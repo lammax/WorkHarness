@@ -9,8 +9,8 @@ import Swinject
 
 extension Container {
     func registerProviders() {
-        register(AIProvider.self) { _ in
-            MockAIProvider()
+        register(ProviderRegistry.self) { _ in
+            ProviderRegistry(providers: [MockAIProvider()], defaultProviderId: MockAIProvider.providerId)
         }.inObjectScope(.container)
     }
 }

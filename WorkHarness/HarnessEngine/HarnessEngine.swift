@@ -11,21 +11,28 @@ import Foundation
 final class HarnessEngine {
     private let repository: RunRepository
     private let recorder: RunRecorder
-    private let provider: AIProvider
+    private let providerService: ProviderServiceProtocol
 
-    init(repository: RunRepository, recorder: RunRecorder, provider: AIProvider) {
+    init(repository: RunRepository, recorder: RunRecorder, providerService: ProviderServiceProtocol) {
         self.repository = repository
         self.recorder = recorder
-        self.provider = provider
+        self.providerService = providerService
     }
 
     var providerName: String {
-        provider.displayName
+        providerService.activeProviderName
     }
 
     func startRun(goal: String) async -> UUID? {
         let trimmedGoal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedGoal.isEmpty else { return nil }
+
+        let provider: any AIProvider
+        do {
+            provider = try providerService.activeProvider()
+        } catch {
+            return createFailedRun(goal: trimmedGoal, message: error.localizedDescription)
+        }
 
         let agent = Agent(
             role: .coder,
@@ -39,22 +46,30 @@ final class HarnessEngine {
         recorder.record(runId: run.id, type: .agentStarted, message: "\(agent.role.label) started with \(provider.displayName).")
         recorder.record(runId: run.id, type: .userMessage, message: trimmedGoal)
 
-        await runSimpleChatLoop(runId: run.id, prompt: trimmedGoal, agent: agent)
+        await runSimpleChatLoop(runId: run.id, prompt: trimmedGoal, agent: agent, provider: provider)
         return run.id
     }
 
     func sendMessage(runId: UUID, message: String) async {
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty, let run = repository.run(withId: runId), let agent = run.agents.first else { return }
+        let provider: any AIProvider
+
+        do {
+            provider = try providerService.activeProvider()
+        } catch {
+            failRun(runId, message: error.localizedDescription)
+            return
+        }
 
         recorder.record(runId: runId, type: .userMessage, message: trimmedMessage)
         repository.updateRun(runId) { run in
             run.status = .running
         }
-        await runSimpleChatLoop(runId: runId, prompt: trimmedMessage, agent: agent)
+        await runSimpleChatLoop(runId: runId, prompt: trimmedMessage, agent: agent, provider: provider)
     }
 
-    private func runSimpleChatLoop(runId: UUID, prompt: String, agent: Agent) async {
+    private func runSimpleChatLoop(runId: UUID, prompt: String, agent: Agent, provider: any AIProvider) async {
         recorder.record(runId: runId, type: .providerRequestStarted, message: provider.displayName, metadata: ["providerId": provider.id, "agentId": agent.id.uuidString])
 
         do {
@@ -109,5 +124,14 @@ final class HarnessEngine {
             run.status = .failed
         }
         recorder.record(runId: runId, type: .runFailed, message: message)
+    }
+
+    private func createFailedRun(goal: String, message: String) -> UUID {
+        let run = Run(goal: goal, status: .failed)
+        repository.insert(run)
+        recorder.record(runId: run.id, type: .runCreated, message: goal)
+        recorder.record(runId: run.id, type: .error, message: message)
+        recorder.record(runId: run.id, type: .runFailed, message: message)
+        return run.id
     }
 }

@@ -9,6 +9,10 @@ import Swinject
 
 extension Container {
     func registerServices() {
+        register(ProviderServiceProtocol.self) { resolver in
+            ProviderService(registry: resolver.resolve(ProviderRegistry.self)!)
+        }.inObjectScope(.container)
+
         register(RunServiceProtocol.self) { resolver in
             RunService(
                 repository: resolver.resolve(RunRepository.self)!,

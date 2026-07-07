@@ -17,7 +17,7 @@ extension Container {
             HarnessEngine(
                 repository: resolver.resolve(RunRepository.self)!,
                 recorder: resolver.resolve(RunRecorder.self)!,
-                provider: resolver.resolve(AIProvider.self)!
+                providerService: resolver.resolve(ProviderServiceProtocol.self)!
             )
         }.inObjectScope(.container)
     }

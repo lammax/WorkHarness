@@ -8,7 +8,9 @@
 import Foundation
 
 struct MockAIProvider: AIProvider {
-    let id = "mock.local"
+    static let providerId = "mock.local"
+
+    let id = MockAIProvider.providerId
     let displayName = "Mock Local Provider"
     let capabilities = ProviderCapabilities(
         supportsStreaming: true,

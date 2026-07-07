@@ -15,7 +15,7 @@ struct WorkHarnessTests {
     @Test func startingRunRecordsInitialEvents() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
-        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
+        let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
 
         _ = await engine.startRun(goal: "Create a harness run")
 
@@ -33,7 +33,7 @@ struct WorkHarnessTests {
     @Test func providerErrorLeavesRunFailed() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
-        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: FailingAIProvider())
+        let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(FailingAIProvider()))
 
         _ = await engine.startRun(goal: "Exercise failure path")
 
@@ -48,7 +48,7 @@ struct WorkHarnessTests {
     @Test func chatPageViewModelSubmitsDraftThroughEngine() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
-        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
+        let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
         let runService = RunService(repository: repository, harnessEngine: engine)
         let viewModel = MainScreen.ChatPageViewModel(runService: runService)
 
@@ -64,7 +64,7 @@ struct WorkHarnessTests {
     @Test func runServiceStartsRunThroughEngineAndExposesRepositoryState() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
-        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
+        let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
         let runService = RunService(repository: repository, harnessEngine: engine)
 
         let runId = try #require(await runService.startRun(goal: "Route through service"))
@@ -80,7 +80,7 @@ struct WorkHarnessTests {
     @Test func mainScreenRoutesSectionsThroughPages() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
-        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
+        let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
         let runService = RunService(repository: repository, harnessEngine: engine)
         let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
         let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
@@ -113,16 +113,83 @@ struct WorkHarnessTests {
 
         let firstRepository = try #require(container.resolve(RunRepository.self))
         let secondRepository = try #require(container.resolve(RunRepository.self))
+        let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
         let runService = try #require(container.resolve(RunServiceProtocol.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
 
         #expect(firstRepository.runs.isEmpty)
         #expect(firstRepository === secondRepository)
+        #expect(providerService.activeProviderId == MockAIProvider.providerId)
         #expect(runService.runs.isEmpty)
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
     }
+
+    @MainActor
+    @Test func providerRegistryStoresRegisteredProviders() async throws {
+        let registry = ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()])
+
+        #expect(registry.availableProviders.map(\.id).sorted() == ["alternate.provider", "test.provider"])
+        #expect(try registry.provider(id: "test.provider").displayName == "Test Provider")
+    }
+
+    @MainActor
+    @Test func providerServiceSelectsActiveProvider() async throws {
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()])
+        )
+
+        try providerService.selectProvider(id: "alternate.provider")
+
+        #expect(providerService.activeProviderId == "alternate.provider")
+        #expect(try providerService.activeProvider().displayName == "Alternate Provider")
+    }
+
+    @MainActor
+    @Test func selectingMissingProviderThrowsProviderError() async throws {
+        let providerService = ProviderService(registry: ProviderRegistry(providers: [TestAIProvider()]))
+
+        do {
+            try providerService.selectProvider(id: "missing.provider")
+            Issue.record("Selecting a missing provider should throw.")
+        } catch let error as ProviderError {
+            #expect(error == .providerNotFound("missing.provider"))
+        }
+    }
+
+    @MainActor
+    @Test func providerServiceExposesCapabilities() async throws {
+        let providerService = ProviderService(registry: ProviderRegistry(providers: [AlternateAIProvider()]))
+
+        let capabilities = try providerService.capabilities(for: "alternate.provider")
+
+        #expect(capabilities.supportsStreaming)
+        #expect(capabilities.contextWindowTokens == 2_000)
+        #expect(capabilities.supportedModels == ["alternate-model"])
+    }
+
+    @MainActor
+    @Test func harnessEngineUsesActiveProviderWithoutConcreteProviderType() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()])
+        )
+        try providerService.selectProvider(id: "alternate.provider")
+        let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: providerService)
+
+        _ = await engine.startRun(goal: "Use active provider")
+
+        let run = try #require(repository.runs.first)
+        #expect(run.agents.first?.providerId == "alternate.provider")
+        #expect(run.events.contains { $0.type == .assistantMessage && $0.message == "Hello from alternate provider." })
+    }
+}
+
+@MainActor
+private func makeProviderService(_ provider: any AIProvider) -> ProviderService {
+    ProviderService(registry: ProviderRegistry(providers: [provider]))
 }
 
 private struct TestAIProvider: AIProvider {
@@ -141,6 +208,25 @@ private struct TestAIProvider: AIProvider {
             continuation.yield(.messageDelta("Hello"))
             continuation.yield(.messageCompleted("Hello from test provider."))
             continuation.yield(.tokenUsage(TokenUsage(inputTokens: 3, outputTokens: 5)))
+            continuation.yield(.finished)
+            continuation.finish()
+        }
+    }
+}
+
+private struct AlternateAIProvider: AIProvider {
+    let id = "alternate.provider"
+    let displayName = "Alternate Provider"
+    let capabilities = ProviderCapabilities(
+        supportsStreaming: true,
+        contextWindowTokens: 2_000,
+        supportedModels: ["alternate-model"]
+    )
+
+    func send(_ request: AIRequest) async throws -> AsyncThrowingStream<AIEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(.started)
+            continuation.yield(.messageCompleted("Hello from alternate provider."))
             continuation.yield(.finished)
             continuation.finish()
         }

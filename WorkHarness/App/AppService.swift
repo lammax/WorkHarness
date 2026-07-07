@@ -6,5 +6,6 @@
 //
 
 enum AppService {
+    case providers
     case runs
 }
