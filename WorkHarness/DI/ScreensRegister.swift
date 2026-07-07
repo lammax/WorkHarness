@@ -1,0 +1,27 @@
+//
+// ScreensRegister.swift
+// WorkHarness
+//
+// Created by Auto (Codex) on 07.07.2026.
+//
+
+import Swinject
+
+extension Container {
+    func registerScreens() {
+        register(MainScreen.ChatPageViewModel.self) { resolver in
+            MainScreen.ChatPageViewModel(runService: resolver.resolve(RunServiceProtocol.self)!)
+        }.inObjectScope(.container)
+
+        register(MainScreen.RunsPageViewModel.self) { resolver in
+            MainScreen.RunsPageViewModel(runService: resolver.resolve(RunServiceProtocol.self)!)
+        }.inObjectScope(.container)
+
+        register(MainScreenProtocol.self) { resolver in
+            MainScreen(
+                chatPageViewModel: resolver.resolve(MainScreen.ChatPageViewModel.self)!,
+                runsPageViewModel: resolver.resolve(MainScreen.RunsPageViewModel.self)!
+            )
+        }.inObjectScope(.transient)
+    }
+}

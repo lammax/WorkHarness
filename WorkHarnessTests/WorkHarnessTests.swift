@@ -6,6 +6,7 @@
 //
 
 import Testing
+import Swinject
 @testable import WorkHarness
 
 struct WorkHarnessTests {
@@ -44,11 +45,12 @@ struct WorkHarnessTests {
     }
 
     @MainActor
-    @Test func chatViewModelSubmitsDraftThroughEngine() async throws {
+    @Test func chatPageViewModelSubmitsDraftThroughEngine() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
         let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
-        let viewModel = ChatViewModel(repository: repository, harnessEngine: engine)
+        let runService = RunService(repository: repository, harnessEngine: engine)
+        let viewModel = MainScreen.ChatPageViewModel(runService: runService)
 
         viewModel.draftMessage = "Build the first architecture slice"
         await viewModel.submitDraftAndWait()
@@ -56,6 +58,70 @@ struct WorkHarnessTests {
         #expect(viewModel.draftMessage.isEmpty)
         #expect(viewModel.selectedRun != nil)
         #expect(viewModel.runs.first?.events.contains { $0.type == .assistantMessage } == true)
+    }
+
+    @MainActor
+    @Test func runServiceStartsRunThroughEngineAndExposesRepositoryState() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
+        let runService = RunService(repository: repository, harnessEngine: engine)
+
+        let runId = try #require(await runService.startRun(goal: "Route through service"))
+        let run = try #require(runService.run(withId: runId))
+
+        #expect(runService.providerName == "Test Provider")
+        #expect(runService.runs.count == 1)
+        #expect(run.goal == "Route through service")
+        #expect(run.events.contains { $0.type == .runCompleted })
+    }
+
+    @MainActor
+    @Test func mainScreenRoutesSectionsThroughPages() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let engine = HarnessEngine(repository: repository, recorder: recorder, provider: TestAIProvider())
+        let runService = RunService(repository: repository, harnessEngine: engine)
+        let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
+        let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
+        let screenModel = MainScreen.MainScreenViewModel(
+            chatPageViewModel: chatPageViewModel,
+            runsPageViewModel: runsPageViewModel
+        )
+
+        #expect(screenModel.pages.first is MainScreen.MainShellPage)
+        #expect(screenModel.detailPage is MainScreen.ChatPage)
+
+        screenModel.show(section: .runs)
+
+        #expect(screenModel.detailPage is MainScreen.RunsPage)
+
+        _ = await engine.startRun(goal: "Review navigation")
+        let run = try #require(repository.runs.first)
+
+        screenModel.selectRun(run)
+
+        #expect(screenModel.selectedSection == .chat)
+        #expect(screenModel.detailPage is MainScreen.ChatPage)
+        #expect(chatPageViewModel.selectedRun?.id == run.id)
+    }
+
+    @MainActor
+    @Test func swinjectContainerResolvesRegisteredAppGraph() async throws {
+        let container = Container()
+        container.registerDependencies()
+
+        let firstRepository = try #require(container.resolve(RunRepository.self))
+        let secondRepository = try #require(container.resolve(RunRepository.self))
+        let runService = try #require(container.resolve(RunServiceProtocol.self))
+        let scene = try #require(container.resolve(AppSceneProtocol.self))
+        let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
+
+        #expect(firstRepository.runs.isEmpty)
+        #expect(firstRepository === secondRepository)
+        #expect(runService.runs.isEmpty)
+        #expect(scene.viewModel.activeScreen != nil)
+        #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
     }
 }
 

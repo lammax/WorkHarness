@@ -6,32 +6,21 @@
 //
 
 import Foundation
-import Observation
+import Swinject
 
 @MainActor
-@Observable
 final class AppContainer {
-    let runRepository: InMemoryRunRepository
-    let provider: AIProvider
-    let runRecorder: RunRecorder
-    let harnessEngine: HarnessEngine
-    let chatViewModel: ChatViewModel
-    let navigationViewModel: AppNavigationViewModel
+    private lazy var container: Container = {
+        let container = Container().synchronize() as! Container
+        container.registerDependencies()
+        return container
+    }()
 
-    convenience init() {
-        self.init(provider: MockAIProvider())
-    }
+    private static let shared = AppContainer()
 
-    init(provider: AIProvider) {
-        let runRepository = InMemoryRunRepository()
-        let runRecorder = RunRecorder(repository: runRepository)
-        let harnessEngine = HarnessEngine(repository: runRepository, recorder: runRecorder, provider: provider)
+    private init() {}
 
-        self.runRepository = runRepository
-        self.provider = provider
-        self.runRecorder = runRecorder
-        self.harnessEngine = harnessEngine
-        self.chatViewModel = ChatViewModel(repository: runRepository, harnessEngine: harnessEngine)
-        self.navigationViewModel = AppNavigationViewModel()
+    static var resolver: Container {
+        AppContainer.shared.container
     }
 }

@@ -6,14 +6,15 @@
 //
 
 import SwiftUI
+import Swinject
 
 @main
 struct WorkHarnessApp: App {
-    @State private var appContainer = AppContainer()
+    private let scene = AppContainer.resolver.resolve(AppSceneProtocol.self)!
 
     var body: some Scene {
         WindowGroup {
-            ContentView(chatViewModel: appContainer.chatViewModel, navigationViewModel: appContainer.navigationViewModel)
+            scene.content
         }
     }
 }

@@ -9,13 +9,17 @@ import Foundation
 import Observation
 
 @MainActor
-protocol RunRepository {
+protocol RunRepository: BaseRepositoryProtocol {
     var runs: [Run] { get }
 
     func insert(_ run: Run)
     func appendEvent(_ event: RunEvent)
     func updateRun(_ runId: UUID, mutation: (inout Run) -> Void)
     func run(withId runId: UUID) -> Run?
+}
+
+extension RunRepository {
+    var repository: AppRepository { .runs }
 }
 
 @MainActor
