@@ -1,0 +1,113 @@
+//
+// HarnessEngine.swift
+// WorkHarness
+//
+// Created by Auto (Codex) on 07.07.2026.
+//
+
+import Foundation
+
+@MainActor
+final class HarnessEngine {
+    private let repository: RunRepository
+    private let recorder: RunRecorder
+    private let provider: AIProvider
+
+    init(repository: RunRepository, recorder: RunRecorder, provider: AIProvider) {
+        self.repository = repository
+        self.recorder = recorder
+        self.provider = provider
+    }
+
+    var providerName: String {
+        provider.displayName
+    }
+
+    func startRun(goal: String) async -> UUID? {
+        let trimmedGoal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedGoal.isEmpty else { return nil }
+
+        let agent = Agent(
+            role: .coder,
+            providerId: provider.id,
+            model: provider.capabilities.supportedModels.first ?? "mock"
+        )
+        let run = Run(goal: trimmedGoal, agents: [agent])
+
+        repository.insert(run)
+        recorder.record(runId: run.id, type: .runCreated, message: trimmedGoal)
+        recorder.record(runId: run.id, type: .agentStarted, message: "\(agent.role.label) started with \(provider.displayName).")
+        recorder.record(runId: run.id, type: .userMessage, message: trimmedGoal)
+
+        await runSimpleChatLoop(runId: run.id, prompt: trimmedGoal, agent: agent)
+        return run.id
+    }
+
+    func sendMessage(runId: UUID, message: String) async {
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedMessage.isEmpty, let run = repository.run(withId: runId), let agent = run.agents.first else { return }
+
+        recorder.record(runId: runId, type: .userMessage, message: trimmedMessage)
+        repository.updateRun(runId) { run in
+            run.status = .running
+        }
+        await runSimpleChatLoop(runId: runId, prompt: trimmedMessage, agent: agent)
+    }
+
+    private func runSimpleChatLoop(runId: UUID, prompt: String, agent: Agent) async {
+        recorder.record(runId: runId, type: .providerRequestStarted, message: provider.displayName, metadata: ["providerId": provider.id, "agentId": agent.id.uuidString])
+
+        do {
+            let request = AIRequest(
+                runId: runId,
+                agent: agent,
+                messages: [.init(role: .user, content: prompt)],
+                tools: agent.tools,
+                budget: .init(maxInputTokens: agent.contextPolicy.maxInputTokens, maxOutputTokens: nil)
+            )
+            let stream = try await provider.send(request)
+            var completedMessage = ""
+
+            for try await event in stream {
+                switch event {
+                case .started:
+                    recorder.record(runId: runId, type: .providerRequestStarted, message: "Provider stream opened.", metadata: ["providerId": provider.id])
+                case .messageDelta(let delta):
+                    recorder.record(runId: runId, type: .providerStreamDelta, message: delta)
+                case .messageCompleted(let message):
+                    completedMessage = message
+                    recorder.record(runId: runId, type: .assistantMessage, message: message)
+                case .toolCall(let name, let input):
+                    recorder.record(runId: runId, type: .toolCallRequested, message: name, metadata: ["input": input])
+                case .tokenUsage(let usage):
+                    repository.updateRun(runId) { run in
+                        run.tokenUsage = usage
+                        run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
+                    }
+                case .finished:
+                    recorder.record(runId: runId, type: .providerRequestFinished, message: completedMessage.isEmpty ? "Provider finished." : completedMessage)
+                case .error(let message):
+                    recorder.record(runId: runId, type: .providerRequestFailed, message: message, metadata: ["providerId": provider.id])
+                    failRun(runId, message: message)
+                    return
+                }
+            }
+
+            repository.updateRun(runId) { run in
+                run.status = .completed
+            }
+            recorder.record(runId: runId, type: .agentFinished, message: "\(agent.role.label) finished.")
+            recorder.record(runId: runId, type: .runCompleted, message: "Run completed.")
+        } catch {
+            failRun(runId, message: error.localizedDescription)
+        }
+    }
+
+    private func failRun(_ runId: UUID, message: String) {
+        recorder.record(runId: runId, type: .error, message: message)
+        repository.updateRun(runId) { run in
+            run.status = .failed
+        }
+        recorder.record(runId: runId, type: .runFailed, message: message)
+    }
+}
