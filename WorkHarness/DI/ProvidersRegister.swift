@@ -9,8 +9,14 @@ import Swinject
 
 extension Container {
     func registerProviders() {
-        register(ProviderRegistry.self) { _ in
-            ProviderRegistry(providers: [MockAIProvider()], defaultProviderId: MockAIProvider.providerId)
+        register(ProviderRegistry.self) { resolver in
+            ProviderRegistry(
+                providers: [
+                    MockAIProvider(),
+                    CodexCLIProvider(processRunner: resolver.resolve(ProcessRunnerProtocol.self)!)
+                ],
+                defaultProviderId: MockAIProvider.providerId
+            )
         }.inObjectScope(.container)
     }
 }

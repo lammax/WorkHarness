@@ -69,9 +69,12 @@ WorkHarness already has:
 - Process stdout/stderr streaming.
 - Process timeout and cancellation.
 - Process exit/error mapping.
+- CodexCLIProvider v1.
+- Codex CLI selectable provider.
+- Codex CLI stdout/stderr mapping.
 - Tests passing for the current stable slice.
 
-Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and process infrastructure steps are complete.
+Do not add `CursorCLIProvider` before the safety and process infrastructure steps are complete.
 
 ## Roadmap Rules
 
@@ -89,6 +92,7 @@ Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and proce
 - Step 3 - Run Timeline v1.
 - Step 4 - Approval / Safety Foundation.
 - Step 5 - CLI Infrastructure v1.
+- Step 6 - CodexCLIProvider v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -214,7 +218,7 @@ Do not add:
 Done when:
 The app can safely run a simple process, stream stdout/stderr, cancel it, and handle timeout/errors.
 
-## Step 6 - CodexCLIProvider v1
+## Step 6 - CodexCLIProvider v1 (Done)
 
 Goal:
 Add the first real backend.

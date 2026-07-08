@@ -119,6 +119,8 @@ struct WorkHarnessTests {
 
     @MainActor
     @Test func swinjectContainerResolvesRegisteredAppGraph() async throws {
+        UserDefaultsAppSettingsService().defaultProviderId = nil
+
         let container = Container()
         container.registerDependencies()
 
@@ -594,6 +596,63 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func codexCLIProviderMapsStdoutToAIEvents() async throws {
+        let processRunner = FakeProcessRunner(events: [
+            .started(ProcessStart(processIdentifier: 42, executablePath: "/usr/bin/env", arguments: ["codex"])),
+            .stdout("Hello "),
+            .stdout("from Codex"),
+            .finished(ProcessExit(status: .succeeded, exitCode: 0))
+        ])
+        let provider = CodexCLIProvider(processRunner: processRunner)
+        let request = makeAIRequest(prompt: "Build CLI provider", workingDirectory: "/tmp/WorkHarness")
+
+        let events = try await collectAIEvents(from: provider, request: request)
+
+        #expect(processRunner.requests.first?.executableURL.path == "/usr/bin/env")
+        #expect(processRunner.requests.first?.arguments == ["codex", "exec", "--", "user: Build CLI provider"])
+        #expect(processRunner.requests.first?.workingDirectoryURL?.path == "/tmp/WorkHarness")
+        #expect(events == [
+            .started,
+            .messageDelta("Hello "),
+            .messageDelta("from Codex"),
+            .messageCompleted("Hello from Codex"),
+            .finished
+        ])
+    }
+
+    @MainActor
+    @Test func codexCLIProviderMapsStderrAndNonZeroExitToError() async throws {
+        let processRunner = FakeProcessRunner(events: [
+            .started(ProcessStart(processIdentifier: 42, executablePath: "/usr/bin/env", arguments: ["codex"])),
+            .stderr("authentication failed"),
+            .finished(ProcessExit(status: .failed, exitCode: 1))
+        ])
+        let provider = CodexCLIProvider(processRunner: processRunner)
+
+        let events = try await collectAIEvents(from: provider, request: makeAIRequest(prompt: "Fail please"))
+
+        #expect(events == [
+            .started,
+            .error("Codex CLI failed. Exit code: 1. authentication failed")
+        ])
+    }
+
+    @MainActor
+    @Test func codexCLIProviderIsRegisteredAndSelectable() async throws {
+        let container = Container()
+        container.registerDependencies()
+        let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
+        let settingsViewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
+
+        #expect(settingsViewModel.providers.contains { $0.id == CodexCLIProvider.providerId && $0.name == "Codex CLI" })
+
+        settingsViewModel.selectProvider(id: CodexCLIProvider.providerId)
+
+        #expect(providerService.activeProviderId == CodexCLIProvider.providerId)
+        #expect(settingsViewModel.activeProviderName == "Codex CLI")
+    }
+
+    @MainActor
     @Test func settingsPageViewModelLoadsProvidersFromProviderService() async throws {
         let providerService = ProviderService(
             registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
@@ -776,6 +835,28 @@ private func collectProcessEvents(
     return events
 }
 
+@MainActor
+private func collectAIEvents(from provider: AIProvider, request: AIRequest) async throws -> [AIEvent] {
+    let stream = try await provider.send(request)
+    var events: [AIEvent] = []
+
+    for try await event in stream {
+        events.append(event)
+    }
+
+    return events
+}
+
+@MainActor
+private func makeAIRequest(prompt: String, workingDirectory: String? = nil) -> AIRequest {
+    AIRequest(
+        runId: UUID(),
+        agent: Agent(role: .coder, providerId: CodexCLIProvider.providerId, model: "codex-cli"),
+        messages: [.init(role: .user, content: prompt)],
+        workingDirectory: workingDirectory
+    )
+}
+
 private func makeIsolatedUserDefaults() throws -> (String, UserDefaults) {
     let suiteName = "WorkHarnessTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -802,6 +883,28 @@ private struct TestAIProvider: AIProvider {
             continuation.yield(.finished)
             continuation.finish()
         }
+    }
+}
+
+@MainActor
+private final class FakeProcessRunner: ProcessRunnerProtocol {
+    private let events: [ProcessRunEvent]
+    private(set) var requests: [ProcessRunRequest] = []
+
+    init(events: [ProcessRunEvent]) {
+        self.events = events
+    }
+
+    func start(_ request: ProcessRunRequest) throws -> ProcessRunSession {
+        requests.append(request)
+
+        let events = events
+        return ProcessRunSession(events: AsyncThrowingStream { continuation in
+            for event in events {
+                continuation.yield(event)
+            }
+            continuation.finish()
+        }, cancelHandler: {})
     }
 }
 
