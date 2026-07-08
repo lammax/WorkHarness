@@ -29,10 +29,17 @@ WorkHarness already has:
 - `ProjectRepositoryProtocol`.
 - `ProjectServiceProtocol`.
 - Current project state.
-- Minimal sidebar project display.
+- Project Selector UI v1.
+- `UserDefaultsProjectRepository`.
+- Durable current project selection.
+- Run Timeline v1.
+- Run detail timeline.
+- Event inspector.
+- Token/cost summary in Runs UI.
+- Artifacts placeholder.
 - Tests passing for the current stable slice.
 
-Do not add `CodexCLIProvider` or `CursorCLIProvider` yet.
+Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and process infrastructure steps are complete.
 
 ## Roadmap Rules
 
@@ -41,309 +48,362 @@ Do not add `CodexCLIProvider` or `CursorCLIProvider` yet.
 - Keep ViewModels behind service/facade boundaries.
 - Add safety and observability before real shell/tool/CLI execution.
 - Prefer small, buildable steps with tests where behavior crosses service, repository, engine, provider or ViewModel boundaries.
-- Commit stable validated slices before starting broad new work.
+- Commit and push stable validated slices before starting broad new work.
 
-## Step 1 - Commit Current Stable Work
+## Completed Steps
+
+- Step 1 - Project Selector UI v1.
+- Step 2 - Durable Project Storage v1.
+- Step 3 - Run Timeline v1.
+
+## Step 1 - Project Selector UI v1 (Done)
 
 Goal:
-Persist the already implemented and tested Durable AppSettings + Project Core changes.
-
-Why:
-The working tree already contains meaningful validated architecture work. Commit it before starting new UI or CLI work.
+Allow the user to select a working project.
 
 Scope:
 
-- Review current `git status`.
-- Stage only related Durable AppSettings + Project Core changes.
-- Confirm tests/build state in the commit message or final handoff.
-- Push only when explicitly requested.
-
-Done when:
-The stable AppSettings + Project Core slice is committed, and the next task can start from a clean baseline.
-
-## Step 2 - Project Selector UI v1
-
-Goal:
-Allow the user to add and select a working project from the app UI.
-
-Why:
-CLI providers, tools, context building and future RAG all require a current project root path.
-
-Scope:
-
-- Add minimal project selector UI.
-- Show current project clearly in the sidebar.
-- Allow adding a project with display name and root path.
-- Allow selecting current project.
-- Support empty state when no projects exist.
-- Use `ProjectServiceProtocol`.
-- Preserve Screen/Page/View/ViewModel/Design boundaries.
-- Add focused ViewModel tests if selection/add flows gain non-trivial state.
+- Project selector UI.
+- Manual project name input.
+- Manual root path input.
+- Add project.
+- Select current project.
+- Empty state.
+- Sidebar current project display.
+- ViewModel tests.
 
 Do not add:
 
-- Codex CLI.
-- Cursor CLI.
-- File indexing.
+- File picker.
+- CLI.
 - RAG.
+- Indexing.
 - SQLite.
-- Tools.
 
 Done when:
-A user can add a project, select it, see it in the sidebar, and the UI does not bypass the service boundary.
+The user can add a project, select it, and see the current project in the sidebar.
 
-## Step 3 - Durable Project Storage v1
+## Step 2 - Durable Project Storage v1 (Done)
 
 Goal:
-Persist projects and current project between app launches.
-
-Why:
-Project Core currently uses in-memory storage. Before CLI execution, current project should survive restart.
+Projects survive app restart.
 
 Scope:
 
-- Add UserDefaults-backed or JSON-backed `ProjectRepositoryProtocol`.
-- Keep `InMemoryProjectRepository` for tests.
+- `UserDefaultsProjectRepository` or `JSONProjectRepository`.
 - Persist project list.
-- Persist current project id if appropriate.
-- Register the durable implementation in DI.
-- Add restore and fallback tests.
+- Persist current project id.
+- Restore projects on launch.
+- Fallback if current project is missing.
+- DI registration.
+- Tests.
 
 Do not add:
 
 - GRDB.
-- Run persistence.
-- RAG persistence.
+- File indexing.
+- Project scanning.
 
 Done when:
-Projects and the selected current project are restored after app restart, with deterministic tests for persistence behavior.
+The added project and current project are restored after recreating the service or repository.
 
-## Step 4 - Run Timeline v1
+## Step 3 - Run Timeline v1 (Done)
 
 Goal:
-Turn Runs page into a real observability and debugging surface.
-
-Why:
-Before real CLI providers produce complex output, Runs must be inspectable.
+Runs page becomes an audit/debug surface.
 
 Scope:
 
-- Add Run detail page.
-- Show ordered `RunEvent` entries.
-- Add event inspector.
-- Show run status.
-- Show token/cost summary.
-- Add artifacts placeholder.
-- Add ViewModel tests for ordering, selection and summary presentation.
+- Run detail page.
+- Ordered `RunEvent` timeline.
+- Event row.
+- Event inspector.
+- Run status.
+- Token/cost summary.
+- Artifacts placeholder.
+- Empty events state.
+- ViewModel tests.
 
 Done when:
-The Runs area can explain what happened in a Run without requiring logs or debugger inspection.
+The user can open a Run and understand what happened inside it.
 
-## Step 5 - Approval / Safety Foundation
+## Step 4 - Approval / Safety Foundation
 
 Goal:
-Introduce the safety model before shell, tools or CLI execution.
-
-Why:
-CLI providers and tools will eventually execute commands or modify files. Safety must exist first.
+Lay down safety before CLI and tools.
 
 Scope:
 
-- Add `ApprovalServiceProtocol`.
-- Add `ApprovalService`.
-- Add safety modes:
+- `ApprovalServiceProtocol`.
+- `ApprovalService`.
+- `ApprovalRequest` lifecycle.
+- Approval states:
+  - pending.
+  - granted.
+  - rejected.
+- Safety modes:
   - Read Only.
   - Ask Before Write.
   - Ask Before Shell.
   - Auto Inside Sandbox.
-- Support approval states:
-  - pending.
-  - granted.
-  - rejected.
-  - cancelled or expired if needed.
-- Add approval modal or page.
-- Emit or process approval `RunEvent` entries.
-- Add tests for state transitions and denied actions.
+- Approval modal or page.
+- Approval `RunEvent` entries.
+- Tests.
 
 Done when:
-Potentially dangerous actions have a single approval path that can be used later by tools and CLI infrastructure.
+The system can request approval, show it to the user, and receive approve/reject.
 
-## Step 6 - CLI Infrastructure v1
+## Step 5 - CLI Infrastructure v1
 
 Goal:
-Create reusable infrastructure for CLI-backed providers.
-
-Why:
-Codex CLI and Cursor CLI should share the same process execution layer.
+Create a shared layer for running CLI processes.
 
 Scope:
 
-- Add `ProcessRunner`.
-- Support stdout streaming.
-- Support stderr streaming.
-- Support cancellation.
-- Support timeout.
-- Support exit code and error mapping.
-- Add tests using safe commands or a fake process abstraction.
+- `ProcessRunnerProtocol`.
+- `ProcessRunner`.
+- stdout stream.
+- stderr stream.
+- start/finish events.
+- timeout.
+- cancellation.
+- exit code mapping.
+- error mapping.
+- tests with fake or safe process.
 
 Do not add:
 
-- Codex-specific code.
-- Cursor-specific code.
-- Provider-specific orchestration branches.
+- `CodexCLIProvider`.
+- `CursorCLIProvider`.
+- Tool execution.
 
 Done when:
-The app has tested process execution infrastructure that is not tied to any one AI backend.
+The app can safely run a simple process, stream stdout/stderr, cancel it, and handle timeout/errors.
 
-## Step 7 - CodexCLIProvider v1
+## Step 6 - CodexCLIProvider v1
 
 Goal:
-Add Codex CLI as the first real AI backend.
+Add the first real backend.
 
 Scope:
 
-- Implement `CodexCLIProvider` behind `AIProvider`.
+- `CodexCLIProvider: AIProvider`.
 - Use `ProcessRunner`.
-- Map CLI output to `AIEvent`.
-- Register the provider in `ProviderRegistry`.
-- Make it selectable in Settings.
-- Preserve `HarnessEngine` concepts.
+- Map stdout/stderr to `AIEvent`.
+- Map errors to provider errors.
+- Register in `ProviderRegistry`.
+- Show in Settings.
+- Select as active provider.
+- Tests with fake `ProcessRunner`.
+
+Important:
+Do not conceptually change `HarnessEngine`.
 
 Done when:
-Codex CLI can be selected as a provider and produce Run events through the existing provider abstraction.
+Codex CLI is selectable in Settings and works through the existing chat/run flow.
 
-## Step 8 - CursorCLIProvider v1
+## Step 7 - CursorCLIProvider v1
 
 Goal:
-Add Cursor CLI as the second real AI backend.
-
-Why:
-This validates that the provider abstraction is strong enough.
+Validate the provider abstraction with a second real backend.
 
 Scope:
 
-- Implement `CursorCLIProvider`.
+- `CursorCLIProvider: AIProvider`.
 - Reuse `ProcessRunner`.
 - Map output to `AIEvent`.
-- Register the provider.
-- Make it selectable in Settings.
-- Avoid `HarnessEngine` changes unless a provider-agnostic gap is discovered.
+- Register provider.
+- Show in Settings.
+- Select as active provider.
+- Tests.
 
 Done when:
-Cursor CLI works through the same provider abstraction without Codex-specific assumptions leaking into orchestration.
+The second CLI backend is added without changes in `HarnessEngine`.
 
-## Step 9 - ContextBuilder v1
+## Step 8 - ContextBuilder v1
 
 Goal:
-Create a single path for assembling context before provider execution.
+Create one path for building provider context.
 
 Scope:
 
-- Add `ContextBuilderProtocol`.
-- Add minimal `ContextBuilder`.
-- Include:
+- `ContextBuilderProtocol`.
+- `ContextBuilder`.
+- Input:
   - user message.
   - current project.
   - root path.
   - recent run summary placeholder.
   - selected files placeholder.
   - token budget.
-- Produce `ContextSnapshot`.
-- Add tests.
+- Output:
+  - `ContextSnapshot`.
+- Tests.
 
 Do not add:
 
 - RAG.
-- Full memory system.
-- Large project indexing.
-
-Done when:
-Provider requests can be built from a traceable `ContextSnapshot` instead of ad hoc strings.
-
-## Step 10 - Tools Foundation
-
-Goal:
-Move from provider chat to real agent harness actions.
-
-Scope:
-
-- Add `ToolProtocol`.
-- Add `ToolRegistry`.
-- Add:
-  - `FileReadTool`.
-  - `FileWriteTool`.
-  - `ShellTool`.
-  - `GitTool`.
-- Route dangerous operations through `ApprovalService`.
-- Emit tool `RunEvent` entries.
-
-Done when:
-Tools are registered, observable and safety-gated without direct UI/provider coupling.
-
-## Step 11 - Persistence v1
-
-Goal:
-Introduce durable application persistence.
-
-Scope:
-
-- Add GRDB/SQLite.
-- Persist:
-  - Runs.
-  - RunEvents.
-  - Projects.
-  - Settings.
-- Keep memory/RAG persistence separate for later.
-
-Done when:
-Core app state can survive restart through a structured persistence layer with repository boundaries intact.
-
-## Step 12 - Memory / Context Folding / RAG
-
-Goal:
-Add long-term intelligence after core execution is stable.
-
-Scope:
-
+- Memory.
+- File indexing.
 - Context folding.
-- Project memory.
-- Run summaries.
-- RAG indexing.
-- RAG search tool.
-- Citations and metadata.
 
 Done when:
-Long-running work can be summarized, searched and reintroduced into context through explicit context-building paths.
+The provider receives requests through a single context pipeline.
 
-## Step 13 - Multi-Agent v1
+## Step 9 - Tools Foundation v1
 
 Goal:
-Support orchestrated multi-agent development workflows.
+Move from provider chat to harness actions.
 
 Scope:
 
+- `ToolProtocol`.
+- `ToolRegistry`.
+- `ToolPermission`.
+- `ToolResult`.
+- `FileReadTool`.
+- `FileWriteTool`.
+- `ShellTool`.
+- `GitTool`.
+- Approval integration.
+- Tool `RunEvent` entries.
+- Tests.
+
+Done when:
+Tools are registered, and dangerous operations go through `ApprovalService`.
+
+## Step 10 - Persistence v1
+
+Goal:
+Replace temporary storage with a real database.
+
+Scope:
+
+- GRDB/SQLite.
+- Run persistence.
+- RunEvent persistence.
+- Project persistence.
+- AppSettings persistence if needed.
+- Repository migration.
+- Tests.
+
+Done when:
+Runs, events and projects survive app restart through structured persistence.
+
+## Step 11 - Token / Cost Statistics v1
+
+Goal:
+Make usage observable.
+
+Scope:
+
+- `TokenLedger`.
+- `CostLedger`.
+- Aggregate by provider.
+- Aggregate by run.
+- Aggregate by day/session.
+- Stats page v1.
+- Tests.
+
+Done when:
+The user can see token and cost usage by Run and provider.
+
+## Step 12 - Context Folding v1
+
+Goal:
+Long runs do not inflate context indefinitely.
+
+Scope:
+
+- Run summary.
+- Conversation summary.
+- Decision log.
+- Current state.
+- Failed attempts.
+- Next actions.
+- `ContextCompacted` event.
+- Tests.
+
+Done when:
+A long Run can be compacted into a useful summary.
+
+## Step 13 - Memory v1
+
+Goal:
+Persist stable project knowledge.
+
+Scope:
+
+- `ProjectMemory`.
+- `MemoryItem`.
+- `MemoryService`.
+- Memory write policy.
+- Memory read policy.
+- Memory events.
+- Basic Memory page.
+- Tests.
+
+Do not add yet:
+
+- Full RAG.
+
+Done when:
+Stable project knowledge can be saved, read and shown through a basic app surface.
+
+## Step 14 - RAG v1
+
+Goal:
+Search project knowledge and files.
+
+Scope:
+
+- Document ingestion.
+- Chunking.
+- Embeddings provider.
+- Vector storage.
+- `RAGSearchTool`.
+- Citations/metadata.
+- `ContextBuilder` integration.
+- Tests.
+
+Done when:
+Relevant indexed knowledge can be retrieved with citations and inserted into context through the approved context path.
+
+## Step 15 - Multi-Agent v1
+
+Goal:
+Support real agentic development workflows.
+
+Scope:
+
+- `AgentRuntime` expansion.
 - `PlannerAgent`.
 - `CoderAgent`.
 - `ReviewerAgent`.
 - `TestRunnerAgent`.
-- Multi-agent Run flow.
-- Optional `ExecutionGraph` model.
+- Multi-agent Run loop.
+- `ExecutionGraph` placeholder or model.
+- Run Timeline integration.
+- Tests.
 
 Done when:
-Multiple agent roles can participate in a Run without breaking Run/Event observability.
+Multiple agent roles can participate in a Run while preserving Run/Event observability.
 
-## Step 14 - Remote Control v1
+## Step 16 - Remote Control v1
 
 Goal:
-Prepare for mobile app control.
+Prepare for mobile control.
 
 Scope:
 
 - Local HTTP/WebSocket server.
+- Auth.
 - Run streaming.
-- Approval requests.
+- Approval requests over API.
+- Current project status.
+- Active run status.
 - Mobile-safe API.
-- Authentication.
+- Tests.
 
 Done when:
-The desktop app can expose controlled, authenticated Run state and approval operations for a future mobile client.
+The desktop app exposes controlled, authenticated Run state and approval operations for a future mobile client.
