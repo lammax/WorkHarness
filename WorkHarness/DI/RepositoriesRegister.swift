@@ -13,8 +13,12 @@ extension Container {
             InMemoryProjectRepository()
         }.inObjectScope(.container)
 
+        register(UserDefaultsProjectRepository.self) { _ in
+            UserDefaultsProjectRepository()
+        }.inObjectScope(.container)
+
         register(ProjectRepositoryProtocol.self) { resolver in
-            resolver.resolve(InMemoryProjectRepository.self)!
+            resolver.resolve(UserDefaultsProjectRepository.self)!
         }.inObjectScope(.container)
 
         register(InMemoryRunRepository.self) { _ in

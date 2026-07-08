@@ -132,6 +132,7 @@ struct WorkHarnessTests {
 
         #expect(firstRepository.runs.isEmpty)
         #expect(firstRepository === secondRepository)
+        #expect(projectRepository is UserDefaultsProjectRepository)
         #expect(projectRepository.projects.isEmpty)
         #expect(projectService.currentProject == nil)
         #expect(providerService.activeProviderId == MockAIProvider.providerId)
@@ -203,6 +204,53 @@ struct WorkHarnessTests {
 
         #expect(screenModel.projectDisplayState.isEmpty)
         #expect(screenModel.projectDisplayState.title == "No Project")
+    }
+
+    @MainActor
+    @Test func userDefaultsProjectRepositoryPersistsProjectsAcrossInstances() async throws {
+        let (suiteName, defaults) = try makeIsolatedUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let firstRepository = UserDefaultsProjectRepository(defaults: defaults)
+        let firstProject = Project(name: "First", rootPath: "/tmp/First")
+        let secondProject = Project(name: "Second", rootPath: "/tmp/Second")
+        firstRepository.insert(firstProject)
+        firstRepository.insert(secondProject)
+        firstRepository.selectProject(id: firstProject.id)
+
+        let restoredRepository = UserDefaultsProjectRepository(defaults: defaults)
+
+        #expect(restoredRepository.projects.map(\.id) == [secondProject.id, firstProject.id])
+        #expect(restoredRepository.project(withId: firstProject.id)?.rootPath == "/tmp/First")
+        #expect(restoredRepository.currentProjectId == firstProject.id)
+    }
+
+    @MainActor
+    @Test func userDefaultsProjectRepositoryClearsCurrentProjectSelection() async throws {
+        let (suiteName, defaults) = try makeIsolatedUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let repository = UserDefaultsProjectRepository(defaults: defaults)
+        let project = Project(name: "WorkHarness", rootPath: "/tmp/WorkHarness")
+        repository.insert(project)
+        repository.clearCurrentProject()
+
+        let restoredRepository = UserDefaultsProjectRepository(defaults: defaults)
+
+        #expect(restoredRepository.projects.first?.id == project.id)
+        #expect(restoredRepository.currentProjectId == nil)
+    }
+
+    @MainActor
+    @Test func userDefaultsProjectRepositoryIgnoresMissingSavedCurrentProject() async throws {
+        let (suiteName, defaults) = try makeIsolatedUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(UUID().uuidString, forKey: "projects.currentProjectId")
+        let repository = UserDefaultsProjectRepository(defaults: defaults)
+
+        #expect(repository.projects.isEmpty)
+        #expect(repository.currentProjectId == nil)
     }
 
     @MainActor
