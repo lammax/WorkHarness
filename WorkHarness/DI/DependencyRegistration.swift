@@ -10,6 +10,7 @@ import Swinject
 extension Container {
     func registerDependencies() {
         registerRepositories()
+        registerProcessRunner()
         registerProviders()
         registerEngine()
         registerServices()

@@ -63,6 +63,12 @@ WorkHarness already has:
 - Safety modes.
 - Approval UI surface.
 - Approval RunEvents.
+- CLI Infrastructure v1.
+- `ProcessRunnerProtocol`.
+- `ProcessRunner`.
+- Process stdout/stderr streaming.
+- Process timeout and cancellation.
+- Process exit/error mapping.
 - Tests passing for the current stable slice.
 
 Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and process infrastructure steps are complete.
@@ -82,6 +88,7 @@ Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and proce
 - Step 2 - Durable Project Storage v1.
 - Step 3 - Run Timeline v1.
 - Step 4 - Approval / Safety Foundation.
+- Step 5 - CLI Infrastructure v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -180,7 +187,7 @@ Scope:
 Done when:
 The system can request approval, show it to the user, and receive approve/reject.
 
-## Step 5 - CLI Infrastructure v1
+## Step 5 - CLI Infrastructure v1 (Done)
 
 Goal:
 Create a shared layer for running CLI processes.

@@ -129,6 +129,7 @@ struct WorkHarnessTests {
         let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
         let runService = try #require(container.resolve(RunServiceProtocol.self))
         let approvalService = try #require(container.resolve(ApprovalServiceProtocol.self))
+        let processRunner = try #require(container.resolve(ProcessRunnerProtocol.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
@@ -141,6 +142,7 @@ struct WorkHarnessTests {
         #expect(providerService.activeProviderId == MockAIProvider.providerId)
         #expect(runService.runs.isEmpty)
         #expect(approvalService.pendingRequests.isEmpty)
+        #expect(processRunner is ProcessRunner)
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
@@ -467,6 +469,69 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func processRunnerStreamsStdoutAndStderr() async throws {
+        let runner = ProcessRunner()
+
+        let events = try await collectProcessEvents(
+            runner: runner,
+            script: "printf stdout-value; printf stderr-value >&2"
+        )
+
+        #expect(events.contains { if case .started = $0 { true } else { false } })
+        #expect(events.contains(.stdout("stdout-value")))
+        #expect(events.contains(.stderr("stderr-value")))
+        #expect(events.last == .finished(ProcessExit(status: .succeeded, exitCode: 0)))
+    }
+
+    @MainActor
+    @Test func processRunnerMapsNonZeroExitCode() async throws {
+        let runner = ProcessRunner()
+
+        let events = try await collectProcessEvents(runner: runner, script: "exit 7")
+
+        #expect(events.last == .finished(ProcessExit(status: .failed, exitCode: 7)))
+    }
+
+    @MainActor
+    @Test func processRunnerTimesOutLongProcess() async throws {
+        let runner = ProcessRunner()
+
+        let events = try await collectProcessEvents(runner: runner, script: "sleep 2", timeout: 0.05)
+
+        #expect(events.last == .finished(ProcessExit(status: .timedOut, exitCode: nil)))
+    }
+
+    @MainActor
+    @Test func processRunnerCancelsRunningProcess() async throws {
+        let runner = ProcessRunner()
+        let session = try runner.start(ProcessRunRequest(
+            executableURL: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "sleep 2"]
+        ))
+        var iterator = session.events.makeAsyncIterator()
+        let startedEvent = try await iterator.next()
+
+        session.cancel()
+        let finishedEvent = try await iterator.next()
+
+        #expect(startedEvent != nil)
+        #expect(finishedEvent == .finished(ProcessExit(status: .cancelled, exitCode: nil)))
+    }
+
+    @MainActor
+    @Test func processRunnerRejectsMissingExecutable() async throws {
+        let runner = ProcessRunner()
+        let missingURL = URL(fileURLWithPath: "/tmp/workharness-missing-executable")
+
+        do {
+            _ = try runner.start(ProcessRunRequest(executableURL: missingURL))
+            Issue.record("Missing executable should throw.")
+        } catch let error as ProcessRunnerError {
+            #expect(error == .executableNotFound(missingURL.path))
+        }
+    }
+
+    @MainActor
     @Test func providerServiceSelectsActiveProvider() async throws {
         let settingsService = InMemoryAppSettingsService()
         let providerService = ProviderService(
@@ -689,6 +754,26 @@ private func makeMainScreenViewModel(
         approvalService: approvalService ?? makeApprovalService(),
         projectService: projectService
     )
+}
+
+@MainActor
+private func collectProcessEvents(
+    runner: ProcessRunnerProtocol,
+    script: String,
+    timeout: TimeInterval? = 2
+) async throws -> [ProcessRunEvent] {
+    let session = try runner.start(ProcessRunRequest(
+        executableURL: URL(fileURLWithPath: "/bin/sh"),
+        arguments: ["-c", script],
+        timeout: timeout
+    ))
+    var events: [ProcessRunEvent] = []
+
+    for try await event in session.events {
+        events.append(event)
+    }
+
+    return events
 }
 
 private func makeIsolatedUserDefaults() throws -> (String, UserDefaults) {
