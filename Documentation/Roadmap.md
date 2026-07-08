@@ -4,6 +4,26 @@ Updated: 08.07.2026
 
 WorkHarness is a local-first macOS SwiftUI AI Agent Harness. It must stay Run-centric, provider-agnostic and safety-aware. Do not treat it as a generic chat app.
 
+## Engineering Priorities
+
+The following priorities are global and apply to every implementation step.
+
+Architecture quality has higher priority than implementation speed.
+
+Long-term maintainability has higher priority than short-term convenience.
+
+When there is a trade-off, always prefer the solution that keeps WorkHarness:
+
+- modular
+- observable
+- replaceable
+- testable
+- local-first
+
+Avoid introducing shortcuts that increase coupling or bypass architectural boundaries.
+
+Every new feature should strengthen the architecture rather than weaken it.
+
 ## Current State
 
 WorkHarness already has:
@@ -414,3 +434,458 @@ Scope:
 
 Done when:
 The desktop app exposes controlled, authenticated Run state and approval operations for a future mobile client.
+
+# Architectural Direction
+
+This section does not change the implementation order.
+
+Instead, it defines the long-term direction of the project.
+
+---
+
+## WorkHarness is an AI Operating System
+
+WorkHarness is not a chat application.
+
+It is not a wrapper around Codex.
+
+It is not a Cursor clone.
+
+WorkHarness is a local-first AI Operating Environment.
+
+Applications interact with it.
+
+WorkHarness itself remains the reusable platform.
+
+---
+
+## Core Philosophy
+
+### Local-first
+
+Everything should work locally whenever practical.
+
+Cloud services are optional.
+
+---
+
+### Provider-agnostic
+
+Never design around one provider.
+
+Codex, Cursor, OpenAI, Anthropic, Ollama and future providers are implementations of the same abstraction.
+
+---
+
+### Run-centric
+
+Run remains the central domain object.
+
+Everything meaningful happens inside a Run.
+
+Chat is only one possible Run interface.
+
+Future voice, automation, mobile and scheduled execution should also create Runs.
+
+---
+
+### Everything Is Observable
+
+Every meaningful action should become observable.
+
+Examples:
+
+- provider execution
+- tool execution
+- approvals
+- validation
+- memory writes
+- context building
+- project changes
+
+Nothing important should happen silently.
+
+---
+
+### Everything Is Replaceable
+
+Providers.
+
+Repositories.
+
+Tools.
+
+Persistence.
+
+Memory.
+
+Context.
+
+UI.
+
+Remote API.
+
+Every subsystem should be replaceable.
+
+---
+
+## Long-Term Concepts
+
+The following concepts should gradually appear as the roadmap progresses.
+
+Do not implement them until they become necessary.
+
+### Capability-Oriented Architecture
+
+Eventually the system should reason about capabilities instead of implementations.
+
+Future concept:
+
+CapabilityRegistry
+
+Examples:
+
+Capability:
+
+Code Editing
+
+Providers:
+
+- Codex CLI
+- Cursor CLI
+
+Capability:
+
+Git
+
+Provided by:
+
+GitTool
+
+Capability:
+
+Vision
+
+Provided by:
+
+Vision Tool
+
+CapabilityRegistry is metadata.
+
+It is not a service locator.
+
+---
+
+### Tools Are First-Class Domain Objects
+
+Tools are not simply functions.
+
+A Tool is a domain entity.
+
+Recommended metadata:
+
+- id
+- name
+- description
+- category
+- permissions
+- capability tags
+- input schema
+- output schema
+- estimated latency
+- estimated cost
+- safety level
+- supported providers
+- version
+
+---
+
+### Provider Never Executes Tools
+
+Architecture rule:
+
+Run
+
+↓
+
+Orchestrator
+
+↓
+
+Agent
+
+↓
+
+ContextBuilder
+
+↓
+
+Provider
+
+↓
+
+AI Response
+
+↓
+
+ToolRouter
+
+↓
+
+Tool
+
+↓
+
+Tool Result
+
+↓
+
+RunEvent
+
+Providers generate AI.
+
+Tools perform actions.
+
+Providers must never execute tools directly.
+
+---
+
+### ContextBuilder Is a Pipeline
+
+Avoid one large ContextBuilder.
+
+Instead:
+
+User Message
+
+↓
+
+Current Project
+
+↓
+
+Project Context
+
+↓
+
+Recent Run Summary
+
+↓
+
+Working Memory
+
+↓
+
+Project Memory
+
+↓
+
+RAG
+
+↓
+
+Selected Files
+
+↓
+
+Agent Instructions
+
+↓
+
+Provider Instructions
+
+↓
+
+Prompt Assembly
+
+Each stage should remain independently replaceable.
+
+---
+
+### Memory Is Event Driven
+
+Preferred flow:
+
+RunCompleted
+
+↓
+
+MemoryPolicy
+
+↓
+
+MemoryWriter
+
+↓
+
+MemoryStorage
+
+Memory reacts to events.
+
+Business logic should not write memory directly whenever possible.
+
+---
+
+### Generic ProcessRunner
+
+ProcessRunner represents executable processes.
+
+Future users:
+
+- Codex CLI
+- Cursor CLI
+- Ollama CLI
+- Git
+- Swift Build
+- xcodebuild
+- npm
+- ffmpeg
+
+Never specialize ProcessRunner for Codex.
+
+---
+
+### Vertical Subsystems
+
+As the project grows, organize by responsibility.
+
+Examples:
+
+- ProjectSubsystem
+- RunSubsystem
+- ProviderSubsystem
+- ApprovalSubsystem
+- ToolSubsystem
+- MemorySubsystem
+- StatisticsSubsystem
+
+Avoid one enormous flat Services directory.
+
+---
+
+### Facades
+
+When subsystem complexity increases, expose Facades to ViewModels.
+
+Example:
+
+ProjectFacade
+
+Methods:
+
+- current()
+- all()
+- create()
+- delete()
+- select()
+
+Internally the facade may coordinate multiple services.
+
+ViewModels should remain simple.
+
+---
+
+### Reserved Future Domain Objects
+
+Reserve architectural space for:
+
+Workspace
+
+Task
+
+ExecutionGraph
+
+Do not implement them yet.
+
+Workspace will eventually own:
+
+- Projects
+- Providers
+- Runs
+- Settings
+- Memory
+
+Task will represent durable user goals.
+
+ExecutionGraph will describe relationships between:
+
+- Agents
+- Tools
+- Validation
+- Build
+- Review
+
+---
+
+### AIChallenge Relationship
+
+AIChallenge should remain a client.
+
+WorkHarness Core
+
+↓
+
+Providers
+
+↓
+
+Tools
+
+↓
+
+Memory
+
+↓
+
+Orchestrator
+
+↓
+
+Remote API
+
+↓
+
+Applications
+
+Examples:
+
+- AIChallenge Vision
+- Mobile App
+- Future Web UI
+
+Applications are clients.
+
+WorkHarness is the platform.
+
+---
+
+### Avoid Premature Complexity
+
+Do not introduce yet:
+
+- CapabilityRegistry
+- Workspace
+- Task
+- ExecutionGraph
+- Skill Graph
+- Plugin Marketplace
+- Voice Pipeline
+- Vision Pipeline
+- Distributed Workers
+
+Implement them only when the existing roadmap naturally reaches those requirements.
+
+---
+
+# Final Engineering Rule
+
+Before implementing any feature ask:
+
+1. Does this preserve Run-centric architecture?
+2. Does this reduce coupling?
+3. Is it replaceable?
+4. Is it observable?
+5. Does it belong to the correct layer?
+6. Can it evolve without redesign?
+
+If the answer to any question is "no", redesign before implementation.
