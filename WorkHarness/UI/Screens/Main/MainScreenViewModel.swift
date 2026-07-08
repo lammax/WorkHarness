@@ -13,13 +13,15 @@ extension MainScreen {
     final class MainScreenViewModel: PagesViewModel {
         let chatPageViewModel: ChatPageViewModel
         let runsPageViewModel: RunsPageViewModel
+        let settingsPageViewModel: SettingsPageViewModel
 
         private(set) var selectedSection: NavigationSection = .chat
         private(set) var detailPage: (any BasePageProtocol)?
 
-        init(chatPageViewModel: ChatPageViewModel, runsPageViewModel: RunsPageViewModel) {
+        init(chatPageViewModel: ChatPageViewModel, runsPageViewModel: RunsPageViewModel, settingsPageViewModel: SettingsPageViewModel) {
             self.chatPageViewModel = chatPageViewModel
             self.runsPageViewModel = runsPageViewModel
+            self.settingsPageViewModel = settingsPageViewModel
             super.init()
             show(section: .chat)
             pushHard(page: MainShellPage(screenModel: self))
@@ -33,7 +35,9 @@ extension MainScreen {
                 detailPage = ChatPage(screenModel: self)
             case .runs:
                 detailPage = RunsPage(screenModel: self, viewModel: runsPageViewModel)
-            case .agents, .tools, .memory, .stats, .settings:
+            case .settings:
+                detailPage = SettingsPage(screenModel: self, viewModel: settingsPageViewModel)
+            case .agents, .tools, .memory, .stats:
                 detailPage = PlaceholderPage(screenModel: self, viewModel: PlaceholderPageViewModel(section: section))
             }
         }

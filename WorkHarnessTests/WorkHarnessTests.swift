@@ -84,9 +84,11 @@ struct WorkHarnessTests {
         let runService = RunService(repository: repository, harnessEngine: engine)
         let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
         let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
+        let settingsPageViewModel = MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider()))
         let screenModel = MainScreen.MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
-            runsPageViewModel: runsPageViewModel
+            runsPageViewModel: runsPageViewModel,
+            settingsPageViewModel: settingsPageViewModel
         )
 
         #expect(screenModel.pages.first is MainScreen.MainShellPage)
@@ -95,6 +97,10 @@ struct WorkHarnessTests {
         screenModel.show(section: .runs)
 
         #expect(screenModel.detailPage is MainScreen.RunsPage)
+
+        screenModel.show(section: .settings)
+
+        #expect(screenModel.detailPage is MainScreen.SettingsPage)
 
         _ = await engine.startRun(goal: "Review navigation")
         let run = try #require(repository.runs.first)
@@ -115,6 +121,7 @@ struct WorkHarnessTests {
         let secondRepository = try #require(container.resolve(RunRepository.self))
         let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
         let runService = try #require(container.resolve(RunServiceProtocol.self))
+        let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
 
@@ -122,6 +129,7 @@ struct WorkHarnessTests {
         #expect(firstRepository === secondRepository)
         #expect(providerService.activeProviderId == MockAIProvider.providerId)
         #expect(runService.runs.isEmpty)
+        #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
     }
@@ -136,19 +144,25 @@ struct WorkHarnessTests {
 
     @MainActor
     @Test func providerServiceSelectsActiveProvider() async throws {
+        let settingsService = InMemoryAppSettingsService()
         let providerService = ProviderService(
-            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()])
+            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
+            appSettingsService: settingsService
         )
 
         try providerService.selectProvider(id: "alternate.provider")
 
         #expect(providerService.activeProviderId == "alternate.provider")
         #expect(try providerService.activeProvider().displayName == "Alternate Provider")
+        #expect(settingsService.defaultProviderId == "alternate.provider")
     }
 
     @MainActor
     @Test func selectingMissingProviderThrowsProviderError() async throws {
-        let providerService = ProviderService(registry: ProviderRegistry(providers: [TestAIProvider()]))
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: InMemoryAppSettingsService()
+        )
 
         do {
             try providerService.selectProvider(id: "missing.provider")
@@ -160,7 +174,10 @@ struct WorkHarnessTests {
 
     @MainActor
     @Test func providerServiceExposesCapabilities() async throws {
-        let providerService = ProviderService(registry: ProviderRegistry(providers: [AlternateAIProvider()]))
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [AlternateAIProvider()]),
+            appSettingsService: InMemoryAppSettingsService()
+        )
 
         let capabilities = try providerService.capabilities(for: "alternate.provider")
 
@@ -174,7 +191,8 @@ struct WorkHarnessTests {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
         let providerService = ProviderService(
-            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()])
+            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
+            appSettingsService: InMemoryAppSettingsService()
         )
         try providerService.selectProvider(id: "alternate.provider")
         let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: providerService)
@@ -185,11 +203,76 @@ struct WorkHarnessTests {
         #expect(run.agents.first?.providerId == "alternate.provider")
         #expect(run.events.contains { $0.type == .assistantMessage && $0.message == "Hello from alternate provider." })
     }
+
+    @MainActor
+    @Test func settingsPageViewModelLoadsProvidersFromProviderService() async throws {
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
+            appSettingsService: InMemoryAppSettingsService()
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
+
+        #expect(viewModel.providers.map(\.id).sorted() == ["alternate.provider", "test.provider"])
+        #expect(viewModel.activeProviderId == "test.provider")
+        #expect(viewModel.activeProviderName == "Test Provider")
+
+        let provider = try #require(viewModel.providers.first { $0.id == "test.provider" })
+        #expect(provider.isActive)
+        #expect(provider.capabilities.contains { $0.title == "Streaming" && $0.value == "Yes" })
+        #expect(provider.capabilities.contains { $0.title == "Context window" && $0.value == "1000 tokens" })
+        #expect(provider.capabilities.contains { $0.title == "Models" && $0.value == "test-model" })
+    }
+
+    @MainActor
+    @Test func settingsPageViewModelSelectsActiveProviderThroughProviderService() async throws {
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
+            appSettingsService: InMemoryAppSettingsService()
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
+
+        viewModel.selectProvider(id: "alternate.provider")
+
+        #expect(providerService.activeProviderId == "alternate.provider")
+        #expect(viewModel.activeProviderId == "alternate.provider")
+        #expect(viewModel.activeProviderName == "Alternate Provider")
+        #expect(viewModel.providers.first { $0.id == "alternate.provider" }?.isActive == true)
+        #expect(viewModel.providers.first { $0.id == "test.provider" }?.isActive == false)
+    }
+
+    @MainActor
+    @Test func providerServiceRestoresSavedDefaultProviderId() async throws {
+        let settingsService = InMemoryAppSettingsService(defaultProviderId: "alternate.provider")
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [MockAIProvider(), AlternateAIProvider()]),
+            appSettingsService: settingsService
+        )
+
+        #expect(providerService.activeProviderId == "alternate.provider")
+        #expect(try providerService.activeProvider().displayName == "Alternate Provider")
+        #expect(settingsService.defaultProviderId == "alternate.provider")
+    }
+
+    @MainActor
+    @Test func providerServiceFallsBackToMockWhenSavedProviderIsMissing() async throws {
+        let settingsService = InMemoryAppSettingsService(defaultProviderId: "missing.provider")
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [MockAIProvider(), AlternateAIProvider()]),
+            appSettingsService: settingsService
+        )
+
+        #expect(providerService.activeProviderId == MockAIProvider.providerId)
+        #expect(try providerService.activeProvider().displayName == "Mock Local Provider")
+        #expect(settingsService.defaultProviderId == MockAIProvider.providerId)
+    }
 }
 
 @MainActor
 private func makeProviderService(_ provider: any AIProvider) -> ProviderService {
-    ProviderService(registry: ProviderRegistry(providers: [provider]))
+    ProviderService(
+        registry: ProviderRegistry(providers: [provider]),
+        appSettingsService: InMemoryAppSettingsService(defaultProviderId: provider.id)
+    )
 }
 
 private struct TestAIProvider: AIProvider {

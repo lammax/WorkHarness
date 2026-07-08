@@ -6,6 +6,7 @@
 //
 
 enum AppService {
+    case appSettings
     case providers
     case runs
 }

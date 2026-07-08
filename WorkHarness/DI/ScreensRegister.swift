@@ -17,10 +17,15 @@ extension Container {
             MainScreen.RunsPageViewModel(runService: resolver.resolve(RunServiceProtocol.self)!)
         }.inObjectScope(.container)
 
+        register(MainScreen.SettingsPageViewModel.self) { resolver in
+            MainScreen.SettingsPageViewModel(providerService: resolver.resolve(ProviderServiceProtocol.self)!)
+        }.inObjectScope(.container)
+
         register(MainScreenProtocol.self) { resolver in
             MainScreen(
                 chatPageViewModel: resolver.resolve(MainScreen.ChatPageViewModel.self)!,
-                runsPageViewModel: resolver.resolve(MainScreen.RunsPageViewModel.self)!
+                runsPageViewModel: resolver.resolve(MainScreen.RunsPageViewModel.self)!,
+                settingsPageViewModel: resolver.resolve(MainScreen.SettingsPageViewModel.self)!
             )
         }.inObjectScope(.transient)
     }

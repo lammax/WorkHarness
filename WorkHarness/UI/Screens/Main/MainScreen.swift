@@ -9,10 +9,11 @@
 final class MainScreen {
     private let viewModel: MainScreenViewModel
 
-    init(chatPageViewModel: ChatPageViewModel, runsPageViewModel: RunsPageViewModel) {
+    init(chatPageViewModel: ChatPageViewModel, runsPageViewModel: RunsPageViewModel, settingsPageViewModel: SettingsPageViewModel) {
         self.viewModel = MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
-            runsPageViewModel: runsPageViewModel
+            runsPageViewModel: runsPageViewModel,
+            settingsPageViewModel: settingsPageViewModel
         )
     }
 }
