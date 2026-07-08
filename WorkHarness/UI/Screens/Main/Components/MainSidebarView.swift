@@ -17,6 +17,16 @@ extension MainScreen {
             List(selection: selection) {
                 Section(Design.projectSectionTitle) {
                     ProjectBlockView(state: screenModel.projectDisplayState)
+                    ProjectListView(
+                        projects: screenModel.projects,
+                        selectedProjectId: screenModel.selectedProjectId,
+                        onSelect: screenModel.selectProject(_:)
+                    )
+                    Button {
+                        screenModel.showProjectForm()
+                    } label: {
+                        Label(Design.Project.addButtonTitle, systemImage: Design.Project.addIcon)
+                    }
                 }
 
                 Section(Design.workspaceSectionTitle) {
@@ -47,6 +57,9 @@ extension MainScreen {
             }
             .listStyle(.sidebar)
             .navigationTitle(Design.appTitle)
+            .sheet(isPresented: projectFormPresentation) {
+                ProjectFormView(screenModel: screenModel)
+            }
         }
 
         private var selection: Binding<NavigationSection> {
@@ -54,6 +67,18 @@ extension MainScreen {
                 screenModel.selectedSection
             } set: { section in
                 screenModel.show(section: section)
+            }
+        }
+
+        private var projectFormPresentation: Binding<Bool> {
+            Binding {
+                screenModel.isProjectFormPresented
+            } set: { isPresented in
+                if isPresented {
+                    screenModel.showProjectForm()
+                } else {
+                    screenModel.dismissProjectForm()
+                }
             }
         }
     }
@@ -77,6 +102,92 @@ extension MainScreen {
                         .lineLimit(1)
                 }
             }
+        }
+    }
+
+    private struct ProjectListView: View {
+        typealias Design = MainScreenDesign.Sidebar.Project
+
+        let projects: [Project]
+        let selectedProjectId: Project.ID?
+        let onSelect: (Project) -> Void
+
+        var body: some View {
+            ForEach(projects) { project in
+                Button {
+                    onSelect(project)
+                } label: {
+                    HStack(alignment: .top, spacing: Design.spacing) {
+                        ProjectSelectionIcon(isSelected: selectedProjectId == project.id)
+
+                        VStack(alignment: .leading, spacing: Design.rowSpacing) {
+                            Text(project.name)
+                                .lineLimit(1)
+                            Text(project.rootPath ?? Design.noRootPathSubtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private struct ProjectSelectionIcon: View {
+        typealias Design = MainScreenDesign.Sidebar.Project
+
+        let isSelected: Bool
+
+        var body: some View {
+            if isSelected {
+                Image(systemName: Design.selectedIcon)
+                    .foregroundStyle(.tint)
+            } else {
+                Image(systemName: Design.icon)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private struct ProjectFormView: View {
+        typealias Design = MainScreenDesign.Sidebar.Project
+
+        @Bindable var screenModel: MainScreenViewModel
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: Design.formSpacing) {
+                Text(Design.sheetTitle)
+                    .font(.headline)
+
+                TextField(Design.namePlaceholder, text: $screenModel.projectDraftName)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel(Design.nameLabel)
+
+                TextField(Design.rootPathPlaceholder, text: $screenModel.projectDraftRootPath)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel(Design.rootPathLabel)
+
+                if let error = screenModel.projectFormError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                HStack {
+                    Spacer()
+                    Button(Design.cancelButtonTitle) {
+                        screenModel.dismissProjectForm()
+                    }
+                    Button(Design.createButtonTitle) {
+                        screenModel.addProjectFromDraft()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(Design.formPadding)
+            .frame(width: Design.formWidth)
         }
     }
 }

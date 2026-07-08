@@ -29,12 +29,27 @@ extension MainScreen {
             enum Project {
                 static let icon = "folder"
                 static let emptyIcon = "folder.badge.questionmark"
+                static let selectedIcon = "checkmark.circle.fill"
+                static let addIcon = "plus"
                 static let emptyTitle = "No Project"
-                static let emptySubtitle = "Project selector coming next"
+                static let emptySubtitle = "Add a project to start"
                 static let unselectedSubtitle = "Select a project"
                 static let noRootPathSubtitle = "No root path"
+                static let addButtonTitle = "Add Project"
+                static let sheetTitle = "Add Project"
+                static let nameLabel = "Name"
+                static let namePlaceholder = "WorkHarness"
+                static let rootPathLabel = "Root Path"
+                static let rootPathPlaceholder = "/Users/me/Projects/App"
+                static let cancelButtonTitle = "Cancel"
+                static let createButtonTitle = "Create"
+                static let nameRequiredMessage = "Project name is required."
                 static let spacing: CGFloat = 6
                 static let textSpacing: CGFloat = 2
+                static let formWidth: CGFloat = 420
+                static let formSpacing: CGFloat = 14
+                static let formPadding: CGFloat = 20
+                static let rowSpacing: CGFloat = 3
             }
 
             static func title(for section: NavigationSection) -> String {

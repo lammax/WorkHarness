@@ -5,6 +5,7 @@
 // Created by Auto (Codex) on 07.07.2026.
 //
 
+import Foundation
 import Observation
 
 extension MainScreen {
@@ -18,6 +19,10 @@ extension MainScreen {
 
         private(set) var selectedSection: NavigationSection = .chat
         private(set) var detailPage: (any BasePageProtocol)?
+        var isProjectFormPresented = false
+        var projectDraftName = ""
+        var projectDraftRootPath = ""
+        private(set) var projectFormError: String?
 
         init(
             chatPageViewModel: ChatPageViewModel,
@@ -42,6 +47,14 @@ extension MainScreen {
             return .current(project)
         }
 
+        var projects: [Project] {
+            projectService.projects
+        }
+
+        var selectedProjectId: Project.ID? {
+            projectService.currentProject?.id
+        }
+
         func show(section: NavigationSection) {
             selectedSection = section
 
@@ -60,6 +73,41 @@ extension MainScreen {
         func selectRun(_ run: Run) {
             chatPageViewModel.selectRun(run)
             show(section: .chat)
+        }
+
+        func showProjectForm() {
+            projectDraftName = ""
+            projectDraftRootPath = ""
+            projectFormError = nil
+            isProjectFormPresented = true
+        }
+
+        func dismissProjectForm() {
+            isProjectFormPresented = false
+            projectFormError = nil
+        }
+
+        func addProjectFromDraft() {
+            let trimmedName = projectDraftName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedRootPath = projectDraftRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !trimmedName.isEmpty else {
+                projectFormError = MainScreenDesign.Sidebar.Project.nameRequiredMessage
+                return
+            }
+
+            let rootPath = trimmedRootPath.isEmpty ? nil : trimmedRootPath
+            projectService.addProject(name: trimmedName, rootPath: rootPath)
+            dismissProjectForm()
+        }
+
+        func selectProject(_ project: Project) {
+            do {
+                try projectService.selectProject(id: project.id)
+                projectFormError = nil
+            } catch {
+                projectFormError = error.localizedDescription
+            }
         }
     }
 

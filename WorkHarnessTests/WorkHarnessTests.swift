@@ -206,6 +206,55 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func mainScreenAddsProjectFromSelectorDraft() async throws {
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        let screenModel = makeMainScreenViewModel(projectService: projectService)
+
+        screenModel.showProjectForm()
+        screenModel.projectDraftName = "  WorkHarness  "
+        screenModel.projectDraftRootPath = "  /tmp/WorkHarness  "
+        screenModel.addProjectFromDraft()
+
+        let project = try #require(screenModel.projects.first)
+        #expect(project.name == "WorkHarness")
+        #expect(project.rootPath == "/tmp/WorkHarness")
+        #expect(screenModel.selectedProjectId == project.id)
+        #expect(screenModel.projectDisplayState.title == "WorkHarness")
+        #expect(!screenModel.isProjectFormPresented)
+        #expect(screenModel.projectFormError == nil)
+    }
+
+    @MainActor
+    @Test func mainScreenProjectSelectorRequiresProjectName() async throws {
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        let screenModel = makeMainScreenViewModel(projectService: projectService)
+
+        screenModel.showProjectForm()
+        screenModel.projectDraftName = "   "
+        screenModel.projectDraftRootPath = "/tmp/MissingName"
+        screenModel.addProjectFromDraft()
+
+        #expect(screenModel.projects.isEmpty)
+        #expect(screenModel.isProjectFormPresented)
+        #expect(screenModel.projectFormError == "Project name is required.")
+    }
+
+    @MainActor
+    @Test func mainScreenSelectsProjectThroughProjectService() async throws {
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        let firstProject = projectService.addProject(name: "First", rootPath: "/tmp/First")
+        let secondProject = projectService.addProject(name: "Second", rootPath: "/tmp/Second")
+        let screenModel = makeMainScreenViewModel(projectService: projectService)
+
+        screenModel.selectProject(secondProject)
+
+        #expect(screenModel.selectedProjectId == secondProject.id)
+        #expect(screenModel.selectedProjectId != firstProject.id)
+        #expect(screenModel.projectDisplayState.title == "Second")
+        #expect(screenModel.projectDisplayState.subtitle == "/tmp/Second")
+    }
+
+    @MainActor
     @Test func providerServiceSelectsActiveProvider() async throws {
         let settingsService = InMemoryAppSettingsService()
         let providerService = ProviderService(
@@ -394,6 +443,17 @@ private func makeRunService() -> RunService {
     let recorder = RunRecorder(repository: repository)
     let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
     return RunService(repository: repository, harnessEngine: engine)
+}
+
+@MainActor
+private func makeMainScreenViewModel(projectService: ProjectServiceProtocol) -> MainScreen.MainScreenViewModel {
+    let runService = makeRunService()
+    return MainScreen.MainScreenViewModel(
+        chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
+        runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
+        settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
+        projectService: projectService
+    )
 }
 
 private func makeIsolatedUserDefaults() throws -> (String, UserDefaults) {
