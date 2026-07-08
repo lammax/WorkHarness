@@ -19,6 +19,7 @@ extension MainScreen {
         enum Sidebar {
             static let workspaceSectionTitle = "Workspace"
             static let projectSectionTitle = "Project"
+            static let approvalsSectionTitle = "Approvals"
             static let recentRunsSectionTitle = "Recent Runs"
             static let appTitle = "WorkHarness"
             static let recentRunSpacing: CGFloat = 3
@@ -50,6 +51,22 @@ extension MainScreen {
                 static let formSpacing: CGFloat = 14
                 static let formPadding: CGFloat = 20
                 static let rowSpacing: CGFloat = 3
+            }
+
+            enum Approval {
+                static let icon = "hand.raised"
+                static let pendingIcon = "exclamationmark.triangle"
+                static let sheetTitle = "Approval Required"
+                static let modeTitle = "Safety Mode"
+                static let pendingBadge = "Pending"
+                static let approveButtonTitle = "Approve"
+                static let rejectButtonTitle = "Reject"
+                static let closeButtonTitle = "Close"
+                static let spacing: CGFloat = 8
+                static let textSpacing: CGFloat = 3
+                static let sheetWidth: CGFloat = 460
+                static let sheetSpacing: CGFloat = 14
+                static let sheetPadding: CGFloat = 20
             }
 
             static func title(for section: NavigationSection) -> String {

@@ -7,6 +7,7 @@
 
 enum AppService {
     case appSettings
+    case approvals
     case projects
     case providers
     case runs

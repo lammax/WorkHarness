@@ -15,24 +15,30 @@ extension MainScreen {
         let chatPageViewModel: ChatPageViewModel
         let runsPageViewModel: RunsPageViewModel
         let settingsPageViewModel: SettingsPageViewModel
+        private let approvalService: ApprovalServiceProtocol
         private let projectService: ProjectServiceProtocol
 
         private(set) var selectedSection: NavigationSection = .chat
         private(set) var detailPage: (any BasePageProtocol)?
+        private(set) var activeApprovalRequestId: ApprovalRequest.ID?
         var isProjectFormPresented = false
+        var isApprovalSheetPresented = false
         var projectDraftName = ""
         var projectDraftRootPath = ""
         private(set) var projectFormError: String?
+        private(set) var approvalDecisionError: String?
 
         init(
             chatPageViewModel: ChatPageViewModel,
             runsPageViewModel: RunsPageViewModel,
             settingsPageViewModel: SettingsPageViewModel,
+            approvalService: ApprovalServiceProtocol,
             projectService: ProjectServiceProtocol
         ) {
             self.chatPageViewModel = chatPageViewModel
             self.runsPageViewModel = runsPageViewModel
             self.settingsPageViewModel = settingsPageViewModel
+            self.approvalService = approvalService
             self.projectService = projectService
             super.init()
             show(section: .chat)
@@ -49,6 +55,15 @@ extension MainScreen {
 
         var projects: [Project] {
             projectService.projects
+        }
+
+        var pendingApprovalStates: [ApprovalRequestState] {
+            approvalService.pendingRequests.map(ApprovalRequestState.init(request:))
+        }
+
+        var activeApprovalState: ApprovalRequestState? {
+            guard let activeApprovalRequestId else { return pendingApprovalStates.first }
+            return approvalService.requests.first { $0.id == activeApprovalRequestId }.map(ApprovalRequestState.init(request:))
         }
 
         var selectedProjectId: Project.ID? {
@@ -73,6 +88,26 @@ extension MainScreen {
         func selectRun(_ run: Run) {
             chatPageViewModel.selectRun(run)
             show(section: .chat)
+        }
+
+        func showApproval(_ request: ApprovalRequestState) {
+            activeApprovalRequestId = request.id
+            approvalDecisionError = nil
+            isApprovalSheetPresented = true
+        }
+
+        func dismissApproval() {
+            activeApprovalRequestId = nil
+            approvalDecisionError = nil
+            isApprovalSheetPresented = false
+        }
+
+        func approveActiveApproval() {
+            decideActiveApproval { try approvalService.approve(requestId: $0) }
+        }
+
+        func rejectActiveApproval() {
+            decideActiveApproval { try approvalService.reject(requestId: $0) }
         }
 
         func showProjectForm() {
@@ -109,6 +144,17 @@ extension MainScreen {
                 projectFormError = error.localizedDescription
             }
         }
+
+        private func decideActiveApproval(_ decision: (ApprovalRequest.ID) throws -> Void) {
+            guard let request = activeApprovalState else { return }
+
+            do {
+                try decision(request.id)
+                dismissApproval()
+            } catch {
+                approvalDecisionError = error.localizedDescription
+            }
+        }
     }
 
     struct ProjectDisplayState: Equatable {
@@ -130,6 +176,22 @@ extension MainScreen {
                 subtitle: projectCount == 0 ? MainScreenDesign.Sidebar.Project.emptySubtitle : MainScreenDesign.Sidebar.Project.unselectedSubtitle,
                 isEmpty: true
             )
+        }
+    }
+
+    struct ApprovalRequestState: Identifiable, Equatable {
+        var id: UUID
+        var title: String
+        var summary: String
+        var mode: String
+        var status: String
+
+        init(request: ApprovalRequest) {
+            self.id = request.id
+            self.title = request.title
+            self.summary = request.summary
+            self.mode = request.mode.label
+            self.status = request.status.label
         }
     }
 }

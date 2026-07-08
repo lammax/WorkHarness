@@ -82,25 +82,62 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
 struct ApprovalRequest: Identifiable, Codable, Equatable {
     let id: UUID
     var runId: UUID
-    var reason: String
-    var requestedAction: String
+    var title: String
+    var summary: String
+    var mode: SafetyMode
     var status: ApprovalStatus
     var createdAt: Date
+    var decidedAt: Date?
 
-    init(id: UUID = UUID(), runId: UUID, reason: String, requestedAction: String, status: ApprovalStatus = .pending, createdAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        runId: UUID,
+        title: String,
+        summary: String,
+        mode: SafetyMode,
+        status: ApprovalStatus = .pending,
+        createdAt: Date = Date(),
+        decidedAt: Date? = nil
+    ) {
         self.id = id
         self.runId = runId
-        self.reason = reason
-        self.requestedAction = requestedAction
+        self.title = title
+        self.summary = summary
+        self.mode = mode
         self.status = status
         self.createdAt = createdAt
+        self.decidedAt = decidedAt
     }
 }
 
-enum ApprovalStatus: String, Codable, Equatable {
+enum ApprovalStatus: String, Codable, CaseIterable, Equatable {
     case pending
     case granted
     case rejected
+
+    var label: String {
+        switch self {
+        case .pending: "Pending"
+        case .granted: "Granted"
+        case .rejected: "Rejected"
+        }
+    }
+}
+
+enum SafetyMode: String, Codable, CaseIterable, Equatable {
+    case readOnly
+    case askBeforeWrite
+    case askBeforeShell
+    case autoInsideSandbox
+
+    var label: String {
+        switch self {
+        case .readOnly: "Read Only"
+        case .askBeforeWrite: "Ask Before Write"
+        case .askBeforeShell: "Ask Before Shell"
+        case .autoInsideSandbox: "Auto Inside Sandbox"
+        }
+    }
 }
 
 struct SettingsProfile: Identifiable, Codable, Equatable {

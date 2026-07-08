@@ -37,6 +37,12 @@ WorkHarness already has:
 - Event inspector.
 - Token/cost summary in Runs UI.
 - Artifacts placeholder.
+- Approval / Safety Foundation v1.
+- `ApprovalServiceProtocol`.
+- Approval request lifecycle.
+- Safety modes.
+- Approval UI surface.
+- Approval RunEvents.
 - Tests passing for the current stable slice.
 
 Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and process infrastructure steps are complete.
@@ -55,6 +61,7 @@ Do not add `CodexCLIProvider` or `CursorCLIProvider` before the safety and proce
 - Step 1 - Project Selector UI v1.
 - Step 2 - Durable Project Storage v1.
 - Step 3 - Run Timeline v1.
+- Step 4 - Approval / Safety Foundation.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -127,7 +134,7 @@ Scope:
 Done when:
 The user can open a Run and understand what happened inside it.
 
-## Step 4 - Approval / Safety Foundation
+## Step 4 - Approval / Safety Foundation (Done)
 
 Goal:
 Lay down safety before CLI and tools.

@@ -86,11 +86,13 @@ struct WorkHarnessTests {
         let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
         let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
         let settingsPageViewModel = MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider()))
+        let approvalService = makeApprovalService(repository: repository)
         let projectService = ProjectService(repository: InMemoryProjectRepository())
         let screenModel = MainScreen.MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
             runsPageViewModel: runsPageViewModel,
             settingsPageViewModel: settingsPageViewModel,
+            approvalService: approvalService,
             projectService: projectService
         )
 
@@ -126,6 +128,7 @@ struct WorkHarnessTests {
         let projectService = try #require(container.resolve(ProjectServiceProtocol.self))
         let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
         let runService = try #require(container.resolve(RunServiceProtocol.self))
+        let approvalService = try #require(container.resolve(ApprovalServiceProtocol.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
@@ -137,6 +140,7 @@ struct WorkHarnessTests {
         #expect(projectService.currentProject == nil)
         #expect(providerService.activeProviderId == MockAIProvider.providerId)
         #expect(runService.runs.isEmpty)
+        #expect(approvalService.pendingRequests.isEmpty)
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
@@ -199,6 +203,7 @@ struct WorkHarnessTests {
             chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
             runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
             settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
+            approvalService: makeApprovalService(),
             projectService: projectService
         )
 
@@ -384,6 +389,81 @@ struct WorkHarnessTests {
         #expect(!detail.hasEvents)
         #expect(detail.events.isEmpty)
         #expect(detail.selectedEvent == nil)
+    }
+
+    @MainActor
+    @Test func approvalServiceRequestsAndGrantsApproval() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Write a file")
+        repository.insert(run)
+        let approvalService = makeApprovalService(repository: repository)
+
+        let request = try approvalService.requestApproval(
+            runId: run.id,
+            title: "Write file",
+            summary: "Allow writing README.md.",
+            mode: .askBeforeWrite
+        )
+
+        #expect(approvalService.pendingRequests.map(\.id) == [request.id])
+        #expect(repository.run(withId: run.id)?.status == .waitingForApproval)
+        #expect(repository.run(withId: run.id)?.events.last?.type == .approvalRequested)
+
+        try approvalService.approve(requestId: request.id)
+
+        #expect(approvalService.pendingRequests.isEmpty)
+        #expect(approvalService.requests.first?.status == .granted)
+        #expect(repository.run(withId: run.id)?.status == .running)
+        #expect(repository.run(withId: run.id)?.events.map(\.type).contains(.approvalGranted) == true)
+    }
+
+    @MainActor
+    @Test func approvalServiceRejectsApprovalAndFailsRun() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Run shell")
+        repository.insert(run)
+        let approvalService = makeApprovalService(repository: repository)
+
+        let request = try approvalService.requestApproval(
+            runId: run.id,
+            title: "Run shell command",
+            summary: "Allow shell execution.",
+            mode: .askBeforeShell
+        )
+
+        try approvalService.reject(requestId: request.id)
+
+        #expect(approvalService.requests.first?.status == .rejected)
+        #expect(repository.run(withId: run.id)?.status == .failed)
+        #expect(repository.run(withId: run.id)?.events.map(\.type).contains(.approvalRejected) == true)
+    }
+
+    @MainActor
+    @Test func mainScreenShowsAndApprovesPendingApproval() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Ask before write")
+        repository.insert(run)
+        let approvalService = makeApprovalService(repository: repository)
+        let request = try approvalService.requestApproval(
+            runId: run.id,
+            title: "Write workspace file",
+            summary: "Allow writing inside the selected project.",
+            mode: .askBeforeWrite
+        )
+        let screenModel = makeMainScreenViewModel(
+            projectService: ProjectService(repository: InMemoryProjectRepository()),
+            approvalService: approvalService
+        )
+
+        #expect(screenModel.pendingApprovalStates.map(\.id) == [request.id])
+
+        let state = try #require(screenModel.pendingApprovalStates.first)
+        screenModel.showApproval(state)
+        screenModel.approveActiveApproval()
+
+        #expect(!screenModel.isApprovalSheetPresented)
+        #expect(screenModel.pendingApprovalStates.isEmpty)
+        #expect(repository.run(withId: run.id)?.events.map(\.type).contains(.approvalGranted) == true)
     }
 
     @MainActor
@@ -583,12 +663,30 @@ private func makeRunService(repository: InMemoryRunRepository) -> RunService {
 }
 
 @MainActor
-private func makeMainScreenViewModel(projectService: ProjectServiceProtocol) -> MainScreen.MainScreenViewModel {
+private func makeApprovalService() -> ApprovalService {
+    makeApprovalService(repository: InMemoryRunRepository())
+}
+
+@MainActor
+private func makeApprovalService(repository: InMemoryRunRepository) -> ApprovalService {
+    ApprovalService(
+        repository: InMemoryApprovalRepository(),
+        runRepository: repository,
+        recorder: RunRecorder(repository: repository)
+    )
+}
+
+@MainActor
+private func makeMainScreenViewModel(
+    projectService: ProjectServiceProtocol,
+    approvalService: ApprovalServiceProtocol? = nil
+) -> MainScreen.MainScreenViewModel {
     let runService = makeRunService()
     return MainScreen.MainScreenViewModel(
         chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
         runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
         settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
+        approvalService: approvalService ?? makeApprovalService(),
         projectService: projectService
     )
 }

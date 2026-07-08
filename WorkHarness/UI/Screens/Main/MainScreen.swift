@@ -13,12 +13,14 @@ final class MainScreen {
         chatPageViewModel: ChatPageViewModel,
         runsPageViewModel: RunsPageViewModel,
         settingsPageViewModel: SettingsPageViewModel,
+        approvalService: ApprovalServiceProtocol,
         projectService: ProjectServiceProtocol
     ) {
         self.viewModel = MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
             runsPageViewModel: runsPageViewModel,
             settingsPageViewModel: settingsPageViewModel,
+            approvalService: approvalService,
             projectService: projectService
         )
     }

@@ -13,6 +13,14 @@ extension Container {
             UserDefaultsAppSettingsService()
         }.inObjectScope(.container)
 
+        register(ApprovalServiceProtocol.self) { resolver in
+            ApprovalService(
+                repository: resolver.resolve(ApprovalRepositoryProtocol.self)!,
+                runRepository: resolver.resolve(RunRepository.self)!,
+                recorder: resolver.resolve(RunRecorder.self)!
+            )
+        }.inObjectScope(.container)
+
         register(ProviderServiceProtocol.self) { resolver in
             ProviderService(
                 registry: resolver.resolve(ProviderRegistry.self)!,

@@ -9,6 +9,14 @@ import Swinject
 
 extension Container {
     func registerRepositories() {
+        register(InMemoryApprovalRepository.self) { _ in
+            InMemoryApprovalRepository()
+        }.inObjectScope(.container)
+
+        register(ApprovalRepositoryProtocol.self) { resolver in
+            resolver.resolve(InMemoryApprovalRepository.self)!
+        }.inObjectScope(.container)
+
         register(InMemoryProjectRepository.self) { _ in
             InMemoryProjectRepository()
         }.inObjectScope(.container)
