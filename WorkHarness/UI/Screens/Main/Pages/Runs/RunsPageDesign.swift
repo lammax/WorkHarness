@@ -46,6 +46,9 @@ extension MainScreen {
             static let cardPadding: CGFloat = 12
             static let cornerRadius: CGFloat = 8
             static let timelineTitle = "Timeline"
+            static let emptyTimelineTitle = "No Events"
+            static let emptyTimelineDescription = "This run has no recorded events yet."
+            static let emptyTimelineIcon = "timeline.selection"
             static let inspectorTitle = "Event Inspector"
             static let metricsTitle = "Stats"
             static let artifactsTitle = "Artifacts"

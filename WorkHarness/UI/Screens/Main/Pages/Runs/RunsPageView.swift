@@ -119,7 +119,7 @@ extension MainScreen {
                     VStack(alignment: .leading, spacing: Design.Detail.spacing) {
                         RunDetailHeader(detail: detail, run: viewModel.selectedRun, onRunSelected: onRunSelected)
                         MetricsView(metrics: detail.metrics)
-                        TimelineView(viewModel: viewModel, events: detail.events)
+                        TimelineView(viewModel: viewModel, events: detail.events, hasEvents: detail.hasEvents)
                         ArtifactsView(artifacts: detail.artifacts)
                         EventInspectorView(event: detail.selectedEvent)
                     }
@@ -196,18 +196,27 @@ extension MainScreen {
 
         @Bindable var viewModel: RunsPageViewModel
         let events: [RunEventState]
+        let hasEvents: Bool
 
         var body: some View {
             SectionBlock(title: Design.Detail.timelineTitle) {
-                LazyVStack(alignment: .leading, spacing: Design.Detail.cardSpacing) {
-                    ForEach(events) { event in
-                        Button {
-                            viewModel.selectEvent(id: event.id)
-                        } label: {
-                            TimelineEventRow(event: event, isSelected: viewModel.isEventSelected(event))
+                if hasEvents {
+                    LazyVStack(alignment: .leading, spacing: Design.Detail.cardSpacing) {
+                        ForEach(events) { event in
+                            Button {
+                                viewModel.selectEvent(id: event.id)
+                            } label: {
+                                TimelineEventRow(event: event, isSelected: viewModel.isEventSelected(event))
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                } else {
+                    ContentUnavailableView(
+                        Design.Detail.emptyTimelineTitle,
+                        systemImage: Design.Detail.emptyTimelineIcon,
+                        description: Text(Design.Detail.emptyTimelineDescription)
+                    )
                 }
             }
         }

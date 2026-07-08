@@ -374,6 +374,19 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func runsPageViewModelExposesEmptyEventsState() async throws {
+        let repository = InMemoryRunRepository()
+        repository.insert(Run(goal: "Run without events"))
+        let viewModel = MainScreen.RunsPageViewModel(runService: makeRunService(repository: repository))
+
+        let detail = try #require(viewModel.selectedRunDetail)
+
+        #expect(!detail.hasEvents)
+        #expect(detail.events.isEmpty)
+        #expect(detail.selectedEvent == nil)
+    }
+
+    @MainActor
     @Test func providerServiceSelectsActiveProvider() async throws {
         let settingsService = InMemoryAppSettingsService()
         let providerService = ProviderService(

@@ -63,6 +63,7 @@ extension MainScreen {
                 updatedAt: run.updatedAt,
                 metrics: metrics(for: run),
                 events: orderedEvents(for: run).map(eventState(for:)),
+                hasEvents: !run.events.isEmpty,
                 artifacts: artifactStates(for: run),
                 selectedEvent: selectedEvent.map(eventInspectorState(for:))
             )
@@ -160,6 +161,7 @@ extension MainScreen {
         var updatedAt: Date
         var metrics: [MetricState]
         var events: [RunEventState]
+        var hasEvents: Bool
         var artifacts: [ArtifactState]
         var selectedEvent: EventInspectorState?
     }
