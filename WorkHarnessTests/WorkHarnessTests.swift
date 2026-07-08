@@ -303,6 +303,77 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func runsPageViewModelBuildsRunDetailTimelineState() async throws {
+        let repository = InMemoryRunRepository()
+        let runId = UUID()
+        let earlyEvent = RunEvent(
+            runId: runId,
+            type: .runCreated,
+            message: "Created",
+            createdAt: Date(timeIntervalSince1970: 10)
+        )
+        let lateEvent = RunEvent(
+            runId: runId,
+            type: .providerRequestFinished,
+            message: "Finished",
+            metadata: ["providerId": "test.provider"],
+            createdAt: Date(timeIntervalSince1970: 20)
+        )
+        let artifact = RunArtifact(
+            name: "Report",
+            kind: "markdown",
+            path: "/tmp/report.md",
+            createdAt: Date(timeIntervalSince1970: 30)
+        )
+        let run = Run(
+            id: runId,
+            goal: "Inspect timeline",
+            status: .completed,
+            events: [lateEvent, earlyEvent],
+            artifacts: [artifact],
+            tokenUsage: TokenUsage(inputTokens: 7, outputTokens: 11, totalCostUSD: Decimal(string: "0.42")!),
+            costUsage: CostUsage(totalUSD: Decimal(string: "0.42")!),
+            createdAt: Date(timeIntervalSince1970: 1),
+            updatedAt: Date(timeIntervalSince1970: 40)
+        )
+        repository.insert(run)
+        let viewModel = MainScreen.RunsPageViewModel(runService: makeRunService(repository: repository))
+
+        let detail = try #require(viewModel.selectedRunDetail)
+
+        #expect(detail.title == "Inspect timeline")
+        #expect(detail.status == "Completed")
+        #expect(detail.events.map(\.id) == [earlyEvent.id, lateEvent.id])
+        #expect(detail.metrics.contains(MainScreen.MetricState(title: "Input", value: "7")))
+        #expect(detail.metrics.contains(MainScreen.MetricState(title: "Output", value: "11")))
+        #expect(detail.metrics.contains(MainScreen.MetricState(title: "Total", value: "18")))
+        #expect(detail.metrics.contains(MainScreen.MetricState(title: "Cost", value: "$0.42")))
+        #expect(detail.artifacts.first?.title == "Report")
+        #expect(detail.selectedEvent?.id == lateEvent.id)
+        #expect(detail.selectedEvent?.metadata.first?.key == "providerId")
+    }
+
+    @MainActor
+    @Test func runsPageViewModelSelectsRunAndTimelineEvent() async throws {
+        let repository = InMemoryRunRepository()
+        let firstRunId = UUID()
+        let secondRunId = UUID()
+        let firstEvent = RunEvent(runId: firstRunId, type: .runCreated, message: "First")
+        let secondEvent = RunEvent(runId: secondRunId, type: .assistantMessage, message: "Second")
+        repository.insert(Run(id: firstRunId, goal: "First run", events: [firstEvent]))
+        repository.insert(Run(id: secondRunId, goal: "Second run", events: [secondEvent]))
+        let viewModel = MainScreen.RunsPageViewModel(runService: makeRunService(repository: repository))
+
+        viewModel.selectRun(id: firstRunId)
+        viewModel.selectEvent(id: firstEvent.id)
+
+        #expect(viewModel.selectedRun?.id == firstRunId)
+        #expect(viewModel.selectedEvent?.id == firstEvent.id)
+        #expect(viewModel.runRows.first { $0.id == firstRunId }?.isSelected == true)
+        #expect(viewModel.runRows.first { $0.id == secondRunId }?.isSelected == false)
+    }
+
+    @MainActor
     @Test func providerServiceSelectsActiveProvider() async throws {
         let settingsService = InMemoryAppSettingsService()
         let providerService = ProviderService(
@@ -488,6 +559,11 @@ private func makeProviderService(_ provider: any AIProvider) -> ProviderService 
 @MainActor
 private func makeRunService() -> RunService {
     let repository = InMemoryRunRepository()
+    return makeRunService(repository: repository)
+}
+
+@MainActor
+private func makeRunService(repository: InMemoryRunRepository) -> RunService {
     let recorder = RunRecorder(repository: repository)
     let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
     return RunService(repository: repository, harnessEngine: engine)
