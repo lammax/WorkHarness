@@ -25,7 +25,8 @@ extension Container {
             MainScreen(
                 chatPageViewModel: resolver.resolve(MainScreen.ChatPageViewModel.self)!,
                 runsPageViewModel: resolver.resolve(MainScreen.RunsPageViewModel.self)!,
-                settingsPageViewModel: resolver.resolve(MainScreen.SettingsPageViewModel.self)!
+                settingsPageViewModel: resolver.resolve(MainScreen.SettingsPageViewModel.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!
             )
         }.inObjectScope(.transient)
     }

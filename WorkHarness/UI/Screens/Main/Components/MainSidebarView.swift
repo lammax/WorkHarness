@@ -15,6 +15,10 @@ extension MainScreen {
 
         var body: some View {
             List(selection: selection) {
+                Section(Design.projectSectionTitle) {
+                    ProjectBlockView(state: screenModel.projectDisplayState)
+                }
+
                 Section(Design.workspaceSectionTitle) {
                     ForEach(NavigationSection.allCases) { section in
                         Label(Design.title(for: section), systemImage: Design.icon(for: section))
@@ -50,6 +54,28 @@ extension MainScreen {
                 screenModel.selectedSection
             } set: { section in
                 screenModel.show(section: section)
+            }
+        }
+    }
+
+    private struct ProjectBlockView: View {
+        typealias Design = MainScreenDesign.Sidebar.Project
+
+        let state: ProjectDisplayState
+
+        var body: some View {
+            HStack(alignment: .top, spacing: Design.spacing) {
+                Image(systemName: state.isEmpty ? Design.emptyIcon : Design.icon)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: Design.textSpacing) {
+                    Text(state.title)
+                        .lineLimit(1)
+                    Text(state.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
     }

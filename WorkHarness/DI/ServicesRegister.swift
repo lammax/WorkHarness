@@ -10,7 +10,7 @@ import Swinject
 extension Container {
     func registerServices() {
         register(AppSettingsServiceProtocol.self) { _ in
-            InMemoryAppSettingsService(defaultProviderId: MockAIProvider.providerId)
+            UserDefaultsAppSettingsService()
         }.inObjectScope(.container)
 
         register(ProviderServiceProtocol.self) { resolver in
@@ -18,6 +18,10 @@ extension Container {
                 registry: resolver.resolve(ProviderRegistry.self)!,
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
             )
+        }.inObjectScope(.container)
+
+        register(ProjectServiceProtocol.self) { resolver in
+            ProjectService(repository: resolver.resolve(ProjectRepositoryProtocol.self)!)
         }.inObjectScope(.container)
 
         register(RunServiceProtocol.self) { resolver in

@@ -6,5 +6,6 @@
 //
 
 enum AppRepository {
+    case projects
     case runs
 }

@@ -7,6 +7,7 @@
 
 import Testing
 import Swinject
+import Foundation
 @testable import WorkHarness
 
 struct WorkHarnessTests {
@@ -85,10 +86,12 @@ struct WorkHarnessTests {
         let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
         let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
         let settingsPageViewModel = MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider()))
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
         let screenModel = MainScreen.MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
             runsPageViewModel: runsPageViewModel,
-            settingsPageViewModel: settingsPageViewModel
+            settingsPageViewModel: settingsPageViewModel,
+            projectService: projectService
         )
 
         #expect(screenModel.pages.first is MainScreen.MainShellPage)
@@ -119,6 +122,8 @@ struct WorkHarnessTests {
 
         let firstRepository = try #require(container.resolve(RunRepository.self))
         let secondRepository = try #require(container.resolve(RunRepository.self))
+        let projectRepository = try #require(container.resolve(ProjectRepositoryProtocol.self))
+        let projectService = try #require(container.resolve(ProjectServiceProtocol.self))
         let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
         let runService = try #require(container.resolve(RunServiceProtocol.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
@@ -127,6 +132,8 @@ struct WorkHarnessTests {
 
         #expect(firstRepository.runs.isEmpty)
         #expect(firstRepository === secondRepository)
+        #expect(projectRepository.projects.isEmpty)
+        #expect(projectService.currentProject == nil)
         #expect(providerService.activeProviderId == MockAIProvider.providerId)
         #expect(runService.runs.isEmpty)
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
@@ -140,6 +147,62 @@ struct WorkHarnessTests {
 
         #expect(registry.availableProviders.map(\.id).sorted() == ["alternate.provider", "test.provider"])
         #expect(try registry.provider(id: "test.provider").displayName == "Test Provider")
+    }
+
+    @MainActor
+    @Test func projectServiceAddsProjectWithRootPath() async throws {
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+
+        let project = projectService.addProject(name: "WorkHarness", rootPath: "/tmp/WorkHarness")
+
+        #expect(projectService.projects.count == 1)
+        #expect(projectService.projects.first == project)
+        #expect(project.rootPath == "/tmp/WorkHarness")
+        #expect(projectService.currentProject?.id == project.id)
+    }
+
+    @MainActor
+    @Test func projectServiceSelectsCurrentProject() async throws {
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        let firstProject = projectService.addProject(name: "First", rootPath: "/tmp/First")
+        let secondProject = projectService.addProject(name: "Second", rootPath: "/tmp/Second")
+
+        try projectService.selectProject(id: secondProject.id)
+
+        #expect(projectService.currentProject?.id == secondProject.id)
+        #expect(projectService.currentProject?.id != firstProject.id)
+    }
+
+    @MainActor
+    @Test func projectServiceRestoresCurrentProjectFromRepositoryState() async throws {
+        let repository = InMemoryProjectRepository()
+        let firstService = ProjectService(repository: repository)
+        let project = firstService.addProject(name: "Shared State", rootPath: "/tmp/Shared")
+        try firstService.selectProject(id: project.id)
+
+        let restoredService = ProjectService(repository: repository)
+
+        #expect(restoredService.currentProject?.id == project.id)
+        #expect(restoredService.currentProject?.rootPath == "/tmp/Shared")
+    }
+
+    @MainActor
+    @Test func projectServiceExposesMissingCurrentProjectEmptyState() async throws {
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+
+        #expect(projectService.projects.isEmpty)
+        #expect(projectService.currentProject == nil)
+
+        let runService = makeRunService()
+        let screenModel = MainScreen.MainScreenViewModel(
+            chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
+            runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
+            settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
+            projectService: projectService
+        )
+
+        #expect(screenModel.projectDisplayState.isEmpty)
+        #expect(screenModel.projectDisplayState.title == "No Project")
     }
 
     @MainActor
@@ -265,6 +328,56 @@ struct WorkHarnessTests {
         #expect(try providerService.activeProvider().displayName == "Mock Local Provider")
         #expect(settingsService.defaultProviderId == MockAIProvider.providerId)
     }
+
+    @MainActor
+    @Test func userDefaultsAppSettingsPersistsDefaultProviderIdAcrossInstances() async throws {
+        let (suiteName, defaults) = try makeIsolatedUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let firstService = UserDefaultsAppSettingsService(defaults: defaults)
+        firstService.defaultProviderId = "alternate.provider"
+
+        let secondService = UserDefaultsAppSettingsService(defaults: defaults)
+
+        #expect(secondService.defaultProviderId == "alternate.provider")
+    }
+
+    @MainActor
+    @Test func providerServiceRestoresSavedProviderFromDurableSettings() async throws {
+        let (suiteName, defaults) = try makeIsolatedUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let firstSettingsService = UserDefaultsAppSettingsService(defaults: defaults)
+        firstSettingsService.defaultProviderId = "alternate.provider"
+        let restoredSettingsService = UserDefaultsAppSettingsService(defaults: defaults)
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [MockAIProvider(), AlternateAIProvider()]),
+            appSettingsService: restoredSettingsService
+        )
+
+        #expect(providerService.activeProviderId == "alternate.provider")
+        #expect(try providerService.activeProvider().displayName == "Alternate Provider")
+        #expect(restoredSettingsService.defaultProviderId == "alternate.provider")
+    }
+
+    @MainActor
+    @Test func providerServicePersistsMockFallbackWhenDurableSavedProviderIsMissing() async throws {
+        let (suiteName, defaults) = try makeIsolatedUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let firstSettingsService = UserDefaultsAppSettingsService(defaults: defaults)
+        firstSettingsService.defaultProviderId = "missing.provider"
+        let restoredSettingsService = UserDefaultsAppSettingsService(defaults: defaults)
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [MockAIProvider(), AlternateAIProvider()]),
+            appSettingsService: restoredSettingsService
+        )
+        let verifiedSettingsService = UserDefaultsAppSettingsService(defaults: defaults)
+
+        #expect(providerService.activeProviderId == MockAIProvider.providerId)
+        #expect(try providerService.activeProvider().displayName == "Mock Local Provider")
+        #expect(verifiedSettingsService.defaultProviderId == MockAIProvider.providerId)
+    }
 }
 
 @MainActor
@@ -273,6 +386,21 @@ private func makeProviderService(_ provider: any AIProvider) -> ProviderService 
         registry: ProviderRegistry(providers: [provider]),
         appSettingsService: InMemoryAppSettingsService(defaultProviderId: provider.id)
     )
+}
+
+@MainActor
+private func makeRunService() -> RunService {
+    let repository = InMemoryRunRepository()
+    let recorder = RunRecorder(repository: repository)
+    let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
+    return RunService(repository: repository, harnessEngine: engine)
+}
+
+private func makeIsolatedUserDefaults() throws -> (String, UserDefaults) {
+    let suiteName = "WorkHarnessTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    return (suiteName, defaults)
 }
 
 private struct TestAIProvider: AIProvider {
