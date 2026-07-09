@@ -9,6 +9,10 @@ import Swinject
 
 extension Container {
     func registerEngine() {
+        register(ContextBuilderProtocol.self) { _ in
+            ContextBuilder()
+        }.inObjectScope(.container)
+
         register(RunRecorder.self) { resolver in
             RunRecorder(repository: resolver.resolve(RunRepository.self)!)
         }.inObjectScope(.container)
@@ -17,7 +21,9 @@ extension Container {
             HarnessEngine(
                 repository: resolver.resolve(RunRepository.self)!,
                 recorder: resolver.resolve(RunRecorder.self)!,
-                providerService: resolver.resolve(ProviderServiceProtocol.self)!
+                providerService: resolver.resolve(ProviderServiceProtocol.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!,
+                contextBuilder: resolver.resolve(ContextBuilderProtocol.self)!
             )
         }.inObjectScope(.container)
     }

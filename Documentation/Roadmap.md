@@ -84,6 +84,11 @@ WorkHarness already has:
   - `local_llm_describe_model`.
   - `local_llm_generate`.
   - `local_llm_health`.
+- ContextBuilder v1.
+- `ContextBuilderProtocol`.
+- `ContextBuilder`.
+- `ContextSnapshot` provider context path.
+- `contextBuilt` RunEvents.
 - Tests passing for the current stable slice.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
@@ -123,6 +128,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 7 - CursorCLIProvider v1.
 - Step 8 - Provider MCP Migration v1.
 - Step 9 - Local LLM MCP Provider v1.
+- Step 10 - ContextBuilder v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -426,7 +432,7 @@ Do not add:
 Done when:
 WorkHarness can select a local MCP-backed LLM provider and receive streamed `AIEvent` output through the existing provider flow, while the local LLM implementation lives in `MCP_server`.
 
-## Step 10 - ContextBuilder v1
+## Step 10 - ContextBuilder v1 (Done)
 
 Goal:
 Create one path for building provider context.

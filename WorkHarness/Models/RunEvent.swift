@@ -51,6 +51,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
     case approvalRequested
     case approvalGranted
     case approvalRejected
+    case contextBuilt
     case contextCompacted
     case memorySaved
     case validationStarted
@@ -80,6 +81,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
         case .approvalRequested: "Approval Requested"
         case .approvalGranted: "Approval Granted"
         case .approvalRejected: "Approval Rejected"
+        case .contextBuilt: "Context Built"
         case .contextCompacted: "Context Compacted"
         case .memorySaved: "Memory Saved"
         case .validationStarted: "Validation Started"

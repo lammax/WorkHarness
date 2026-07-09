@@ -66,14 +66,50 @@ struct MemoryItem: Identifiable, Codable, Equatable {
 struct ContextSnapshot: Identifiable, Codable, Equatable {
     let id: UUID
     var runId: UUID
+    var agentId: UUID?
+    var providerId: String?
+    var userMessage: String
+    var projectId: UUID?
+    var projectName: String?
+    var rootPath: String?
     var summary: String
+    var contextItems: [String]
+    var includedFiles: [String]
+    var includedMemories: [String]
+    var includedSummaries: [String]
     var tokenCount: Int
     var createdAt: Date
 
-    init(id: UUID = UUID(), runId: UUID, summary: String, tokenCount: Int = 0, createdAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        runId: UUID,
+        agentId: UUID? = nil,
+        providerId: String? = nil,
+        userMessage: String = "",
+        projectId: UUID? = nil,
+        projectName: String? = nil,
+        rootPath: String? = nil,
+        summary: String,
+        contextItems: [String] = [],
+        includedFiles: [String] = [],
+        includedMemories: [String] = [],
+        includedSummaries: [String] = [],
+        tokenCount: Int = 0,
+        createdAt: Date = Date()
+    ) {
         self.id = id
         self.runId = runId
+        self.agentId = agentId
+        self.providerId = providerId
+        self.userMessage = userMessage
+        self.projectId = projectId
+        self.projectName = projectName
+        self.rootPath = rootPath
         self.summary = summary
+        self.contextItems = contextItems
+        self.includedFiles = includedFiles
+        self.includedMemories = includedMemories
+        self.includedSummaries = includedSummaries
         self.tokenCount = tokenCount
         self.createdAt = createdAt
     }

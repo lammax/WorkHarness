@@ -132,6 +132,7 @@ struct WorkHarnessTests {
         let runService = try #require(container.resolve(RunServiceProtocol.self))
         let approvalService = try #require(container.resolve(ApprovalServiceProtocol.self))
         let processRunner = try #require(container.resolve(ProcessRunnerProtocol.self))
+        let contextBuilder = try #require(container.resolve(ContextBuilderProtocol.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
@@ -145,6 +146,7 @@ struct WorkHarnessTests {
         #expect(runService.runs.isEmpty)
         #expect(approvalService.pendingRequests.isEmpty)
         #expect(processRunner is ProcessRunner)
+        #expect(contextBuilder is ContextBuilder)
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
@@ -596,6 +598,64 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func contextBuilderCreatesMinimalProjectSnapshot() async throws {
+        let builder = ContextBuilder()
+        let project = Project(name: "WorkHarness", rootPath: "/tmp/WorkHarness")
+        let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
+        let runId = UUID()
+
+        let snapshot = builder.buildSnapshot(from: ContextBuildInput(
+            runId: runId,
+            agent: agent,
+            providerId: "test.provider",
+            userMessage: "Add context",
+            currentProject: project,
+            recentRunSummary: "Previous run summary",
+            selectedFiles: ["WorkHarness/App/AppContainer.swift"],
+            tokenBudget: TokenBudget(maxInputTokens: 1_000, maxOutputTokens: 200)
+        ))
+
+        #expect(snapshot.runId == runId)
+        #expect(snapshot.agentId == agent.id)
+        #expect(snapshot.providerId == "test.provider")
+        #expect(snapshot.userMessage == "Add context")
+        #expect(snapshot.projectId == project.id)
+        #expect(snapshot.projectName == "WorkHarness")
+        #expect(snapshot.rootPath == "/tmp/WorkHarness")
+        #expect(snapshot.contextItems.contains("Current project: WorkHarness"))
+        #expect(snapshot.contextItems.contains("Project root: /tmp/WorkHarness"))
+        #expect(snapshot.includedFiles == ["WorkHarness/App/AppContainer.swift"])
+        #expect(snapshot.includedSummaries == ["Previous run summary"])
+        #expect(snapshot.includedMemories.isEmpty)
+        #expect(snapshot.tokenCount > 0)
+    }
+
+    @MainActor
+    @Test func harnessEngineBuildsProviderContextThroughContextBuilder() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "WorkHarness", rootPath: "/tmp/WorkHarness")
+        let provider = RecordingAIProvider()
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(provider),
+            projectService: projectService,
+            contextBuilder: ContextBuilder()
+        )
+
+        _ = await engine.startRun(goal: "Use context")
+
+        let request = try #require(provider.requests.first)
+        let run = try #require(repository.runs.first)
+        #expect(request.context.contains("Current project: WorkHarness"))
+        #expect(request.context.contains("Project root: /tmp/WorkHarness"))
+        #expect(run.events.contains { $0.type == .contextBuilt })
+        #expect(run.events.first { $0.type == .contextBuilt }?.metadata["providerId"] == "recording.provider")
+    }
+
+    @MainActor
     @Test func mcpBackedProviderMapsStreamToAIEvents() async throws {
         let client = FakeMCPProviderClient(events: [
             .started,
@@ -923,6 +983,29 @@ private struct TestAIProvider: AIProvider {
             continuation.yield(.messageDelta("Hello"))
             continuation.yield(.messageCompleted("Hello from test provider."))
             continuation.yield(.tokenUsage(TokenUsage(inputTokens: 3, outputTokens: 5)))
+            continuation.yield(.finished)
+            continuation.finish()
+        }
+    }
+}
+
+@MainActor
+private final class RecordingAIProvider: AIProvider {
+    let id = "recording.provider"
+    let displayName = "Recording Provider"
+    let capabilities = ProviderCapabilities(
+        supportsStreaming: true,
+        contextWindowTokens: 1_000,
+        supportedModels: ["recording-model"]
+    )
+    private(set) var requests: [AIRequest] = []
+
+    func send(_ request: AIRequest) async throws -> AsyncThrowingStream<AIEvent, Error> {
+        requests.append(request)
+
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.started)
+            continuation.yield(.messageCompleted("Recorded."))
             continuation.yield(.finished)
             continuation.finish()
         }

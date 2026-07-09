@@ -12,11 +12,21 @@ final class HarnessEngine {
     private let repository: RunRepository
     private let recorder: RunRecorder
     private let providerService: ProviderServiceProtocol
+    private let projectService: ProjectServiceProtocol?
+    private let contextBuilder: ContextBuilderProtocol
 
-    init(repository: RunRepository, recorder: RunRecorder, providerService: ProviderServiceProtocol) {
+    init(
+        repository: RunRepository,
+        recorder: RunRecorder,
+        providerService: ProviderServiceProtocol,
+        projectService: ProjectServiceProtocol? = nil,
+        contextBuilder: ContextBuilderProtocol? = nil
+    ) {
         self.repository = repository
         self.recorder = recorder
         self.providerService = providerService
+        self.projectService = projectService
+        self.contextBuilder = contextBuilder ?? ContextBuilder()
     }
 
     var providerName: String {
@@ -77,6 +87,7 @@ final class HarnessEngine {
                 runId: runId,
                 agent: agent,
                 messages: [.init(role: .user, content: prompt)],
+                context: context(for: runId, prompt: prompt, agent: agent, provider: provider).contextItems,
                 tools: agent.tools,
                 budget: .init(maxInputTokens: agent.contextPolicy.maxInputTokens, maxOutputTokens: nil)
             )
@@ -116,6 +127,33 @@ final class HarnessEngine {
         } catch {
             failRun(runId, message: error.localizedDescription)
         }
+    }
+
+    private func context(for runId: UUID, prompt: String, agent: Agent, provider: any AIProvider) -> ContextSnapshot {
+        let currentProject = projectService?.currentProject
+        let snapshot = contextBuilder.buildSnapshot(from: ContextBuildInput(
+            runId: runId,
+            agent: agent,
+            providerId: provider.id,
+            userMessage: prompt,
+            currentProject: currentProject,
+            rootPath: currentProject?.rootPath,
+            tokenBudget: .init(maxInputTokens: agent.contextPolicy.maxInputTokens, maxOutputTokens: nil)
+        ))
+
+        recorder.record(
+            runId: runId,
+            type: .contextBuilt,
+            message: snapshot.summary,
+            metadata: [
+                "contextSnapshotId": snapshot.id.uuidString,
+                "providerId": provider.id,
+                "agentId": agent.id.uuidString,
+                "tokenEstimate": "\(snapshot.tokenCount)"
+            ]
+        )
+
+        return snapshot
     }
 
     private func failRun(_ runId: UUID, message: String) {

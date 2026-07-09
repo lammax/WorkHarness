@@ -68,6 +68,7 @@ extension MainScreen {
                 case .approvalRequested: "hand.raised"
                 case .approvalGranted: "checkmark.shield"
                 case .approvalRejected: "xmark.shield"
+                case .contextBuilt: "text.viewfinder"
                 case .contextCompacted: "rectangle.compress.vertical"
                 case .memorySaved: "brain"
                 case .validationStarted: "checklist"
