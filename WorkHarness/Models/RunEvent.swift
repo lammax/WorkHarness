@@ -46,6 +46,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
     case toolCallRequested
     case toolCallStarted
     case toolCallFinished
+    case toolCallFailed
     case toolResult
     case fileChanged
     case approvalRequested
@@ -76,6 +77,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
         case .toolCallRequested: "Tool Requested"
         case .toolCallStarted: "Tool Started"
         case .toolCallFinished: "Tool Finished"
+        case .toolCallFailed: "Tool Failed"
         case .toolResult: "Tool Result"
         case .fileChanged: "File Changed"
         case .approvalRequested: "Approval Requested"

@@ -91,6 +91,7 @@ extension MainScreen {
                 case .toolCallRequested: "terminal"
                 case .toolCallStarted: "play.rectangle"
                 case .toolCallFinished: "checkmark.rectangle"
+                case .toolCallFailed: "exclamationmark.rectangle"
                 case .toolResult: "doc.text.magnifyingglass"
                 case .fileChanged: "doc.badge.gearshape"
                 case .approvalRequested: "hand.raised"

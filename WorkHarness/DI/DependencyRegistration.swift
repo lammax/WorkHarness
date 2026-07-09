@@ -14,6 +14,7 @@ extension Container {
         registerProviders()
         registerEngine()
         registerServices()
+        registerTools()
         registerScreens()
         registerScene()
     }

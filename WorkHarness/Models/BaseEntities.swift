@@ -46,7 +46,26 @@ struct ProviderDefinition: Identifiable, Codable, Equatable {
 struct ToolDefinition: Identifiable, Codable, Equatable {
     var id: String
     var displayName: String
+    var description: String
+    var permission: ToolPermission
+    var inputSchema: [ToolInputField]
     var requiresApproval: Bool
+
+    init(
+        id: String,
+        displayName: String,
+        description: String = "",
+        permission: ToolPermission = .readOnly,
+        inputSchema: [ToolInputField] = [],
+        requiresApproval: Bool = false
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.description = description
+        self.permission = permission
+        self.inputSchema = inputSchema
+        self.requiresApproval = requiresApproval
+    }
 }
 
 struct MemoryItem: Identifiable, Codable, Equatable {

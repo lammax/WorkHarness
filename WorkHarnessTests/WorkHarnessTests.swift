@@ -133,6 +133,9 @@ struct WorkHarnessTests {
         let approvalService = try #require(container.resolve(ApprovalServiceProtocol.self))
         let processRunner = try #require(container.resolve(ProcessRunnerProtocol.self))
         let contextBuilder = try #require(container.resolve(ContextBuilderProtocol.self))
+        let toolRegistry = try #require(container.resolve(ToolRegistry.self))
+        let mcpToolClient = try #require(container.resolve(MCPToolClientProtocol.self))
+        let toolService = try #require(container.resolve(ToolServiceProtocol.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
@@ -147,9 +150,106 @@ struct WorkHarnessTests {
         #expect(approvalService.pendingRequests.isEmpty)
         #expect(processRunner is ProcessRunner)
         #expect(contextBuilder is ContextBuilder)
+        #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
+        #expect(mcpToolClient is MCPToolClient)
+        #expect(toolService.availableTools.contains { $0.id == "mcp.invoke" })
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
+    }
+
+    @MainActor
+    @Test func toolRegistryExposesDefaultTools() async throws {
+        let registry = ToolRegistry(tools: [
+            FileReadTool(),
+            FileWriteTool(),
+            ShellTool(),
+            GitTool(),
+            MCPToolAdapter()
+        ])
+
+        let ids = registry.availableTools.map(\.id).sorted()
+
+        #expect(ids == ["file.read", "file.write", "git.run", "mcp.invoke", "shell.run"])
+        #expect(try registry.tool(id: "file.read").permission == .readOnly)
+        #expect(try registry.tool(id: "file.write").permission == .workspaceWrite)
+    }
+
+    @MainActor
+    @Test func toolServiceRoutesSafeFileReadThroughMCPAndRecordsEvents() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Read a project file")
+        repository.insert(run)
+        let mcpClient = FakeMCPToolClient(result: ToolResult(toolId: "file.read", status: .succeeded, output: "let value = 42\n"))
+        let service = makeToolService(repository: repository, mcpClient: mcpClient, tools: [FileReadTool()])
+
+        let result = try await service.execute(.init(
+            runId: run.id,
+            toolId: "file.read",
+            arguments: ["path": "Sources/Example.swift"],
+            projectRootPath: "/tmp/project"
+        ))
+        let eventTypes = try #require(repository.run(withId: run.id)?.events.map(\.type))
+
+        #expect(result.status == .succeeded)
+        #expect(result.output == "let value = 42\n")
+        #expect(mcpClient.invocations.first?.toolId == "file.read")
+        #expect(eventTypes == [.toolCallRequested, .toolCallStarted, .toolCallFinished, .toolResult])
+    }
+
+    @MainActor
+    @Test func toolServiceRequestsApprovalBeforeFileWrite() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Write a project file")
+        repository.insert(run)
+        let projectRoot = try makeTemporaryDirectory()
+        let approvalRepository = InMemoryApprovalRepository()
+        let service = makeToolService(repository: repository, approvalRepository: approvalRepository, tools: [FileWriteTool()])
+
+        let result = try await service.execute(.init(
+            runId: run.id,
+            toolId: "file.write",
+            arguments: ["path": "Generated.txt", "content": "hello"],
+            projectRootPath: projectRoot.path
+        ))
+        let storedRun = try #require(repository.run(withId: run.id))
+
+        #expect(result.status == .approvalRequired)
+        #expect(approvalRepository.requests.count == 1)
+        #expect(approvalRepository.requests.first?.mode == .askBeforeWrite)
+        #expect(storedRun.status == .waitingForApproval)
+        #expect(storedRun.events.map(\.type) == [.toolCallRequested, .approvalRequested])
+        #expect(!FileManager.default.fileExists(atPath: projectRoot.appendingPathComponent("Generated.txt").path))
+    }
+
+    @MainActor
+    @Test func toolServiceRequestsApprovalBeforeShellAndDangerousGit() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Run dangerous tools")
+        repository.insert(run)
+        let approvalRepository = InMemoryApprovalRepository()
+        let service = makeToolService(
+            repository: repository,
+            approvalRepository: approvalRepository,
+            tools: [ShellTool(), GitTool()]
+        )
+
+        let shellResult = try await service.execute(.init(
+            runId: run.id,
+            toolId: "shell.run",
+            arguments: ["command": "rm -rf build"],
+            projectRootPath: "/tmp"
+        ))
+        let gitResult = try await service.execute(.init(
+            runId: run.id,
+            toolId: "git.run",
+            arguments: ["arguments": "reset --hard HEAD"],
+            projectRootPath: "/tmp"
+        ))
+
+        #expect(shellResult.status == .approvalRequired)
+        #expect(gitResult.status == .approvalRequired)
+        #expect(approvalRepository.requests.map(\.mode).sorted { $0.rawValue < $1.rawValue } == [.askBeforeShell, .askBeforeWrite])
     }
 
     @MainActor
@@ -899,6 +999,36 @@ private func makeApprovalService(repository: InMemoryRunRepository) -> ApprovalS
 }
 
 @MainActor
+private func makeToolService(
+    repository: InMemoryRunRepository,
+    mcpClient: MCPToolClientProtocol? = nil,
+    approvalRepository: InMemoryApprovalRepository? = nil,
+    tools: [any ToolProtocol]
+) -> ToolService {
+    let approvalRepository = approvalRepository ?? InMemoryApprovalRepository()
+    let mcpClient = mcpClient ?? FakeMCPToolClient()
+    return ToolService(
+        registry: ToolRegistry(tools: tools),
+        mcpClient: mcpClient,
+        approvalService: ApprovalService(
+            repository: approvalRepository,
+            runRepository: repository,
+            recorder: RunRecorder(repository: repository)
+        ),
+        recorder: RunRecorder(repository: repository)
+    )
+}
+
+private func makeTemporaryDirectory() throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "WorkHarnessTests-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+}
+
+@MainActor
 private func makeMainScreenViewModel(
     projectService: ProjectServiceProtocol,
     approvalService: ApprovalServiceProtocol? = nil
@@ -1030,6 +1160,21 @@ private final class FakeMCPProviderClient: MCPProviderClientProtocol {
             }
             continuation.finish()
         }
+    }
+}
+
+@MainActor
+private final class FakeMCPToolClient: MCPToolClientProtocol {
+    private let result: ToolResult
+    private(set) var invocations: [MCPToolInvocation] = []
+
+    init(result: ToolResult = ToolResult(toolId: "fake.tool", status: .succeeded, output: "ok")) {
+        self.result = result
+    }
+
+    func invoke(_ invocation: MCPToolInvocation) async throws -> ToolResult {
+        invocations.append(invocation)
+        return result
     }
 }
 

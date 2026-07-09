@@ -89,9 +89,31 @@ WorkHarness already has:
 - `ContextBuilder`.
 - `ContextSnapshot` provider context path.
 - `contextBuilt` RunEvents.
+- Tools Foundation v1.
+- `ToolProtocol`.
+- `ToolRegistry`.
+- `ToolPermission`.
+- `ToolResult`.
+- `ToolServiceProtocol`.
+- `ToolService`.
+- `FileReadTool`.
+- `FileWriteTool`.
+- `ShellTool`.
+- `GitTool`.
+- `MCPToolAdapter`.
+- MCP-only tool execution path.
+- Approval-gated MCP tool execution.
+- Tool RunEvents:
+  - `toolCallRequested`.
+  - `toolCallStarted`.
+  - `toolCallFinished`.
+  - `toolCallFailed`.
+  - `toolResult`.
 - Tests passing for the current stable slice.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
+
+All tool execution must go through MCP-backed tool adapters.
 
 All agent runtimes must eventually go through `AgentRuntime`, with ACP as the preferred transport.
 
@@ -104,6 +126,8 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Keep ViewModels behind service/facade boundaries.
 - Add safety and observability before real shell/tool/CLI execution.
 - Route every LLM/provider backend through MCP-backed provider adapters, not direct SDK/HTTP/CLI adapters inside WorkHarness.
+- Route every tool execution through MCP. WorkHarness must not execute file, shell, git, RAG, browser or external service tools directly.
+- Treat local tool types inside WorkHarness as descriptors/metadata only, never as fallback execution paths.
 - Route every full agent integration through `AgentRuntime`; ACP is the preferred transport for agents.
 - Treat MCP as the tool/provider protocol and ACP as the agent runtime protocol.
 - Direction rule: MCP means `Agent -> Harness tools/resources/provider capabilities`; ACP means `Harness -> Agent`.
@@ -129,6 +153,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 8 - Provider MCP Migration v1.
 - Step 9 - Local LLM MCP Provider v1.
 - Step 10 - ContextBuilder v1.
+- Step 11 - Tools Foundation v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -462,7 +487,7 @@ Do not add:
 Done when:
 The provider receives requests through a single context pipeline.
 
-## Step 11 - Tools Foundation v1
+## Step 11 - Tools Foundation v1 (Done)
 
 Goal:
 Move from provider chat to harness actions.
@@ -481,9 +506,12 @@ Scope:
 - Approval integration.
 - Tool `RunEvent` entries.
 - Tests.
+- All real execution is routed through MCP.
+- WorkHarness owns tool metadata, approval, RunEvents and UI.
+- MCP server owns file, shell, git, RAG, browser and external capability execution.
 
 Done when:
-Tools are registered, MCP can become a controlled external capability source, and dangerous operations go through `ApprovalService`.
+Tools are registered as WorkHarness-controlled metadata, all execution is routed through MCP, and dangerous operations go through `ApprovalService` before MCP invocation.
 
 ## Step 12 - Persistence v1
 

@@ -11,4 +11,5 @@ enum AppService {
     case projects
     case providers
     case runs
+    case tools
 }
