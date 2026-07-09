@@ -115,6 +115,17 @@ All LLM/provider backends must go through MCP-backed provider adapters.
 
 All tool execution must go through MCP-backed tool adapters.
 
+Existing MCP server base contains these ready server targets:
+
+- `FileOperationsMCPServer`
+- `GitHubMCPServer`
+- `LocalLLMMCPServer`
+- `RAGMCPServer`
+- `SupportMCPServer`
+- `UtilityMCPServer`
+- `VisionBackendServer`
+- `Shared`
+
 All agent runtimes must eventually go through `AgentRuntime`, with ACP as the preferred transport.
 
 Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary scaffold and must not be extended as the final agent architecture.
@@ -133,6 +144,8 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Direction rule: MCP means `Agent -> Harness tools/resources/provider capabilities`; ACP means `Harness -> Agent`.
 - Build an embedded ACP Host / ACP Client Runtime inside WorkHarness first; do not introduce a standalone ACP server or daemon until Remote Control requires it.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` as the existing local MCP server base for MCP-backed providers/tools unless a task explicitly chooses another server.
+- Before adding a new MCP capability, check the existing server targets: `FileOperationsMCPServer`, `GitHubMCPServer`, `LocalLLMMCPServer`, `RAGMCPServer`, `SupportMCPServer`, `UtilityMCPServer`, `VisionBackendServer` and `Shared`.
+- Do not duplicate an existing MCP server capability inside WorkHarness as a local tool.
 - Route local LLM model providers, such as Ollama, Qwen and llama.cpp-style backends, through the same MCP-backed provider path.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer` as the existing source implementation for local LLM logic; migrate the reusable parts into the MCP server base instead of duplicating that logic inside WorkHarness.
 - Treat direct local CLI providers, such as Codex CLI and Cursor CLI over `ProcessRunner`, as temporary scaffolding only.

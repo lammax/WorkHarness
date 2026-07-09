@@ -156,6 +156,21 @@ Screens/<Name>/
 
 Tool layer должен быть отделен от UI и Providers.
 
+Все реальные tools должны исполняться через MCP server boundary. WorkHarness владеет только metadata/registry, approval flow, RunEvents, UI и orchestration; file/shell/git/RAG/GitHub/utility/vision/local-LLM исполнение принадлежит MCP servers.
+
+В `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` уже есть готовые MCP servers, которые нужно учитывать перед добавлением новых capabilities:
+
+- `FileOperationsMCPServer`
+- `GitHubMCPServer`
+- `LocalLLMMCPServer`
+- `RAGMCPServer`
+- `SupportMCPServer`
+- `UtilityMCPServer`
+- `VisionBackendServer`
+- `Shared`
+
+Не дублировать эти capabilities локальными tools внутри WorkHarness. Сначала проверять существующий MCP server и маршрутизировать capability через него.
+
 ## 9. Git workflow
 
 - Не делать commit/push без явной просьбы пользователя.
