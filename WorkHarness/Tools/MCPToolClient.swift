@@ -22,8 +22,8 @@ protocol MCPToolClientProtocol: AnyObject {
 final class MCPToolClient: MCPToolClientProtocol {
     private let serverBasePath: String
 
-    init(serverBasePath: String = MCPProviderConfiguration.defaultServerBasePath) {
-        self.serverBasePath = serverBasePath
+    init(serverBasePath: String? = nil) {
+        self.serverBasePath = serverBasePath ?? MCPProviderConfiguration.defaultServerBasePath
     }
 
     func invoke(_ invocation: MCPToolInvocation) async throws -> ToolResult {

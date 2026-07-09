@@ -9,6 +9,10 @@ import Swinject
 
 extension Container {
     func registerRepositories() {
+        register(SQLiteDatabase.self) { _ in
+            try! SQLiteDatabase()
+        }.inObjectScope(.container)
+
         register(InMemoryApprovalRepository.self) { _ in
             InMemoryApprovalRepository()
         }.inObjectScope(.container)
@@ -25,16 +29,24 @@ extension Container {
             UserDefaultsProjectRepository()
         }.inObjectScope(.container)
 
+        register(SQLiteProjectRepository.self) { resolver in
+            SQLiteProjectRepository(database: resolver.resolve(SQLiteDatabase.self)!)
+        }.inObjectScope(.container)
+
         register(ProjectRepositoryProtocol.self) { resolver in
-            resolver.resolve(UserDefaultsProjectRepository.self)!
+            resolver.resolve(SQLiteProjectRepository.self)!
         }.inObjectScope(.container)
 
         register(InMemoryRunRepository.self) { _ in
             InMemoryRunRepository()
         }.inObjectScope(.container)
 
+        register(SQLiteRunRepository.self) { resolver in
+            SQLiteRunRepository(database: resolver.resolve(SQLiteDatabase.self)!)
+        }.inObjectScope(.container)
+
         register(RunRepository.self) { resolver in
-            resolver.resolve(InMemoryRunRepository.self)!
+            resolver.resolve(SQLiteRunRepository.self)!
         }.inObjectScope(.container)
     }
 }

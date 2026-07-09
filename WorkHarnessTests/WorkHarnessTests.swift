@@ -120,6 +120,7 @@ struct WorkHarnessTests {
     @MainActor
     @Test func swinjectContainerResolvesRegisteredAppGraph() async throws {
         UserDefaultsAppSettingsService().defaultProviderId = nil
+        setenv("WORKHARNESS_SQLITE_PATH", try makeTemporaryDatabaseURL().path, 1)
 
         let container = Container()
         container.registerDependencies()
@@ -142,7 +143,8 @@ struct WorkHarnessTests {
 
         #expect(firstRepository.runs.isEmpty)
         #expect(firstRepository === secondRepository)
-        #expect(projectRepository is UserDefaultsProjectRepository)
+        #expect(firstRepository is SQLiteRunRepository)
+        #expect(projectRepository is SQLiteProjectRepository)
         #expect(projectRepository.projects.isEmpty)
         #expect(projectService.currentProject == nil)
         #expect(providerService.activeProviderId == MockAIProvider.providerId)
@@ -362,6 +364,42 @@ struct WorkHarnessTests {
 
         #expect(repository.projects.isEmpty)
         #expect(repository.currentProjectId == nil)
+    }
+
+    @MainActor
+    @Test func sqliteProjectRepositoryPersistsProjectsAcrossInstances() async throws {
+        let databaseURL = try makeTemporaryDatabaseURL()
+        let firstRepository = try SQLiteProjectRepository(database: SQLiteDatabase(url: databaseURL))
+        let firstProject = Project(name: "First", rootPath: "/tmp/First")
+        let secondProject = Project(name: "Second", rootPath: "/tmp/Second")
+
+        firstRepository.insert(firstProject)
+        firstRepository.insert(secondProject)
+        firstRepository.selectProject(id: firstProject.id)
+
+        let restoredRepository = try SQLiteProjectRepository(database: SQLiteDatabase(url: databaseURL))
+
+        #expect(restoredRepository.projects.map(\.id) == [secondProject.id, firstProject.id])
+        #expect(restoredRepository.project(withId: firstProject.id)?.rootPath == "/tmp/First")
+        #expect(restoredRepository.currentProjectId == firstProject.id)
+    }
+
+    @MainActor
+    @Test func sqliteRunRepositoryPersistsRunsAndEventsAcrossInstances() async throws {
+        let databaseURL = try makeTemporaryDatabaseURL()
+        let firstRepository = try SQLiteRunRepository(database: SQLiteDatabase(url: databaseURL))
+        let run = Run(goal: "Persist run")
+        let event = RunEvent(runId: run.id, type: .assistantMessage, message: "Stored")
+
+        firstRepository.insert(run)
+        firstRepository.appendEvent(event)
+
+        let restoredRepository = try SQLiteRunRepository(database: SQLiteDatabase(url: databaseURL))
+        let restoredRun = try #require(restoredRepository.run(withId: run.id))
+
+        #expect(restoredRun.goal == "Persist run")
+        #expect(restoredRun.events.map(\.id) == [event.id])
+        #expect(restoredRun.events.first?.message == "Stored")
     }
 
     @MainActor
@@ -1026,6 +1064,10 @@ private func makeTemporaryDirectory() throws -> URL {
     )
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
+}
+
+private func makeTemporaryDatabaseURL() throws -> URL {
+    try makeTemporaryDirectory().appendingPathComponent("WorkHarness.sqlite")
 }
 
 @MainActor
