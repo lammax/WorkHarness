@@ -19,7 +19,8 @@ extension Container {
                 providers: [
                     MockAIProvider(),
                     MCPBackedAIProvider(descriptor: .codexCLI, client: mcpClient),
-                    MCPBackedAIProvider(descriptor: .cursorCLI, client: mcpClient)
+                    MCPBackedAIProvider(descriptor: .cursorCLI, client: mcpClient),
+                    MCPBackedAIProvider(descriptor: .localLLM, client: mcpClient)
                 ],
                 defaultProviderId: MockAIProvider.providerId
             )

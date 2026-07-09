@@ -645,6 +645,35 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func mcpBackedLocalLLMProviderMapsStreamToAIEvents() async throws {
+        let client = FakeMCPProviderClient(events: [
+            .started,
+            .messageDelta("Local "),
+            .messageDelta("answer"),
+            .messageCompleted("Local answer"),
+            .finished
+        ])
+        let provider = MCPBackedAIProvider(descriptor: .localLLM, client: client)
+        let request = makeAIRequest(
+            prompt: "Use the local model",
+            providerId: MCPProviderDescriptor.localLLM.id,
+            model: "local-private"
+        )
+
+        let events = try await collectAIEvents(from: provider, request: request)
+
+        #expect(client.requests.first?.providerId == MCPProviderDescriptor.localLLM.id)
+        #expect(client.requests.first?.aiRequest.model == "local-private")
+        #expect(events == [
+            .started,
+            .messageDelta("Local "),
+            .messageDelta("answer"),
+            .messageCompleted("Local answer"),
+            .finished
+        ])
+    }
+
+    @MainActor
     @Test func mcpBackedCLIProvidersAreRegisteredAndSelectable() async throws {
         let container = Container()
         container.registerDependencies()
@@ -653,11 +682,12 @@ struct WorkHarnessTests {
 
         #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.codexCLI.id && $0.name == "Codex CLI" })
         #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.cursorCLI.id && $0.name == "Cursor CLI" })
+        #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.localLLM.id && $0.name == "Local LLM" })
 
-        settingsViewModel.selectProvider(id: MCPProviderDescriptor.cursorCLI.id)
+        settingsViewModel.selectProvider(id: MCPProviderDescriptor.localLLM.id)
 
-        #expect(providerService.activeProviderId == MCPProviderDescriptor.cursorCLI.id)
-        #expect(settingsViewModel.activeProviderName == "Cursor CLI")
+        #expect(providerService.activeProviderId == MCPProviderDescriptor.localLLM.id)
+        #expect(settingsViewModel.activeProviderName == "Local LLM")
     }
 
     @MainActor

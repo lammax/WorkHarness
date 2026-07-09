@@ -1,6 +1,6 @@
 # WorkHarness Development Roadmap
 
-Updated: 08.07.2026
+Updated: 09.07.2026
 
 WorkHarness is a local-first macOS SwiftUI AI Agent Harness. It must stay Run-centric, provider-agnostic and safety-aware. Do not treat it as a generic chat app.
 
@@ -74,6 +74,16 @@ WorkHarness already has:
 - `MCPBackedAIProvider`.
 - Codex CLI MCP provider descriptor.
 - Cursor CLI MCP provider descriptor.
+- Local LLM MCP provider descriptor.
+- Local LLM MCP JSON-RPC client path in `MCPProviderClient`.
+- Local LLM provider registration in `ProviderRegistry`.
+- Local LLM provider settings selectability.
+- `LocalLLMMCPServer` in `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server`.
+- Local LLM MCP tools:
+  - `local_llm_list_models`.
+  - `local_llm_describe_model`.
+  - `local_llm_generate`.
+  - `local_llm_health`.
 - Tests passing for the current stable slice.
 
 All AI providers must go through MCP-backed provider adapters. Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary scaffold and must not be extended as the final provider path.
@@ -101,6 +111,8 @@ All AI providers must go through MCP-backed provider adapters. Direct CLI provid
 - Step 5 - CLI Infrastructure v1.
 - Step 6 - CodexCLIProvider v1.
 - Step 7 - CursorCLIProvider v1.
+- Step 8 - Provider MCP Migration v1.
+- Step 9 - Local LLM MCP Provider v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -272,7 +284,7 @@ Scope:
 Done when:
 The second CLI backend is added without changes in `HarnessEngine`.
 
-## Step 8 - Provider MCP Migration v1
+## Step 8 - Provider MCP Migration v1 (Done)
 
 Goal:
 Move the provider layer to the final rule: every AI backend goes through MCP-backed provider adapters.
@@ -311,10 +323,15 @@ Do not add:
 Done when:
 Codex CLI and Cursor CLI are reachable through MCP-backed provider adapters, and no final provider path depends on direct `ProcessRunner` providers inside WorkHarness.
 
-## Step 9 - Local LLM MCP Provider v1
+## Step 9 - Local LLM MCP Provider v1 (Done)
 
 Goal:
 Add local model support without putting Ollama/Qwen/llama.cpp-specific code directly into WorkHarness.
+
+Status note:
+The v1 slice adds a dedicated `LocalLLMMCPServer` to the MCP server package and registers a WorkHarness `Local LLM` provider through the MCP-backed provider adapter path.
+
+The current local LLM MCP server wraps an OpenAI-compatible local endpoint, matching the existing `LlamaLocalServer` / `llama-server` setup. WorkHarness sends MCP JSON-RPC `tools/call` requests to `local_llm_generate` and maps the tool result into `AIEvent` output. Token-by-token upstream streaming can be expanded later without changing `HarnessEngine`.
 
 Boundary:
 Local LLMs are providers, but they are not local CLI agent providers like Codex CLI or Cursor CLI.
