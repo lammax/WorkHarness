@@ -82,6 +82,11 @@ Do not add `CursorCLIProvider` before the safety and process infrastructure step
 - Keep Views out of repositories, providers, tools and engine internals.
 - Keep ViewModels behind service/facade boundaries.
 - Add safety and observability before real shell/tool/CLI execution.
+- Route external/cloud AI providers through MCP-backed provider adapters, not direct SDK/HTTP adapters inside WorkHarness.
+- Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` as the existing local MCP server base for MCP-backed providers/tools unless a task explicitly chooses another server.
+- Route local LLM model providers, such as Ollama, Qwen and llama.cpp-style backends, through the same MCP-backed provider path.
+- Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer` as the existing source implementation for local LLM logic; migrate the reusable parts into the MCP server base instead of duplicating that logic inside WorkHarness.
+- Keep local CLI agent providers, such as Codex CLI and Cursor CLI, behind `ProcessRunner` and the normal safety/approval boundaries.
 - Prefer small, buildable steps with tests where behavior crosses service, repository, engine, provider or ViewModel boundaries.
 - Commit and push stable validated slices before starting broad new work.
 
@@ -245,6 +250,9 @@ Codex CLI is selectable in Settings and works through the existing chat/run flow
 Goal:
 Validate the provider abstraction with a second real backend.
 
+Boundary:
+Cursor CLI is treated as a local CLI agent provider. External/cloud providers are not added with this pattern; they must go through MCP.
+
 Scope:
 
 - `CursorCLIProvider: AIProvider`.
@@ -258,7 +266,86 @@ Scope:
 Done when:
 The second CLI backend is added without changes in `HarnessEngine`.
 
-## Step 8 - ContextBuilder v1
+## Step 8 - Local LLM MCP Provider v1
+
+Goal:
+Add local model support without putting Ollama/Qwen/llama.cpp-specific code directly into WorkHarness.
+
+Boundary:
+Local LLMs are providers, but they are not local CLI agent providers like Codex CLI or Cursor CLI.
+
+They must go through MCP-backed provider adapters.
+
+Existing source code:
+
+- Local LLM implementation source: `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer`.
+- MCP server base: `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server`.
+
+Migration instruction:
+
+1. Inspect `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer` before designing the WorkHarness side.
+2. Identify reusable local LLM capabilities:
+   - model discovery/listing.
+   - model metadata.
+   - prompt/completion request.
+   - streaming generation.
+   - cancellation if already supported.
+   - error mapping.
+   - health/status checks.
+   - token/usage metadata if available.
+3. Inspect `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` and choose the existing extension points for tools/resources/prompts/provider-style capabilities.
+4. Move or wrap the reusable LLM logic from `LlamaLocalServer` into `MCP_server`.
+5. Keep LLM backend-specific details inside `MCP_server`, not inside WorkHarness:
+   - Ollama URLs and payloads.
+   - Qwen-specific settings.
+   - llama.cpp server details.
+   - model-specific request fields.
+   - retry/health behavior.
+6. Expose a stable MCP contract for local LLM usage:
+   - list local models.
+   - describe model capabilities.
+   - start generation.
+   - stream generation deltas.
+   - finish generation.
+   - report failure.
+   - optionally report token usage.
+7. Add or prepare a WorkHarness MCP-backed local LLM provider adapter.
+8. The WorkHarness adapter maps MCP capabilities/results into existing app concepts:
+   - `AIProvider`.
+   - `ProviderDefinition`.
+   - `ProviderCapabilities`.
+   - `AIRequest`.
+   - `AIEvent.started`.
+   - `AIEvent.messageDelta`.
+   - `AIEvent.messageCompleted`.
+   - `AIEvent.finished`.
+   - `AIEvent.error`.
+9. Register the local LLM provider through `ProviderRegistry` only after the MCP contract is stable.
+10. Show local MCP-backed LLM provider options in Settings without leaking MCP/internal backend details into UI.
+11. Allow choosing a local model such as Qwen through provider settings or provider metadata, depending on the existing UI shape at that time.
+12. Keep `HarnessEngine` provider-agnostic; do not add branches for Ollama, Qwen, llama.cpp, MCP or local model families.
+13. Keep tool execution separate from local LLM generation. The local LLM provider generates text; tools still go through Tool/Approval/RunEvent boundaries.
+14. Add deterministic tests:
+   - fake MCP local model list.
+   - fake streaming generation.
+   - fake backend failure.
+   - provider registration/selectability.
+   - no `HarnessEngine` changes for local LLM support.
+15. Update documentation when migration details become concrete.
+
+Do not add:
+
+- Direct `OllamaProvider` HTTP adapter inside WorkHarness.
+- Direct `QwenProvider` adapter inside WorkHarness.
+- Direct llama.cpp network adapter inside WorkHarness.
+- LLM backend-specific branching in `HarnessEngine`.
+- Tool execution inside the local LLM provider.
+- RAG or embeddings unless explicitly part of the later RAG step.
+
+Done when:
+WorkHarness can select a local MCP-backed LLM provider and receive streamed `AIEvent` output through the existing provider flow, while the local LLM implementation lives in `MCP_server`.
+
+## Step 9 - ContextBuilder v1
 
 Goal:
 Create one path for building provider context.
@@ -288,7 +375,7 @@ Do not add:
 Done when:
 The provider receives requests through a single context pipeline.
 
-## Step 9 - Tools Foundation v1
+## Step 10 - Tools Foundation v1
 
 Goal:
 Move from provider chat to harness actions.
@@ -303,14 +390,15 @@ Scope:
 - `FileWriteTool`.
 - `ShellTool`.
 - `GitTool`.
+- `MCPToolAdapter`.
 - Approval integration.
 - Tool `RunEvent` entries.
 - Tests.
 
 Done when:
-Tools are registered, and dangerous operations go through `ApprovalService`.
+Tools are registered, MCP can become a controlled external capability source, and dangerous operations go through `ApprovalService`.
 
-## Step 10 - Persistence v1
+## Step 11 - Persistence v1
 
 Goal:
 Replace temporary storage with a real database.
@@ -328,7 +416,7 @@ Scope:
 Done when:
 Runs, events and projects survive app restart through structured persistence.
 
-## Step 11 - Token / Cost Statistics v1
+## Step 12 - Token / Cost Statistics v1
 
 Goal:
 Make usage observable.
@@ -346,7 +434,7 @@ Scope:
 Done when:
 The user can see token and cost usage by Run and provider.
 
-## Step 12 - Context Folding v1
+## Step 13 - Context Folding v1
 
 Goal:
 Long runs do not inflate context indefinitely.
@@ -365,7 +453,7 @@ Scope:
 Done when:
 A long Run can be compacted into a useful summary.
 
-## Step 13 - Memory v1
+## Step 14 - Memory v1
 
 Goal:
 Persist stable project knowledge.
@@ -388,7 +476,7 @@ Do not add yet:
 Done when:
 Stable project knowledge can be saved, read and shown through a basic app surface.
 
-## Step 14 - RAG v1
+## Step 15 - RAG v1
 
 Goal:
 Search project knowledge and files.
@@ -397,7 +485,7 @@ Scope:
 
 - Document ingestion.
 - Chunking.
-- Embeddings provider.
+- MCP-backed embeddings provider.
 - Vector storage.
 - `RAGSearchTool`.
 - Citations/metadata.
@@ -407,7 +495,7 @@ Scope:
 Done when:
 Relevant indexed knowledge can be retrieved with citations and inserted into context through the approved context path.
 
-## Step 15 - Multi-Agent v1
+## Step 16 - Multi-Agent v1
 
 Goal:
 Support real agentic development workflows.
@@ -427,7 +515,7 @@ Scope:
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.
 
-## Step 16 - Remote Control v1
+## Step 17 - Remote Control v1
 
 Goal:
 Prepare for mobile control.
@@ -467,6 +555,36 @@ WorkHarness is a local-first AI Operating Environment.
 Applications interact with it.
 
 WorkHarness itself remains the reusable platform.
+
+## External And Local Model Providers Go Through MCP
+
+External/cloud AI providers are not integrated as direct SDK or raw HTTP adapters inside WorkHarness.
+
+Local model providers such as Ollama, Qwen and llama.cpp-style servers are also not integrated as direct HTTP adapters inside WorkHarness.
+
+Instead, WorkHarness talks to external and local model backends through MCP-backed provider adapters.
+
+The local MCP server base already exists at:
+
+`/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server`
+
+Use that project as the starting point for MCP-backed providers/tools unless a specific task says otherwise.
+
+The existing local LLM implementation already exists at:
+
+`/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer`
+
+When adding local LLM support, migrate or wrap the reusable local LLM logic from `LlamaLocalServer` into `MCP_server`. Do not copy that backend logic into WorkHarness.
+
+This keeps provider integrations:
+
+- replaceable
+- auditable
+- permissioned
+- observable
+- outside the core orchestration surface
+
+Local CLI agent providers, such as Codex CLI and Cursor CLI, are the exception: they run locally through `ProcessRunner` and must still respect the same safety, approval and RunEvent boundaries.
 
 ---
 
@@ -745,14 +863,16 @@ Future users:
 
 - Codex CLI
 - Cursor CLI
-- Ollama CLI
+- MCP server launcher/helper processes
 - Git
 - Swift Build
 - xcodebuild
 - npm
 - ffmpeg
 
-Never specialize ProcessRunner for Codex.
+Never specialize ProcessRunner for Codex, Cursor, Ollama or any other single backend.
+
+Local LLM model execution must stay behind MCP-backed provider adapters, not direct WorkHarness `ProcessRunner` providers.
 
 ---
 

@@ -115,6 +115,10 @@ Screens/<Name>/
 ## 7. Providers
 
 - Каждый AI backend должен быть за общим `AIProvider` protocol.
+- Все внешние provider-интеграции должны подключаться через MCP boundary, а не через прямые SDK/HTTP adapters внутри приложения.
+- `AIProvider` остаётся внутренним протоколом WorkHarness; для внешних облачных/удалённых AI backend использовать MCP-backed provider adapter, который мапит MCP capability/result в `AIProvider`/`AIEvent`.
+- База для MCP server уже подготовлена в `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server`; при реализации MCP-backed providers/tools использовать её как исходную локальную основу, если пользователь явно не указал другой сервер.
+- Исключение: локальные CLI agent backends, такие как Codex CLI и Cursor CLI, могут быть отдельными CLI providers/adapters поверх `ProcessRunner`, если они выполняются локально и проходят через safety/approval boundaries.
 - Provider может:
   - принимать request
   - stream events
@@ -126,6 +130,7 @@ Screens/<Name>/
   - владеть memory/RAG/orchestration
   - решать global permissions
   - напрямую редактировать файлы без approval path harness engine
+- Не добавлять прямые `OpenAIProvider`, `AnthropicProvider`, `GeminiProvider`, `OpenRouterProvider` и аналогичные network-specific adapters в приложение; такие backends должны приходить через MCP.
 - CLI process execution не размазывать по проекту. Для CLI backend создавать отдельный provider/adapter.
 
 ## 8. Tools и безопасность
