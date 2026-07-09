@@ -929,7 +929,6 @@ private struct TestAIProvider: AIProvider {
     }
 }
 
-@MainActor
 private final class FakeMCPProviderClient: MCPProviderClientProtocol {
     private let events: [MCPProviderEvent]
     private(set) var requests: [MCPProviderRequest] = []

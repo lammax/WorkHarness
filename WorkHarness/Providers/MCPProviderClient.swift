@@ -101,12 +101,10 @@ enum MCPProviderEvent: Equatable {
     case failed(String)
 }
 
-@MainActor
 protocol MCPProviderClientProtocol: AnyObject {
     func streamEvents(for request: MCPProviderRequest) async throws -> AsyncThrowingStream<MCPProviderEvent, Error>
 }
 
-@MainActor
 final class MCPProviderClient: MCPProviderClientProtocol {
     private let configuration: MCPProviderConfiguration
 

@@ -2,7 +2,7 @@
 
 Updated: 09.07.2026
 
-WorkHarness is a local-first macOS SwiftUI AI Agent Harness. It must stay Run-centric, provider-agnostic and safety-aware. Do not treat it as a generic chat app.
+WorkHarness is a local-first macOS SwiftUI AI Agent Harness. It must stay Run-centric, provider-agnostic, agent-agnostic and safety-aware. Do not treat it as a generic chat app.
 
 ## Engineering Priorities
 
@@ -86,7 +86,11 @@ WorkHarness already has:
   - `local_llm_health`.
 - Tests passing for the current stable slice.
 
-All AI providers must go through MCP-backed provider adapters. Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary scaffold and must not be extended as the final provider path.
+All LLM/provider backends must go through MCP-backed provider adapters.
+
+All agent runtimes must eventually go through `AgentRuntime`, with ACP as the preferred transport.
+
+Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary scaffold and must not be extended as the final agent architecture.
 
 ## Roadmap Rules
 
@@ -94,11 +98,17 @@ All AI providers must go through MCP-backed provider adapters. Direct CLI provid
 - Keep Views out of repositories, providers, tools and engine internals.
 - Keep ViewModels behind service/facade boundaries.
 - Add safety and observability before real shell/tool/CLI execution.
-- Route every AI provider through MCP-backed provider adapters, not direct SDK/HTTP/CLI adapters inside WorkHarness.
+- Route every LLM/provider backend through MCP-backed provider adapters, not direct SDK/HTTP/CLI adapters inside WorkHarness.
+- Route every full agent integration through `AgentRuntime`; ACP is the preferred transport for agents.
+- Treat MCP as the tool/provider protocol and ACP as the agent runtime protocol.
+- Direction rule: MCP means `Agent -> Harness tools/resources/provider capabilities`; ACP means `Harness -> Agent`.
+- Build an embedded ACP Host / ACP Client Runtime inside WorkHarness first; do not introduce a standalone ACP server or daemon until Remote Control requires it.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` as the existing local MCP server base for MCP-backed providers/tools unless a task explicitly chooses another server.
 - Route local LLM model providers, such as Ollama, Qwen and llama.cpp-style backends, through the same MCP-backed provider path.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer` as the existing source implementation for local LLM logic; migrate the reusable parts into the MCP server base instead of duplicating that logic inside WorkHarness.
-- Treat direct local CLI providers, such as Codex CLI and Cursor CLI over `ProcessRunner`, as temporary scaffolding only; migrate them into MCP-backed provider adapters.
+- Treat direct local CLI providers, such as Codex CLI and Cursor CLI over `ProcessRunner`, as temporary scaffolding only.
+- Treat MCP-backed Codex CLI / Cursor CLI provider descriptors as interim compatibility surfaces; the final architecture for full coding agents is ACP-backed `AgentRuntime`.
+- Never branch on concrete agent names such as Codex, Cursor, Claude Code, Gemini CLI or OpenHands in `HarnessEngine`, planner, tools or UI.
 - Prefer small, buildable steps with tests where behavior crosses service, repository, engine, provider or ViewModel boundaries.
 - Commit and push stable validated slices before starting broad new work.
 
@@ -244,7 +254,9 @@ Goal:
 Add the first real backend.
 
 Status note:
-This step created a direct `ProcessRunner` provider scaffold. That is useful validation, but it is not the final provider architecture because all providers must go through MCP.
+This step created a direct `ProcessRunner` provider scaffold. That is useful validation, but it is not the final architecture.
+
+LLM/provider backends go through MCP-backed provider adapters. Full coding agents move to ACP-backed `AgentRuntime`.
 
 Scope:
 
@@ -269,7 +281,9 @@ Goal:
 Validate the provider abstraction with a second real backend.
 
 Boundary:
-This step created a second direct `ProcessRunner` provider scaffold. That validates the provider abstraction, but the final provider path must still be MCP-backed.
+This step created a second direct `ProcessRunner` provider scaffold. That validates the provider abstraction, but direct CLI execution is not a final architecture path.
+
+LLM/provider backends go through MCP-backed provider adapters. Full coding agents move to ACP-backed `AgentRuntime`.
 
 Scope:
 
@@ -287,7 +301,12 @@ The second CLI backend is added without changes in `HarnessEngine`.
 ## Step 8 - Provider MCP Migration v1 (Done)
 
 Goal:
-Move the provider layer to the final rule: every AI backend goes through MCP-backed provider adapters.
+Move the provider layer to the final rule for LLM/provider backends: they go through MCP-backed provider adapters.
+
+Status note:
+This step is final for LLM/provider backends and interim for full coding agents.
+
+Codex CLI and Cursor CLI MCP-backed descriptors are compatibility surfaces until Step 17 introduces ACP-backed `AgentRuntime`.
 
 Scope:
 
@@ -321,7 +340,7 @@ Do not add:
 - Tool execution inside providers.
 
 Done when:
-Codex CLI and Cursor CLI are reachable through MCP-backed provider adapters, and no final provider path depends on direct `ProcessRunner` providers inside WorkHarness.
+Codex CLI and Cursor CLI are reachable through MCP-backed provider adapters as interim compatibility surfaces, and no LLM/provider backend depends on direct `ProcessRunner` providers inside WorkHarness.
 
 ## Step 9 - Local LLM MCP Provider v1 (Done)
 
@@ -557,27 +576,141 @@ Scope:
 Done when:
 Relevant indexed knowledge can be retrieved with citations and inserted into context through the approved context path.
 
-## Step 17 - Multi-Agent v1
+## Step 17 - ACP Agent Runtime v1
+
+Goal:
+Introduce one agent runtime abstraction so WorkHarness can run coding agents without depending on Codex, Cursor, Claude Code, Gemini CLI, OpenHands or any future concrete agent.
+
+Architectural decision:
+ACP is the preferred transport for full agent integrations.
+
+Layer:
+
+```text
+Run
+↓
+HarnessEngine
+↓
+TaskPlanner
+↓
+AgentRuntime
+↓
+ACPHost / ACPClientRuntime
+↓
+ACPAgent
+```
+
+Scope:
+
+- Create `AgentRuntime/`.
+- Define the agent-facing domain API:
+  - `AgentRuntime`.
+  - `Agent`.
+  - `AgentSession`.
+  - `AgentTask`.
+  - `AgentRequest`.
+  - `AgentResponse`.
+  - `AgentEvent`.
+  - `AgentCapabilities`.
+  - `AgentRegistry`.
+  - `AgentFactory`.
+  - `AgentExecution`.
+- Create `ACP/`.
+- Define ACP isolation types:
+  - `ACPHost`.
+  - `ACPClient`.
+  - `ACPClientRuntime`.
+  - `ACPConnection`.
+  - `ACPTransport`.
+  - `ACPMessage`.
+  - `ACPEvent`.
+  - `ACPError`.
+  - `ACPCodec`.
+- Launch ACP-compatible agents as subprocesses for local integrations.
+- Use JSON-RPC 2.0 over stdin/stdout as the default local subprocess transport, unless a specific ACP agent requires a different transport.
+- Add a stable agent interface:
+  - `connect`.
+  - `disconnect`.
+  - `capabilities`.
+  - `run(task:)`.
+  - `cancel`.
+  - `pause`.
+  - `resume`.
+  - `events`.
+- Add capability discovery for agents.
+- Add `AgentRegistry` for registered agent runtimes.
+- Add `AgentSession` state/events/cost/tokens/artifacts/logs/child sessions/timeline placeholders.
+- Keep one `AgentSession` per connected/running ACP agent session.
+- Receive streamed ACP events from the agent.
+- Map ACP event stream into existing `RunEvent` timeline concepts.
+- Ensure approvals are requested through the existing `ApprovalService`, not agent-specific UI.
+- Ensure agent tool requests route through Harness Tool Runtime / Tool Registry.
+- Ensure agents receive `ContextSnapshot` from `ContextBuilder`; agents do not own memory.
+- Log diffs, commands, tool calls and artifacts through the Run/AgentSession event pipeline.
+- Add tests with fake ACP transports and fake agents.
+
+Agent capabilities:
+
+- canEditFiles.
+- canSearch.
+- canPlan.
+- canUseTools.
+- canStreamTokens.
+- canExecuteTerminal.
+- canSpawnAgents.
+- canApproveChanges.
+- canReadGit.
+- canRunTests.
+- canOpenDiff.
+- canIndexWorkspace.
+- canGenerateImages.
+
+Adapter priority:
+
+1. ACP.
+2. Native SDK, only if it exposes agent-session semantics.
+3. CLI subprocess fallback behind `AgentRuntime`.
+4. AppleScript.
+5. UI automation.
+
+MCP is not an ACP replacement for full agent sessions. Use MCP for Harness tools, resources, prompts and LLM/provider capabilities, plus interim compatibility provider surfaces where already needed.
+
+Do not add:
+
+- `if Codex`, `if Cursor`, `if Claude`, `if Gemini` or similar branching.
+- Standalone ACP server, ACP daemon or ACP tool server in this step.
+- Direct agent CLI process execution in `HarnessEngine`.
+- Agent-owned tools.
+- Agent-owned memory.
+- Mobile remote control or `HarnessDaemon` extraction.
+- Provider-specific events leaking into UI.
+
+Done when:
+WorkHarness can run at least one fake ACP agent through `AgentRuntime`, persist/observe its events as `RunEvent`s, and keep `HarnessEngine` independent from concrete agent implementations.
+
+## Step 18 - Multi-Agent v1
 
 Goal:
 Support real agentic development workflows.
 
 Scope:
 
-- `AgentRuntime` expansion.
-- `PlannerAgent`.
-- `CoderAgent`.
-- `ReviewerAgent`.
-- `TestRunnerAgent`.
+- `AgentRuntime` expansion after ACP foundation.
+- Capability-based planner.
+- Planner agent role.
+- Coder agent role.
+- Reviewer agent role.
+- Test runner agent role.
 - Multi-agent Run loop.
 - `ExecutionGraph` placeholder or model.
+- Child `AgentSession` support.
 - Run Timeline integration.
 - Tests.
 
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.
 
-## Step 18 - Remote Control v1
+## Step 19 - Remote Control v1
 
 Goal:
 Prepare for mobile control.
@@ -591,6 +724,9 @@ Scope:
 - Current project status.
 - Active run status.
 - Mobile-safe API.
+- Mobile clients talk to Harness Remote API, not directly to ACP agents.
+- WorkHarness on Mac remains the owner of the embedded ACP Host.
+- Consider extracting a separate `HarnessDaemon` only after the in-app ACP Host is stable and mobile control needs a background station process.
 - Tests.
 
 Done when:
@@ -618,15 +754,14 @@ Applications interact with it.
 
 WorkHarness itself remains the reusable platform.
 
-## All Providers Go Through MCP
+## MCP for Tools and LLM Providers
 
-AI providers are not integrated as direct SDK, raw HTTP or direct CLI adapters inside WorkHarness.
+LLM/provider backends are not integrated as direct SDK, raw HTTP or direct CLI adapters inside WorkHarness.
 
 This applies to:
 
 - external/cloud providers.
 - local model providers such as Ollama, Qwen and llama.cpp-style servers.
-- local CLI agent providers such as Codex CLI and Cursor CLI.
 
 WorkHarness talks to AI backends through MCP-backed provider adapters.
 
@@ -652,7 +787,9 @@ The existing local LLM implementation already exists at:
 
 When adding local LLM support, migrate or wrap the reusable local LLM logic from `LlamaLocalServer` into `MCP_server`. Do not copy that backend logic into WorkHarness.
 
-When keeping or extending Codex CLI and Cursor CLI support, migrate the direct CLI execution into `MCP_server` and keep WorkHarness on the MCP-backed provider path.
+MCP is also the standard way to connect external tools, resources and prompts.
+
+Codex CLI and Cursor CLI MCP descriptors are interim compatibility surfaces from the early provider abstraction work. They must not become the final architecture for full coding agents.
 
 This keeps provider integrations:
 
@@ -662,7 +799,396 @@ This keeps provider integrations:
 - observable
 - outside the core orchestration surface
 
-Existing direct `ProcessRunner` providers are temporary scaffolding only; they are not the final provider architecture.
+Existing direct `ProcessRunner` providers are temporary scaffolding only; they are not the final provider or agent architecture.
+
+---
+
+## ACP for Agent Runtime
+
+Architectural decision:
+WorkHarness is ACP-first for full agent integrations.
+
+MCP is the standard for tools and LLM/provider backends.
+
+ACP is the standard for agents.
+
+Meaning:
+
+- MCP server means an agent comes to WorkHarness for tools, resources, prompts or provider-style capabilities.
+- ACP Host / ACP Client Runtime means WorkHarness connects to an agent and manages its session.
+
+Direction:
+
+```text
+MCP: Agent -> Harness tools/resources/provider capabilities
+ACP: Harness -> Agent
+```
+
+Do not model ACP as a WorkHarness tool server.
+
+Harness remains the orchestrator and must not depend on concrete agents such as:
+
+- Codex CLI.
+- Cursor Agent.
+- Claude Code.
+- Gemini CLI.
+- OpenHands.
+- future custom agents.
+
+Replace this product goal:
+
+```text
+Support multiple agent CLIs.
+```
+
+with:
+
+```text
+Support one Agent Runtime abstraction. ACP is the preferred transport.
+```
+
+CLI is only one possible adapter implementation and should be treated as fallback.
+
+Target runtime stack:
+
+```text
+WorkHarness
+↓
+AgentRuntime
+↓
+ACP Host / ACP Client Runtime
+↓
+Codex ACP Agent / Cursor ACP Agent / Claude ACP Agent / Custom ACP Agent
+```
+
+The execution logic above `AgentRuntime` must not know whether the active agent is Codex, Cursor, Claude Code, Gemini CLI, OpenHands or another implementation.
+
+Do not build this as the current architecture:
+
+```text
+WorkHarness
+↓
+ACP Server
+↓
+Tools
+```
+
+Tools belong to the Harness Tool Runtime and MCP/tool adapters. Agent sessions belong to ACP Host / ACP Client Runtime.
+
+### Agent Runtime
+
+Add `AgentRuntime/` as the lifecycle boundary for agents.
+
+It owns:
+
+- agent connection lifecycle.
+- agent task lifecycle.
+- agent sessions.
+- agent capabilities.
+- agent event streams.
+- agent cancellation/pause/resume.
+- mapping agent output into RunEvents.
+
+Recommended structure:
+
+```text
+AgentRuntime/
+├── AgentRuntime
+├── Agent
+├── AgentSession
+├── AgentTask
+├── AgentRequest
+├── AgentResponse
+├── AgentEvent
+├── AgentCapabilities
+├── AgentRegistry
+├── AgentFactory
+├── AgentExecution
+├── ACP/
+├── CLI/
+└── Local/
+```
+
+Runtime knows interfaces and capabilities, not concrete agent names.
+
+The first implementation should be embedded in the macOS app. A separate agent daemon is a later deployment choice, not the Step 17 architecture.
+
+### ACP Module
+
+Add `ACP/` as a separate module that isolates WorkHarness from ACP protocol details.
+
+Recommended structure:
+
+```text
+ACP/
+├── ACPHost
+├── ACPClient
+├── ACPClientRuntime
+├── ACPConnection
+├── ACPTransport
+├── ACPMessage
+├── ACPEvent
+├── ACPError
+└── ACPCodec
+```
+
+If ACP changes later, changes should be contained inside the ACP module and narrow mapping code.
+
+For local integrations, the default shape is an ACP-compatible agent subprocess with JSON-RPC 2.0 over stdin/stdout. The ACP Host owns subprocess lifecycle, message routing, session state and stream consumption; it does not own tools, memory or approvals.
+
+### Agent Interface
+
+WorkHarness should work through one agent interface:
+
+```text
+Agent
+├── connect()
+├── disconnect()
+├── capabilities()
+├── run(task)
+├── cancel()
+├── pause()
+├── resume()
+└── events()
+```
+
+### Capability-Based Agents
+
+Every agent must describe its capabilities.
+
+Examples:
+
+- canEditFiles.
+- canSearch.
+- canPlan.
+- canUseTools.
+- canStreamTokens.
+- canExecuteTerminal.
+- canSpawnAgents.
+- canApproveChanges.
+- canReadGit.
+- canRunTests.
+- canOpenDiff.
+- canIndexWorkspace.
+- canGenerateImages.
+
+Harness decisions must be based on capabilities, not agent names.
+
+Never add:
+
+```text
+if Codex ...
+if Cursor ...
+if Claude ...
+```
+
+### Agent Registry
+
+`AgentRegistry` stores registered agents and their capabilities.
+
+Examples:
+
+- Codex.
+- Claude Code.
+- Cursor Agent.
+- Gemini CLI.
+- OpenHands.
+- Custom Agent.
+
+Registry only registers and exposes metadata.
+
+The planner chooses an agent by capability and task needs.
+
+### Planner Upgrade
+
+Planner should choose agents, not LLMs.
+
+Example:
+
+```text
+Task
+↓
+Needs Git
+↓
+Needs editing
+↓
+Needs tool access
+↓
+Choose capable Agent
+```
+
+### Multi-Agent Ready
+
+Any agent may create child `AgentSession`s through the Harness.
+
+Examples:
+
+```text
+Planner
+↓
+Codex
+↓
+Claude
+↓
+Cursor
+```
+
+or:
+
+```text
+Planner
+↓
+5 ACP Agents
+↓
+Merge Results
+```
+
+Even if the MVP uses one agent, the architecture should allow many.
+
+### Agent Sessions
+
+`Run` contains many `AgentSession`s.
+
+An `AgentSession` should eventually contain:
+
+- state.
+- events.
+- cost.
+- tokens.
+- artifacts.
+- logs.
+- child sessions.
+- timeline.
+
+For ACP-backed agents, the session tracks the connected subprocess or remote endpoint, protocol state, active task, streamed event cursor, cancellation state, pause/resume state, diffs, commands, tool calls and artifacts.
+
+### Agent Events
+
+ACP generates an event stream.
+
+Examples:
+
+- agentStarted.
+- agentThinking.
+- toolCallRequested.
+- patchCreated.
+- patchApplied.
+- approvalRequested.
+- fileOpened.
+- commandExecuted.
+- artifactCreated.
+- taskFinished.
+- taskFailed.
+
+All important events must map into the existing Harness event model so Timeline does not need agent-specific adapters.
+
+The ACP Host should translate agent events into `RunEvent`s as soon as they are observed. Diffs, commands, tool calls and artifacts must be logged through the same Run/AgentSession event pipeline rather than through agent-specific UI state.
+
+### Approval Ownership
+
+Approval belongs to Agent Runtime and Harness safety policy, not to any concrete agent.
+
+Any agent can request approval for:
+
+- edit.
+- delete.
+- shell.
+- git push.
+- git commit.
+- secrets.
+- network.
+- filesystem.
+
+Harness shows one approval UI and records one consistent approval event flow.
+
+ACP approval requests are routed into the same `ApprovalService` and approval UI used by tools and shell execution. The agent receives the decision; it does not create its own approval surface.
+
+### Tool Ownership
+
+Agents do not directly execute tools.
+
+Preferred flow:
+
+```text
+Agent
+↓
+ACP
+↓
+Harness Tool Runtime
+↓
+ToolRegistry
+↓
+Tool
+```
+
+Harness remains the owner of tools, permissions and audit trail.
+
+### Memory Ownership
+
+Agents do not own memory.
+
+Harness owns memory.
+
+Agents receive `ContextSnapshot`s and return results/events.
+
+After agent completion, Harness decides what to write through memory policy.
+
+### Context Ownership
+
+`ContextBuilder` is agent-independent.
+
+It builds context from:
+
+- project.
+- memory.
+- RAG.
+- workspace.
+- open files.
+- git.
+- selection.
+- rules.
+- skills.
+- task.
+
+Then it passes the prepared snapshot to Agent Runtime.
+
+ACP-backed agents receive a `ContextSnapshot` prepared by WorkHarness. They may request more context through approved tool/context paths, but they do not own memory, RAG indexing or project state.
+
+### Adapter Priority
+
+Adapter preference for full agents:
+
+1. ACP.
+2. Native SDK, only if it exposes agent-session semantics.
+3. CLI subprocess fallback behind `AgentRuntime`.
+4. AppleScript.
+5. UI automation.
+
+MCP is not an ACP replacement for full agent sessions. Use MCP for Harness tools, resources, prompts and LLM/provider capabilities, plus interim compatibility provider surfaces where already needed.
+
+ACP is the long-term path.
+
+CLI is fallback.
+
+### Future Remote Runtime
+
+Do not add a standalone ACP server for the current desktop architecture.
+
+Separate runtime extraction is only a later Remote Control concern. The intended future shape is:
+
+```text
+iPhone
+↓
+Harness Remote API
+↓
+WorkHarness on Mac
+↓
+ACP Host
+↓
+Agent
+```
+
+If WorkHarness later gains a `HarnessDaemon`, it may host the ACP Host so the Mac works as a local agent station and mobile clients act as remote controllers. Until that step, ACP Host / ACP Client Runtime lives inside the macOS app.
 
 ---
 
@@ -676,11 +1202,13 @@ Cloud services are optional.
 
 ---
 
-### Provider-agnostic
+### Provider-Agnostic and Agent-Agnostic
 
-Never design around one provider.
+Never design around one provider or one agent.
 
-Codex, Cursor, OpenAI, Anthropic, Ollama and future providers are implementations of the same abstraction.
+OpenAI, Anthropic, Ollama, Qwen and future model backends are implementations of provider abstractions.
+
+Codex, Cursor Agent, Claude Code, Gemini CLI, OpenHands and future coding agents are implementations of agent abstractions.
 
 ---
 
@@ -703,6 +1231,7 @@ Every meaningful action should become observable.
 Examples:
 
 - provider execution
+- agent execution
 - tool execution
 - approvals
 - validation
@@ -717,6 +1246,8 @@ Nothing important should happen silently.
 ### Everything Is Replaceable
 
 Providers.
+
+Agents.
 
 Repositories.
 
@@ -758,8 +1289,14 @@ Code Editing
 
 Providers:
 
-- MCP-backed Codex CLI provider
-- MCP-backed Cursor CLI provider
+- MCP-backed local LLM provider
+- MCP-backed cloud LLM provider
+
+Agents:
+
+- ACP-backed Codex agent
+- ACP-backed Cursor agent
+- ACP-backed Claude Code agent
 
 Capability:
 
@@ -802,12 +1339,12 @@ Recommended metadata:
 - estimated latency
 - estimated cost
 - safety level
-- supported providers
+- supported providers or agents
 - version
 
 ---
 
-### Provider Never Executes Tools
+### Providers and Agents Never Execute Tools Directly
 
 Architecture rule:
 
@@ -816,10 +1353,6 @@ Run
 ↓
 
 Orchestrator
-
-↓
-
-Agent
 
 ↓
 
@@ -849,11 +1382,55 @@ Tool Result
 
 RunEvent
 
-Providers generate AI.
+Agent runtime rule:
+
+Run
+
+↓
+
+HarnessEngine
+
+↓
+
+AgentRuntime
+
+↓
+
+ACP Agent
+
+↓
+
+Tool request
+
+↓
+
+Harness Tool Runtime
+
+↓
+
+ToolRegistry
+
+↓
+
+Tool
+
+↓
+
+Tool Result
+
+↓
+
+AgentEvent / RunEvent
+
+Providers generate AI output.
+
+Agents coordinate task execution.
 
 Tools perform actions.
 
-Providers must never execute tools directly.
+Providers and agents must never bypass the Harness tool, approval and event pipeline.
+
+Providers and agents must never execute tools directly inside WorkHarness.
 
 ---
 
@@ -949,6 +1526,8 @@ Future users:
 Never specialize ProcessRunner for Codex, Cursor, Ollama or any other single backend.
 
 AI provider execution must stay behind MCP-backed provider adapters, not direct WorkHarness `ProcessRunner` providers.
+
+Agent execution must stay behind `AgentRuntime`, preferably ACP-backed, not direct WorkHarness `ProcessRunner` agent wrappers.
 
 ---
 
