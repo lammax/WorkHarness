@@ -78,6 +78,24 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func harnessEngineUsesDefaultTokenBudgetFromAppSettings() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let provider = RecordingAIProvider()
+        let appSettings = InMemoryAppSettingsService(defaultMaxInputTokens: 1_024, defaultMaxOutputTokens: 256)
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(provider),
+            appSettingsService: appSettings
+        )
+
+        _ = await engine.startRun(goal: "Use configured budget")
+
+        #expect(provider.requests.first?.budget == TokenBudget(maxInputTokens: 1_024, maxOutputTokens: 256))
+    }
+
+    @MainActor
     @Test func mainScreenRoutesSectionsThroughPages() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -86,7 +104,10 @@ struct WorkHarnessTests {
         let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
         let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
         let statsPageViewModel = MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService))
-        let settingsPageViewModel = MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider()))
+        let settingsPageViewModel = MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: InMemoryAppSettingsService()
+        )
         let approvalService = makeApprovalService(repository: repository)
         let projectService = ProjectService(repository: InMemoryProjectRepository())
         let screenModel = MainScreen.MainScreenViewModel(
@@ -321,7 +342,10 @@ struct WorkHarnessTests {
             chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
             runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
             statsPageViewModel: MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService)),
-            settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
+            settingsPageViewModel: MainScreen.SettingsPageViewModel(
+                providerService: makeProviderService(TestAIProvider()),
+                appSettingsService: InMemoryAppSettingsService()
+            ),
             approvalService: makeApprovalService(),
             projectService: projectService
         )
@@ -962,7 +986,10 @@ struct WorkHarnessTests {
         let container = Container()
         container.registerDependencies()
         let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
-        let settingsViewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
+        let settingsViewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: InMemoryAppSettingsService()
+        )
 
         #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.codexCLI.id && $0.name == "Codex CLI" })
         #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.cursorCLI.id && $0.name == "Cursor CLI" })
@@ -980,7 +1007,10 @@ struct WorkHarnessTests {
             registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
             appSettingsService: InMemoryAppSettingsService()
         )
-        let viewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: InMemoryAppSettingsService()
+        )
 
         #expect(viewModel.providers.map(\.id).sorted() == ["alternate.provider", "test.provider"])
         #expect(viewModel.activeProviderId == "test.provider")
@@ -999,7 +1029,10 @@ struct WorkHarnessTests {
             registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),
             appSettingsService: InMemoryAppSettingsService()
         )
-        let viewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: InMemoryAppSettingsService()
+        )
 
         viewModel.selectProvider(id: "alternate.provider")
 
@@ -1008,6 +1041,76 @@ struct WorkHarnessTests {
         #expect(viewModel.activeProviderName == "Alternate Provider")
         #expect(viewModel.providers.first { $0.id == "alternate.provider" }?.isActive == true)
         #expect(viewModel.providers.first { $0.id == "test.provider" }?.isActive == false)
+    }
+
+    @MainActor
+    @Test func settingsPageViewModelSavesEditableAppSettings() async throws {
+        let appSettings = InMemoryAppSettingsService()
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: appSettings
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: appSettings
+        )
+
+        #expect(!viewModel.hasUnsavedAppSettingsChanges)
+        #expect(viewModel.appSettingsStatus == "Saved")
+
+        viewModel.selectedSafetyMode = .askBeforeShell
+        viewModel.mcpServerBasePath = "/tmp/MCP_server"
+        viewModel.localLLMEndpoint = "http://127.0.0.1:3008/mcp"
+        viewModel.localLLMModel = "qwen-local"
+        viewModel.defaultMaxInputTokens = 4_096
+        viewModel.defaultMaxOutputTokens = 512
+
+        #expect(viewModel.hasUnsavedAppSettingsChanges)
+        #expect(viewModel.appSettingsStatus == "Unsaved changes")
+
+        viewModel.saveSettings()
+
+        #expect(appSettings.defaultSafetyMode == .askBeforeShell)
+        #expect(appSettings.mcpServerBasePath == "/tmp/MCP_server")
+        #expect(appSettings.localLLMEndpoint == "http://127.0.0.1:3008/mcp")
+        #expect(appSettings.localLLMModel == "qwen-local")
+        #expect(appSettings.defaultMaxInputTokens == 4_096)
+        #expect(appSettings.defaultMaxOutputTokens == 512)
+        #expect(!viewModel.hasUnsavedAppSettingsChanges)
+    }
+
+    @MainActor
+    @Test func settingsPageViewModelRestoresDefaultsAsDraftAndCanRevert() async throws {
+        let appSettings = InMemoryAppSettingsService(
+            defaultSafetyMode: .askBeforeShell,
+            mcpServerBasePath: "/tmp/MCP_server",
+            localLLMEndpoint: "http://127.0.0.1:3008/mcp",
+            localLLMModel: "qwen-local",
+            defaultMaxInputTokens: 4_096,
+            defaultMaxOutputTokens: 512
+        )
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: appSettings
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: appSettings
+        )
+
+        viewModel.restoreDefaultSettingsDraft()
+
+        #expect(viewModel.hasUnsavedAppSettingsChanges)
+        #expect(viewModel.selectedSafetyMode == AppSettingsDefaults.defaultSafetyMode)
+        #expect(viewModel.mcpServerBasePath == AppSettingsDefaults.mcpServerBasePath)
+        #expect(appSettings.defaultSafetyMode == .askBeforeShell)
+        #expect(appSettings.mcpServerBasePath == "/tmp/MCP_server")
+
+        viewModel.revertSettings()
+
+        #expect(!viewModel.hasUnsavedAppSettingsChanges)
+        #expect(viewModel.selectedSafetyMode == .askBeforeShell)
+        #expect(viewModel.mcpServerBasePath == "/tmp/MCP_server")
     }
 
     @MainActor
@@ -1043,10 +1146,22 @@ struct WorkHarnessTests {
 
         let firstService = UserDefaultsAppSettingsService(defaults: defaults)
         firstService.defaultProviderId = "alternate.provider"
+        firstService.defaultSafetyMode = .askBeforeShell
+        firstService.mcpServerBasePath = "/tmp/MCP_server"
+        firstService.localLLMEndpoint = "http://127.0.0.1:3008/mcp"
+        firstService.localLLMModel = "qwen-local"
+        firstService.defaultMaxInputTokens = 4_096
+        firstService.defaultMaxOutputTokens = 512
 
         let secondService = UserDefaultsAppSettingsService(defaults: defaults)
 
         #expect(secondService.defaultProviderId == "alternate.provider")
+        #expect(secondService.defaultSafetyMode == .askBeforeShell)
+        #expect(secondService.mcpServerBasePath == "/tmp/MCP_server")
+        #expect(secondService.localLLMEndpoint == "http://127.0.0.1:3008/mcp")
+        #expect(secondService.localLLMModel == "qwen-local")
+        #expect(secondService.defaultMaxInputTokens == 4_096)
+        #expect(secondService.defaultMaxOutputTokens == 512)
     }
 
     @MainActor
@@ -1166,7 +1281,10 @@ private func makeMainScreenViewModel(
         chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
         runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
         statsPageViewModel: MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService)),
-        settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
+        settingsPageViewModel: MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: InMemoryAppSettingsService()
+        ),
         approvalService: approvalService ?? makeApprovalService(),
         projectService: projectService
     )

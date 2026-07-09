@@ -22,7 +22,10 @@ extension Container {
         }.inObjectScope(.container)
 
         register(MainScreen.SettingsPageViewModel.self) { resolver in
-            MainScreen.SettingsPageViewModel(providerService: resolver.resolve(ProviderServiceProtocol.self)!)
+            MainScreen.SettingsPageViewModel(
+                providerService: resolver.resolve(ProviderServiceProtocol.self)!,
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+            )
         }.inObjectScope(.container)
 
         register(MainScreenProtocol.self) { resolver in

@@ -120,6 +120,13 @@ WorkHarness already has:
 - `UsageStatisticsService`.
 - Run, provider and daily usage aggregates.
 - Stats page v1 in the main navigation.
+- Settings v1.
+- Editable durable AppSettings.
+- Durable safety mode setting.
+- Durable MCP server base path setting.
+- Durable Local LLM endpoint and model settings.
+- Durable default token budget settings.
+- Settings page controls that save and reset app parameters.
 - Tests passing for the current stable slice.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
@@ -180,6 +187,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 11 - Tools Foundation v1.
 - Step 12 - Persistence v1.
 - Step 13 - Token / Cost Statistics v1.
+- Step 14 - Settings v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -363,7 +371,7 @@ Move the provider layer to the final rule for LLM/provider backends: they go thr
 Status note:
 This step is final for LLM/provider backends and interim for full coding agents.
 
-Codex CLI and Cursor CLI MCP-backed descriptors are compatibility surfaces until Step 17 introduces ACP-backed `AgentRuntime`.
+Codex CLI and Cursor CLI MCP-backed descriptors are compatibility surfaces until Step 18 introduces ACP-backed `AgentRuntime`.
 
 Scope:
 
@@ -575,7 +583,38 @@ Scope:
 Done when:
 The user can see token and cost usage by Run and provider.
 
-## Step 14 - Context Folding v1
+## Step 14 - Settings v1 (Done)
+
+Goal:
+Make Settings an actual configuration surface, not only a read-only provider status page.
+
+Scope:
+
+- Editable app settings page.
+- Durable safety mode setting.
+- Durable MCP server base path setting.
+- Durable Local LLM endpoint setting.
+- Durable Local LLM model setting.
+- Durable default input token budget.
+- Durable default output token budget.
+- Save and reset actions.
+- Settings ViewModel writes through `AppSettingsServiceProtocol`.
+- Provider MCP client reads configurable MCP/Local LLM settings.
+- `HarnessEngine` reads default token budgets from AppSettings.
+- Tests for persistence, ViewModel save flow and engine budget usage.
+
+Do not add:
+
+- Advanced per-provider forms.
+- Secret storage.
+- Remote settings sync.
+- Agent-specific settings.
+- MCP server health UI.
+
+Done when:
+The user can change core WorkHarness parameters in Settings, persist them, and see those values affect provider/runtime configuration without bypassing service boundaries.
+
+## Step 15 - Context Folding v1
 
 Goal:
 Long runs do not inflate context indefinitely.
@@ -594,7 +633,7 @@ Scope:
 Done when:
 A long Run can be compacted into a useful summary.
 
-## Step 15 - Memory v1
+## Step 16 - Memory v1
 
 Goal:
 Persist stable project knowledge.
@@ -617,7 +656,7 @@ Do not add yet:
 Done when:
 Stable project knowledge can be saved, read and shown through a basic app surface.
 
-## Step 16 - RAG v1
+## Step 17 - RAG v1
 
 Goal:
 Search project knowledge and files.
@@ -636,7 +675,7 @@ Scope:
 Done when:
 Relevant indexed knowledge can be retrieved with citations and inserted into context through the approved context path.
 
-## Step 17 - ACP Agent Runtime v1
+## Step 18 - ACP Agent Runtime v1
 
 Goal:
 Introduce one agent runtime abstraction so WorkHarness can run coding agents without depending on Codex, Cursor, Claude Code, Gemini CLI, OpenHands or any future concrete agent.
@@ -748,7 +787,7 @@ Do not add:
 Done when:
 WorkHarness can run at least one fake ACP agent through `AgentRuntime`, persist/observe its events as `RunEvent`s, and keep `HarnessEngine` independent from concrete agent implementations.
 
-## Step 18 - Multi-Agent v1
+## Step 19 - Multi-Agent v1
 
 Goal:
 Support real agentic development workflows.
@@ -770,7 +809,7 @@ Scope:
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.
 
-## Step 19 - Remote Control v1
+## Step 20 - Remote Control v1
 
 Goal:
 Prepare for mobile control.
@@ -971,7 +1010,7 @@ AgentRuntime/
 
 Runtime knows interfaces and capabilities, not concrete agent names.
 
-The first implementation should be embedded in the macOS app. A separate agent daemon is a later deployment choice, not the Step 17 architecture.
+The first implementation should be embedded in the macOS app. A separate agent daemon is a later deployment choice, not the Step 18 architecture.
 
 ### ACP Module
 

@@ -95,6 +95,35 @@ Screens/<Name>/
   - технические литералы, не относящиеся к UI-оформлению
   - одноразовые прототипные значения только в раннем scaffold, с явным намерением вынести при стабилизации экрана
 
+## 5.1. Настройки: UX и поддерживаемость
+
+- Settings должны быть настоящей рабочей поверхностью для изменения параметров, а не read-only витриной.
+- Любая настройка должна иметь понятное имя, предсказуемый control type и безопасное поведение сохранения:
+  - toggle/segmented picker для ограниченного набора вариантов;
+  - text field/path field для строк и путей;
+  - stepper/slider/numeric input для числовых значений;
+  - disabled Save, если изменений нет;
+  - явный unsaved/saved state;
+  - Revert для отката несохранённого draft;
+  - Restore Defaults не должен молча сохранять destructive изменения без явного Save.
+- Для пользователя Settings должны быть быстрыми и понятными:
+  - изменения видны сразу в форме;
+  - опасные/широкие изменения не применяются скрыто;
+  - параметры группируются по смыслу;
+  - кнопки действий расположены рядом с редактируемой областью;
+  - экран остаётся плотным desktop UI без маркетинговых описаний и лишнего текста.
+- Для разработчика Settings должны быть легко изучаемы вручную:
+  - View содержит только layout, bindings и forwarding actions;
+  - ViewModel содержит draft state, dirty state, save/revert/defaults logic и обращается только к service boundary;
+  - Design содержит все UI-строки, размеры, spacing, ranges и identifiers;
+  - persistence/defaults живут в typed settings service/defaults, а не размазываются по View;
+  - новые настройки добавляются одним понятным маршрутом: defaults → service protocol/implementation → ViewModel draft → View control → tests.
+- Для каждой новой настройки добавлять focused tests на:
+  - загрузку из service;
+  - dirty state;
+  - save;
+  - revert/defaults, если настройка отображается в Settings UI.
+
 ## 6. RunEvent и наблюдаемость
 
 - Каждое важное действие внутри Run должно порождать `RunEvent`.

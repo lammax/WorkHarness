@@ -27,12 +27,18 @@ extension MainScreen {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
-                        providerList
-                        Divider()
-                        providerDetails
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Design.Content.sectionSpacing) {
+                            appSettings
+
+                            HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
+                                providerList
+                                Divider()
+                                providerDetails
+                            }
+                        }
+                        .padding(Design.Content.padding)
                     }
-                    .padding(Design.Content.padding)
                 }
             }
         }
@@ -56,6 +62,77 @@ extension MainScreen {
             .padding(Design.Header.padding)
         }
 
+        private var appSettings: some View {
+            VStack(alignment: .leading, spacing: Design.AppSettings.spacing) {
+                HStack {
+                    Text(Design.AppSettings.title)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text(viewModel.appSettingsStatus)
+                        .font(.caption)
+                        .foregroundStyle(viewModel.hasUnsavedAppSettingsChanges ? .orange : .secondary)
+
+                    Button(Design.AppSettings.revertButtonTitle) {
+                        viewModel.revertSettings()
+                    }
+                    .disabled(!viewModel.hasUnsavedAppSettingsChanges)
+
+                    Button(Design.AppSettings.restoreDefaultsButtonTitle) {
+                        viewModel.restoreDefaultSettingsDraft()
+                    }
+
+                    Button(Design.AppSettings.saveButtonTitle) {
+                        viewModel.saveSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.hasUnsavedAppSettingsChanges)
+                }
+
+                VStack(alignment: .leading, spacing: Design.AppSettings.rowSpacing) {
+                    Picker(Design.AppSettings.safetyModeTitle, selection: $viewModel.selectedSafetyMode) {
+                        ForEach(SafetyMode.allCases, id: \.self) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    SettingsTextField(
+                        title: Design.AppSettings.mcpBasePathTitle,
+                        placeholder: Design.AppSettings.mcpBasePathPlaceholder,
+                        text: $viewModel.mcpServerBasePath
+                    )
+
+                    SettingsTextField(
+                        title: Design.AppSettings.localLLMEndpointTitle,
+                        placeholder: Design.AppSettings.localLLMEndpointPlaceholder,
+                        text: $viewModel.localLLMEndpoint
+                    )
+
+                    SettingsTextField(
+                        title: Design.AppSettings.localLLMModelTitle,
+                        placeholder: Design.AppSettings.localLLMModelPlaceholder,
+                        text: $viewModel.localLLMModel
+                    )
+
+                    HStack(spacing: Design.AppSettings.fieldSpacing) {
+                        TokenBudgetStepper(
+                            title: Design.AppSettings.maxInputTokensTitle,
+                            value: $viewModel.defaultMaxInputTokens
+                        )
+
+                        TokenBudgetStepper(
+                            title: Design.AppSettings.maxOutputTokensTitle,
+                            value: $viewModel.defaultMaxOutputTokens
+                        )
+                    }
+                }
+            }
+            .padding(Design.AppSettings.padding)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Design.AppSettings.cornerRadius))
+        }
+
         private var providerList: some View {
             VStack(alignment: .leading, spacing: Design.ProviderList.spacing) {
                 Text(Design.ProviderList.title)
@@ -76,29 +153,27 @@ extension MainScreen {
         @ViewBuilder
         private var providerDetails: some View {
             if let selectedProvider = viewModel.selectedProvider {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Design.ProviderDetails.spacing) {
-                        VStack(alignment: .leading, spacing: Design.ProviderDetails.titleSpacing) {
-                            Text(selectedProvider.name)
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                            Text(selectedProvider.id)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
+                VStack(alignment: .leading, spacing: Design.ProviderDetails.spacing) {
+                    VStack(alignment: .leading, spacing: Design.ProviderDetails.titleSpacing) {
+                        Text(selectedProvider.name)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text(selectedProvider.id)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
 
-                        VStack(alignment: .leading, spacing: Design.CapabilityList.spacing) {
-                            Text(Design.CapabilityList.title)
-                                .font(.headline)
+                    VStack(alignment: .leading, spacing: Design.CapabilityList.spacing) {
+                        Text(Design.CapabilityList.title)
+                            .font(.headline)
 
-                            ForEach(selectedProvider.capabilities) { capability in
-                                CapabilityRow(capability: capability)
-                            }
+                        ForEach(selectedProvider.capabilities) { capability in
+                            CapabilityRow(capability: capability)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -155,6 +230,37 @@ extension MainScreen {
             }
             .font(.callout)
             .padding(.vertical, Design.verticalPadding)
+        }
+    }
+
+    private struct SettingsTextField: View {
+        let title: String
+        let placeholder: String
+        @Binding var text: String
+
+        var body: some View {
+            LabeledContent(title) {
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private struct TokenBudgetStepper: View {
+        typealias Design = SettingsPageDesign.AppSettings
+
+        let title: String
+        @Binding var value: Int
+
+        var body: some View {
+            Stepper(
+                "\(title): \(value)",
+                value: $value,
+                in: Design.tokenRange,
+                step: Design.tokenStep
+            )
+            .monospacedDigit()
         }
     }
 }

@@ -23,6 +23,32 @@ extension MainScreen {
         enum Content {
             static let columnSpacing: CGFloat = 16
             static let padding: CGFloat = 16
+            static let sectionSpacing: CGFloat = 18
+        }
+
+        enum AppSettings {
+            static let title = "Application Settings"
+            static let safetyModeTitle = "Safety mode"
+            static let mcpBasePathTitle = "MCP server base path"
+            static let localLLMEndpointTitle = "Local LLM endpoint"
+            static let localLLMModelTitle = "Local LLM model"
+            static let maxInputTokensTitle = "Max input tokens"
+            static let maxOutputTokensTitle = "Max output tokens"
+            static let saveButtonTitle = "Save"
+            static let revertButtonTitle = "Revert"
+            static let restoreDefaultsButtonTitle = "Restore Defaults"
+            static let savedStatus = "Saved"
+            static let unsavedStatus = "Unsaved changes"
+            static let mcpBasePathPlaceholder = "/Users/me/MCP_server"
+            static let localLLMEndpointPlaceholder = "http://127.0.0.1:3007/mcp"
+            static let localLLMModelPlaceholder = "local-private"
+            static let spacing: CGFloat = 12
+            static let rowSpacing: CGFloat = 10
+            static let fieldSpacing: CGFloat = 18
+            static let padding: CGFloat = 12
+            static let cornerRadius: CGFloat = 8
+            static let tokenRange = 256...200_000
+            static let tokenStep = 256
         }
 
         enum ProviderList {

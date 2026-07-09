@@ -23,7 +23,8 @@ extension Container {
                 recorder: resolver.resolve(RunRecorder.self)!,
                 providerService: resolver.resolve(ProviderServiceProtocol.self)!,
                 projectService: resolver.resolve(ProjectServiceProtocol.self)!,
-                contextBuilder: resolver.resolve(ContextBuilderProtocol.self)!
+                contextBuilder: resolver.resolve(ContextBuilderProtocol.self)!,
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
             )
         }.inObjectScope(.container)
     }

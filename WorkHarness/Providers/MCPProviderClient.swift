@@ -76,13 +76,19 @@ struct MCPProviderConfiguration: Equatable {
     static let defaultServerBasePath = "/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server"
 
     var serverBasePath: String
+    var localLLMEndpointURL: String
+    var localLLMModel: String
     var providerDescriptors: [MCPProviderDescriptor]
 
     init(
         serverBasePath: String = Self.defaultServerBasePath,
+        localLLMEndpointURL: String = AppSettingsDefaults.localLLMEndpoint,
+        localLLMModel: String = AppSettingsDefaults.localLLMModel,
         providerDescriptors: [MCPProviderDescriptor] = [.codexCLI, .cursorCLI, .localLLM]
     ) {
         self.serverBasePath = serverBasePath
+        self.localLLMEndpointURL = localLLMEndpointURL
+        self.localLLMModel = localLLMModel
         self.providerDescriptors = providerDescriptors
     }
 }
@@ -158,8 +164,7 @@ final class MCPProviderClient: MCPProviderClientProtocol {
 
     private func callLocalLLMGenerate(_ request: AIRequest) async throws -> LocalLLMGenerateResult {
         guard
-            let endpoint = MCPProviderDescriptor.localLLM.mcpEndpointURL,
-            let url = URL(string: endpoint)
+            let url = URL(string: configuration.localLLMEndpointURL)
         else {
             throw MCPProviderClientError.missingEndpoint(MCPProviderDescriptor.localLLM.id)
         }
@@ -177,7 +182,7 @@ final class MCPProviderClient: MCPProviderClientProtocol {
                 name: "local_llm_generate",
                 arguments: LocalLLMGenerateArguments(
                     messages: messages,
-                    model: request.model,
+                    model: request.model.isEmpty ? configuration.localLLMModel : request.model,
                     temperature: request.temperature,
                     maxTokens: request.budget?.maxOutputTokens
                 )

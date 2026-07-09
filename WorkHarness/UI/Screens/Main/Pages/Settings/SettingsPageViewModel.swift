@@ -13,18 +13,40 @@ extension MainScreen {
     @Observable
     final class SettingsPageViewModel {
         private let providerService: ProviderServiceProtocol
+        private let appSettingsService: AppSettingsServiceProtocol
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
         private(set) var errorMessage: String?
+        var selectedSafetyMode: SafetyMode
+        var mcpServerBasePath: String
+        var localLLMEndpoint: String
+        var localLLMModel: String
+        var defaultMaxInputTokens: Int
+        var defaultMaxOutputTokens: Int
 
-        init(providerService: ProviderServiceProtocol) {
+        init(providerService: ProviderServiceProtocol, appSettingsService: AppSettingsServiceProtocol) {
             self.providerService = providerService
+            self.appSettingsService = appSettingsService
+            self.selectedSafetyMode = appSettingsService.defaultSafetyMode
+            self.mcpServerBasePath = appSettingsService.mcpServerBasePath
+            self.localLLMEndpoint = appSettingsService.localLLMEndpoint
+            self.localLLMModel = appSettingsService.localLLMModel
+            self.defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
+            self.defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             reloadProviders()
         }
 
         var activeProviderName: String {
             selectedProvider?.name ?? SettingsPageDesign.ProviderFallback.noActiveProvider
+        }
+
+        var hasUnsavedAppSettingsChanges: Bool {
+            currentAppSettingsSnapshot != persistedAppSettingsSnapshot
+        }
+
+        var appSettingsStatus: String {
+            hasUnsavedAppSettingsChanges ? SettingsPageDesign.AppSettings.unsavedStatus : SettingsPageDesign.AppSettings.savedStatus
         }
 
         var selectedProvider: ProviderSettingsItem? {
@@ -52,6 +74,41 @@ extension MainScreen {
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+
+        func saveSettings() {
+            appSettingsService.defaultSafetyMode = selectedSafetyMode
+            appSettingsService.mcpServerBasePath = mcpServerBasePath
+            appSettingsService.localLLMEndpoint = localLLMEndpoint
+            appSettingsService.localLLMModel = localLLMModel
+            appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
+            appSettingsService.defaultMaxOutputTokens = defaultMaxOutputTokens
+
+            mcpServerBasePath = appSettingsService.mcpServerBasePath
+            localLLMEndpoint = appSettingsService.localLLMEndpoint
+            localLLMModel = appSettingsService.localLLMModel
+            defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
+            defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            errorMessage = nil
+        }
+
+        func revertSettings() {
+            loadSettingsFromService()
+            errorMessage = nil
+        }
+
+        func restoreDefaultSettingsDraft() {
+            selectedSafetyMode = AppSettingsDefaults.defaultSafetyMode
+            mcpServerBasePath = AppSettingsDefaults.mcpServerBasePath
+            localLLMEndpoint = AppSettingsDefaults.localLLMEndpoint
+            localLLMModel = AppSettingsDefaults.localLLMModel
+            defaultMaxInputTokens = AppSettingsDefaults.defaultMaxInputTokens
+            defaultMaxOutputTokens = AppSettingsDefaults.defaultMaxOutputTokens
+            errorMessage = nil
+        }
+
+        func resetSettings() {
+            restoreDefaultSettingsDraft()
         }
 
         private func capabilityRows(for capabilities: ProviderCapabilities) -> [ProviderCapabilityRow] {
@@ -84,6 +141,46 @@ extension MainScreen {
         private func modelsLabel(for models: [String]) -> String {
             models.isEmpty ? SettingsPageDesign.ProviderFallback.notAvailable : models.joined(separator: SettingsPageDesign.ProviderFallback.listSeparator)
         }
+
+        private func loadSettingsFromService() {
+            selectedSafetyMode = appSettingsService.defaultSafetyMode
+            mcpServerBasePath = appSettingsService.mcpServerBasePath
+            localLLMEndpoint = appSettingsService.localLLMEndpoint
+            localLLMModel = appSettingsService.localLLMModel
+            defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
+            defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+        }
+
+        private var currentAppSettingsSnapshot: EditableAppSettingsSnapshot {
+            EditableAppSettingsSnapshot(
+                safetyMode: selectedSafetyMode,
+                mcpServerBasePath: mcpServerBasePath,
+                localLLMEndpoint: localLLMEndpoint,
+                localLLMModel: localLLMModel,
+                defaultMaxInputTokens: defaultMaxInputTokens,
+                defaultMaxOutputTokens: defaultMaxOutputTokens
+            )
+        }
+
+        private var persistedAppSettingsSnapshot: EditableAppSettingsSnapshot {
+            EditableAppSettingsSnapshot(
+                safetyMode: appSettingsService.defaultSafetyMode,
+                mcpServerBasePath: appSettingsService.mcpServerBasePath,
+                localLLMEndpoint: appSettingsService.localLLMEndpoint,
+                localLLMModel: appSettingsService.localLLMModel,
+                defaultMaxInputTokens: appSettingsService.defaultMaxInputTokens,
+                defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens
+            )
+        }
+    }
+
+    private struct EditableAppSettingsSnapshot: Equatable {
+        var safetyMode: SafetyMode
+        var mcpServerBasePath: String
+        var localLLMEndpoint: String
+        var localLLMModel: String
+        var defaultMaxInputTokens: Int
+        var defaultMaxOutputTokens: Int
     }
 
     struct ProviderSettingsItem: Identifiable, Equatable {

@@ -14,19 +14,22 @@ final class HarnessEngine {
     private let providerService: ProviderServiceProtocol
     private let projectService: ProjectServiceProtocol?
     private let contextBuilder: ContextBuilderProtocol
+    private let appSettingsService: AppSettingsServiceProtocol?
 
     init(
         repository: RunRepository,
         recorder: RunRecorder,
         providerService: ProviderServiceProtocol,
         projectService: ProjectServiceProtocol? = nil,
-        contextBuilder: ContextBuilderProtocol? = nil
+        contextBuilder: ContextBuilderProtocol? = nil,
+        appSettingsService: AppSettingsServiceProtocol? = nil
     ) {
         self.repository = repository
         self.recorder = recorder
         self.providerService = providerService
         self.projectService = projectService
         self.contextBuilder = contextBuilder ?? ContextBuilder()
+        self.appSettingsService = appSettingsService
     }
 
     var providerName: String {
@@ -89,7 +92,7 @@ final class HarnessEngine {
                 messages: [.init(role: .user, content: prompt)],
                 context: context(for: runId, prompt: prompt, agent: agent, provider: provider).contextItems,
                 tools: agent.tools,
-                budget: .init(maxInputTokens: agent.contextPolicy.maxInputTokens, maxOutputTokens: nil)
+                budget: defaultTokenBudget(for: agent)
             )
             let stream = try await provider.send(request)
             var completedMessage = ""
@@ -138,7 +141,7 @@ final class HarnessEngine {
             userMessage: prompt,
             currentProject: currentProject,
             rootPath: currentProject?.rootPath,
-            tokenBudget: .init(maxInputTokens: agent.contextPolicy.maxInputTokens, maxOutputTokens: nil)
+            tokenBudget: defaultTokenBudget(for: agent)
         ))
 
         recorder.record(
@@ -154,6 +157,13 @@ final class HarnessEngine {
         )
 
         return snapshot
+    }
+
+    private func defaultTokenBudget(for agent: Agent) -> TokenBudget {
+        TokenBudget(
+            maxInputTokens: appSettingsService?.defaultMaxInputTokens ?? agent.contextPolicy.maxInputTokens,
+            maxOutputTokens: appSettingsService?.defaultMaxOutputTokens
+        )
     }
 
     private func failRun(_ runId: UUID, message: String) {
