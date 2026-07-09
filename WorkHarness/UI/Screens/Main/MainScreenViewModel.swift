@@ -14,6 +14,7 @@ extension MainScreen {
     final class MainScreenViewModel: PagesViewModel {
         let chatPageViewModel: ChatPageViewModel
         let runsPageViewModel: RunsPageViewModel
+        let statsPageViewModel: StatsPageViewModel
         let settingsPageViewModel: SettingsPageViewModel
         private let approvalService: ApprovalServiceProtocol
         private let projectService: ProjectServiceProtocol
@@ -31,12 +32,14 @@ extension MainScreen {
         init(
             chatPageViewModel: ChatPageViewModel,
             runsPageViewModel: RunsPageViewModel,
+            statsPageViewModel: StatsPageViewModel,
             settingsPageViewModel: SettingsPageViewModel,
             approvalService: ApprovalServiceProtocol,
             projectService: ProjectServiceProtocol
         ) {
             self.chatPageViewModel = chatPageViewModel
             self.runsPageViewModel = runsPageViewModel
+            self.statsPageViewModel = statsPageViewModel
             self.settingsPageViewModel = settingsPageViewModel
             self.approvalService = approvalService
             self.projectService = projectService
@@ -80,7 +83,9 @@ extension MainScreen {
                 detailPage = RunsPage(screenModel: self, viewModel: runsPageViewModel)
             case .settings:
                 detailPage = SettingsPage(screenModel: self, viewModel: settingsPageViewModel)
-            case .agents, .tools, .memory, .stats:
+            case .stats:
+                detailPage = StatsPage(screenModel: self, viewModel: statsPageViewModel)
+            case .agents, .tools, .memory:
                 detailPage = PlaceholderPage(screenModel: self, viewModel: PlaceholderPageViewModel(section: section))
             }
         }

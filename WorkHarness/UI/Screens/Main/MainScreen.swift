@@ -12,6 +12,7 @@ final class MainScreen {
     init(
         chatPageViewModel: ChatPageViewModel,
         runsPageViewModel: RunsPageViewModel,
+        statsPageViewModel: StatsPageViewModel,
         settingsPageViewModel: SettingsPageViewModel,
         approvalService: ApprovalServiceProtocol,
         projectService: ProjectServiceProtocol
@@ -19,6 +20,7 @@ final class MainScreen {
         self.viewModel = MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
             runsPageViewModel: runsPageViewModel,
+            statsPageViewModel: statsPageViewModel,
             settingsPageViewModel: settingsPageViewModel,
             approvalService: approvalService,
             projectService: projectService

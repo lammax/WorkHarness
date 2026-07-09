@@ -17,6 +17,10 @@ extension Container {
             MainScreen.RunsPageViewModel(runService: resolver.resolve(RunServiceProtocol.self)!)
         }.inObjectScope(.container)
 
+        register(MainScreen.StatsPageViewModel.self) { resolver in
+            MainScreen.StatsPageViewModel(statisticsService: resolver.resolve(UsageStatisticsServiceProtocol.self)!)
+        }.inObjectScope(.container)
+
         register(MainScreen.SettingsPageViewModel.self) { resolver in
             MainScreen.SettingsPageViewModel(providerService: resolver.resolve(ProviderServiceProtocol.self)!)
         }.inObjectScope(.container)
@@ -25,6 +29,7 @@ extension Container {
             MainScreen(
                 chatPageViewModel: resolver.resolve(MainScreen.ChatPageViewModel.self)!,
                 runsPageViewModel: resolver.resolve(MainScreen.RunsPageViewModel.self)!,
+                statsPageViewModel: resolver.resolve(MainScreen.StatsPageViewModel.self)!,
                 settingsPageViewModel: resolver.resolve(MainScreen.SettingsPageViewModel.self)!,
                 approvalService: resolver.resolve(ApprovalServiceProtocol.self)!,
                 projectService: resolver.resolve(ProjectServiceProtocol.self)!

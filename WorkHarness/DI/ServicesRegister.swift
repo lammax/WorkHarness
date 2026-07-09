@@ -38,5 +38,9 @@ extension Container {
                 harnessEngine: resolver.resolve(HarnessEngine.self)!
             )
         }.inObjectScope(.container)
+
+        register(UsageStatisticsServiceProtocol.self) { resolver in
+            UsageStatisticsService(runService: resolver.resolve(RunServiceProtocol.self)!)
+        }.inObjectScope(.container)
     }
 }

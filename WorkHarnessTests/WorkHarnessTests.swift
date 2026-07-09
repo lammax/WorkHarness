@@ -85,12 +85,14 @@ struct WorkHarnessTests {
         let runService = RunService(repository: repository, harnessEngine: engine)
         let chatPageViewModel = MainScreen.ChatPageViewModel(runService: runService)
         let runsPageViewModel = MainScreen.RunsPageViewModel(runService: runService)
+        let statsPageViewModel = MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService))
         let settingsPageViewModel = MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider()))
         let approvalService = makeApprovalService(repository: repository)
         let projectService = ProjectService(repository: InMemoryProjectRepository())
         let screenModel = MainScreen.MainScreenViewModel(
             chatPageViewModel: chatPageViewModel,
             runsPageViewModel: runsPageViewModel,
+            statsPageViewModel: statsPageViewModel,
             settingsPageViewModel: settingsPageViewModel,
             approvalService: approvalService,
             projectService: projectService
@@ -102,6 +104,10 @@ struct WorkHarnessTests {
         screenModel.show(section: .runs)
 
         #expect(screenModel.detailPage is MainScreen.RunsPage)
+
+        screenModel.show(section: .stats)
+
+        #expect(screenModel.detailPage is MainScreen.StatsPage)
 
         screenModel.show(section: .settings)
 
@@ -137,6 +143,8 @@ struct WorkHarnessTests {
         let toolRegistry = try #require(container.resolve(ToolRegistry.self))
         let mcpToolClient = try #require(container.resolve(MCPToolClientProtocol.self))
         let toolService = try #require(container.resolve(ToolServiceProtocol.self))
+        let statisticsService = try #require(container.resolve(UsageStatisticsServiceProtocol.self))
+        let statsViewModel = try #require(container.resolve(MainScreen.StatsPageViewModel.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
         let scene = try #require(container.resolve(AppSceneProtocol.self))
         let mainScreen = try #require(container.resolve(MainScreenProtocol.self))
@@ -155,6 +163,8 @@ struct WorkHarnessTests {
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
         #expect(mcpToolClient is MCPToolClient)
         #expect(toolService.availableTools.contains { $0.id == "mcp.invoke" })
+        #expect(statisticsService.snapshot.total.runCount == 0)
+        #expect(statsViewModel.isEmpty)
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
         #expect(scene.viewModel.activeScreen != nil)
         #expect(mainScreen.pagesModel.pages.first is MainScreen.MainShellPage)
@@ -310,6 +320,7 @@ struct WorkHarnessTests {
         let screenModel = MainScreen.MainScreenViewModel(
             chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
             runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
+            statsPageViewModel: MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService)),
             settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
             approvalService: makeApprovalService(),
             projectService: projectService
@@ -500,6 +511,81 @@ struct WorkHarnessTests {
         #expect(detail.artifacts.first?.title == "Report")
         #expect(detail.selectedEvent?.id == lateEvent.id)
         #expect(detail.selectedEvent?.metadata.first?.key == "providerId")
+    }
+
+    @MainActor
+    @Test func usageStatisticsServiceAggregatesUsageByProviderRunAndDay() async throws {
+        let repository = InMemoryRunRepository()
+        let runService = makeRunService(repository: repository)
+        let service = UsageStatisticsService(runService: runService, calendar: Calendar(identifier: .gregorian))
+        let firstDay = try #require(DateComponents(calendar: .current, year: 2026, month: 7, day: 8).date)
+        let secondDay = try #require(DateComponents(calendar: .current, year: 2026, month: 7, day: 9).date)
+        let codexRun = Run(
+            goal: "Codex run",
+            agents: [Agent(role: .coder, providerId: "codex.mcp", model: "codex")],
+            tokenUsage: TokenUsage(inputTokens: 10, outputTokens: 15),
+            costUsage: CostUsage(totalUSD: Decimal(string: "0.25")!),
+            createdAt: firstDay,
+            updatedAt: firstDay
+        )
+        let metadataRunId = UUID()
+        let metadataRun = Run(
+            id: metadataRunId,
+            goal: "Metadata run",
+            events: [
+                RunEvent(
+                    runId: metadataRunId,
+                    type: .providerRequestStarted,
+                    message: "provider",
+                    metadata: ["providerId": "local.llm"],
+                    createdAt: secondDay
+                )
+            ],
+            tokenUsage: TokenUsage(inputTokens: 3, outputTokens: 7),
+            costUsage: CostUsage(totalUSD: Decimal(string: "0.10")!),
+            createdAt: secondDay,
+            updatedAt: secondDay
+        )
+
+        repository.insert(codexRun)
+        repository.insert(metadataRun)
+
+        let snapshot = service.snapshot
+
+        #expect(snapshot.total.runCount == 2)
+        #expect(snapshot.total.inputTokens == 13)
+        #expect(snapshot.total.outputTokens == 22)
+        #expect(snapshot.total.totalTokens == 35)
+        #expect(snapshot.total.totalCostUSD == Decimal(string: "0.35")!)
+        #expect(snapshot.providers.map(\.providerId) == ["codex.mcp", "local.llm"])
+        #expect(snapshot.providers.first?.totalTokens == 25)
+        #expect(snapshot.runs.map(\.title) == ["Metadata run", "Codex run"])
+        #expect(snapshot.days.map(\.runCount) == [1, 1])
+    }
+
+    @MainActor
+    @Test func statsPageViewModelExposesUsageRows() async throws {
+        let repository = InMemoryRunRepository()
+        let runService = makeRunService(repository: repository)
+        let viewModel = MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService))
+        let run = Run(
+            goal: "Measure usage",
+            agents: [Agent(role: .coder, providerId: "stats.provider", model: "stats")],
+            tokenUsage: TokenUsage(inputTokens: 4, outputTokens: 6),
+            costUsage: CostUsage(totalUSD: Decimal(string: "0.50")!)
+        )
+
+        #expect(viewModel.isEmpty)
+
+        repository.insert(run)
+
+        #expect(!viewModel.isEmpty)
+        #expect(viewModel.summaryCards.contains(MainScreen.StatsSummaryCardState(title: "Total", value: "10")))
+        #expect(viewModel.summaryCards.contains(MainScreen.StatsSummaryCardState(title: "Cost", value: "$0.5")))
+        #expect(viewModel.providerRows.first?.providerId == "stats.provider")
+        #expect(viewModel.providerRows.first?.tokens == "10")
+        #expect(viewModel.runRows.first?.title == "Measure usage")
+        #expect(viewModel.dailyRows.first?.runs == "1")
     }
 
     @MainActor
@@ -1079,6 +1165,7 @@ private func makeMainScreenViewModel(
     return MainScreen.MainScreenViewModel(
         chatPageViewModel: MainScreen.ChatPageViewModel(runService: runService),
         runsPageViewModel: MainScreen.RunsPageViewModel(runService: runService),
+        statsPageViewModel: MainScreen.StatsPageViewModel(statisticsService: UsageStatisticsService(runService: runService)),
         settingsPageViewModel: MainScreen.SettingsPageViewModel(providerService: makeProviderService(TestAIProvider())),
         approvalService: approvalService ?? makeApprovalService(),
         projectService: projectService
@@ -1120,7 +1207,7 @@ private func collectAIEvents(from provider: AIProvider, request: AIRequest) asyn
 @MainActor
 private func makeAIRequest(
     prompt: String,
-    providerId: String = MCPProviderDescriptor.codexCLI.id,
+    providerId: String = "mcp.codex.cli",
     model: String = "codex-cli",
     workingDirectory: String? = nil
 ) -> AIRequest {

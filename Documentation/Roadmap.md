@@ -115,6 +115,11 @@ WorkHarness already has:
 - `SQLiteProjectRepository`.
 - SQLite-backed Run, RunEvent and Project storage.
 - `WORKHARNESS_SQLITE_PATH` test override for isolated repository tests.
+- Token / Cost Statistics v1.
+- `UsageStatisticsServiceProtocol`.
+- `UsageStatisticsService`.
+- Run, provider and daily usage aggregates.
+- Stats page v1 in the main navigation.
 - Tests passing for the current stable slice.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
@@ -174,6 +179,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 10 - ContextBuilder v1.
 - Step 11 - Tools Foundation v1.
 - Step 12 - Persistence v1.
+- Step 13 - Token / Cost Statistics v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -551,7 +557,7 @@ Scope:
 Done when:
 Runs, events and projects survive app restart through structured persistence.
 
-## Step 13 - Token / Cost Statistics v1
+## Step 13 - Token / Cost Statistics v1 (Done)
 
 Goal:
 Make usage observable.
