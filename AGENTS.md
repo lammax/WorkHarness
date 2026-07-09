@@ -53,7 +53,7 @@ View -> ViewModel -> Service / HarnessFacade -> HarnessEngine
 - `WorkHarness/Design/` — только общий дизайн, если появится; feature design держать внутри соответствующего Screen/Page модуля.
 - `WorkHarness/HarnessEngine/` — orchestration, loops, approvals, validation, event recording.
 - `WorkHarness/Services/` — business/application фасады между ViewModel и HarnessEngine/Repositories/Providers/Tools.
-- `WorkHarness/Providers/` — AI backend protocols/adapters. CLI tools вроде Codex CLI/Cursor CLI должны быть providers/adapters.
+- `WorkHarness/Providers/` — AI backend protocols/adapters. Все реальные backend-интеграции, включая Codex CLI/Cursor CLI, должны приходить через MCP-backed provider boundary.
 - `WorkHarness/Repositories/` — data access и in-memory/persistence-backed storage.
 - `WorkHarness/Tools/` — shell/git/file/search/RAG/browser/MCP tools, когда появятся.
 - `WorkHarness/Persistence/` — SQLite/GRDB и mapping, когда появится persistence.
@@ -115,10 +115,18 @@ Screens/<Name>/
 ## 7. Providers
 
 - Каждый AI backend должен быть за общим `AIProvider` protocol.
-- Все внешние provider-интеграции должны подключаться через MCP boundary, а не через прямые SDK/HTTP adapters внутри приложения.
-- `AIProvider` остаётся внутренним протоколом WorkHarness; для внешних облачных/удалённых AI backend использовать MCP-backed provider adapter, который мапит MCP capability/result в `AIProvider`/`AIEvent`.
+- Все provider-интеграции должны подключаться через MCP boundary, а не через прямые SDK/HTTP/CLI adapters внутри приложения.
+- `AIProvider` остаётся внутренним протоколом WorkHarness; для любого AI backend использовать MCP-backed provider adapter, который мапит MCP capability/result в `AIProvider`/`AIEvent`.
 - База для MCP server уже подготовлена в `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server`; при реализации MCP-backed providers/tools использовать её как исходную локальную основу, если пользователь явно не указал другой сервер.
-- Исключение: локальные CLI agent backends, такие как Codex CLI и Cursor CLI, могут быть отдельными CLI providers/adapters поверх `ProcessRunner`, если они выполняются локально и проходят через safety/approval boundaries.
+- Новые MCP servers в `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` добавлять строго по существующему шаблону этого package:
+  - добавить `.executable` product и `.executableTarget` в `Package.swift`;
+  - создать target в `Sources/<Name>MCPServer/<Name>MCPServer.swift`;
+  - подключить зависимости `Shared`, Vapor и MCP так же, как у существующих servers;
+  - строить entrypoint через `MCP.Server(...)`, `ListTools` и `CallTool`;
+  - публиковать HTTP endpoint через существующий Vapor + `StatelessHTTPServerTransport` + `Shared/bridge/MCPHTTPBridge.swift` pattern;
+  - reusable domain/services/helpers держать в `Sources/Shared/...`, а не в WorkHarness и не в случайных новых пакетах;
+  - не вводить второй transport/package/layout style без явного архитектурного решения пользователя.
+- Прямые локальные CLI providers/adapters поверх `ProcessRunner`, включая Codex CLI и Cursor CLI, не являются финальной архитектурой provider layer. Если такие adapters уже появились как временный scaffold, их нужно мигрировать за MCP-backed provider boundary.
 - Provider может:
   - принимать request
   - stream events
@@ -130,8 +138,8 @@ Screens/<Name>/
   - владеть memory/RAG/orchestration
   - решать global permissions
   - напрямую редактировать файлы без approval path harness engine
-- Не добавлять прямые `OpenAIProvider`, `AnthropicProvider`, `GeminiProvider`, `OpenRouterProvider` и аналогичные network-specific adapters в приложение; такие backends должны приходить через MCP.
-- CLI process execution не размазывать по проекту. Для CLI backend создавать отдельный provider/adapter.
+- Не добавлять прямые `OpenAIProvider`, `AnthropicProvider`, `GeminiProvider`, `OpenRouterProvider`, `OllamaProvider`, `QwenProvider`, `CodexCLIProvider`, `CursorCLIProvider` и аналогичные backend-specific adapters как финальный путь в приложение; такие backends должны приходить через MCP.
+- CLI process execution не размазывать по проекту. Если нужно запускать CLI, запускать его внутри MCP server/tool boundary или как временный scaffold с последующей миграцией в MCP.
 
 ## 8. Tools и безопасность
 

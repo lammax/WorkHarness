@@ -596,60 +596,68 @@ struct WorkHarnessTests {
     }
 
     @MainActor
-    @Test func codexCLIProviderMapsStdoutToAIEvents() async throws {
-        let processRunner = FakeProcessRunner(events: [
-            .started(ProcessStart(processIdentifier: 42, executablePath: "/usr/bin/env", arguments: ["codex"])),
-            .stdout("Hello "),
-            .stdout("from Codex"),
-            .finished(ProcessExit(status: .succeeded, exitCode: 0))
+    @Test func mcpBackedProviderMapsStreamToAIEvents() async throws {
+        let client = FakeMCPProviderClient(events: [
+            .started,
+            .messageDelta("Hello "),
+            .messageDelta("from MCP"),
+            .messageCompleted("Hello from MCP"),
+            .tokenUsage(TokenUsage(inputTokens: 4, outputTokens: 6)),
+            .finished
         ])
-        let provider = CodexCLIProvider(processRunner: processRunner)
-        let request = makeAIRequest(prompt: "Build CLI provider", workingDirectory: "/tmp/WorkHarness")
+        let provider = MCPBackedAIProvider(descriptor: .codexCLI, client: client)
+        let request = makeAIRequest(prompt: "Build MCP provider", workingDirectory: "/tmp/WorkHarness")
 
         let events = try await collectAIEvents(from: provider, request: request)
 
-        #expect(processRunner.requests.first?.executableURL.path == "/usr/bin/env")
-        #expect(processRunner.requests.first?.arguments == ["codex", "exec", "--", "user: Build CLI provider"])
-        #expect(processRunner.requests.first?.workingDirectoryURL?.path == "/tmp/WorkHarness")
+        #expect(client.requests.first?.providerId == MCPProviderDescriptor.codexCLI.id)
+        #expect(client.requests.first?.aiRequest.workingDirectory == "/tmp/WorkHarness")
         #expect(events == [
             .started,
             .messageDelta("Hello "),
-            .messageDelta("from Codex"),
-            .messageCompleted("Hello from Codex"),
+            .messageDelta("from MCP"),
+            .messageCompleted("Hello from MCP"),
+            .tokenUsage(TokenUsage(inputTokens: 4, outputTokens: 6)),
             .finished
         ])
     }
 
     @MainActor
-    @Test func codexCLIProviderMapsStderrAndNonZeroExitToError() async throws {
-        let processRunner = FakeProcessRunner(events: [
-            .started(ProcessStart(processIdentifier: 42, executablePath: "/usr/bin/env", arguments: ["codex"])),
-            .stderr("authentication failed"),
-            .finished(ProcessExit(status: .failed, exitCode: 1))
+    @Test func mcpBackedProviderMapsFailureToAIError() async throws {
+        let client = FakeMCPProviderClient(events: [
+            .started,
+            .failed("MCP provider failed")
         ])
-        let provider = CodexCLIProvider(processRunner: processRunner)
+        let provider = MCPBackedAIProvider(descriptor: .cursorCLI, client: client)
+        let request = makeAIRequest(
+            prompt: "Fail please",
+            providerId: MCPProviderDescriptor.cursorCLI.id,
+            model: "cursor-agent"
+        )
 
-        let events = try await collectAIEvents(from: provider, request: makeAIRequest(prompt: "Fail please"))
+        let events = try await collectAIEvents(from: provider, request: request)
 
+        #expect(client.requests.first?.providerId == MCPProviderDescriptor.cursorCLI.id)
         #expect(events == [
             .started,
-            .error("Codex CLI failed. Exit code: 1. authentication failed")
+            .error("MCP provider failed")
         ])
     }
 
     @MainActor
-    @Test func codexCLIProviderIsRegisteredAndSelectable() async throws {
+    @Test func mcpBackedCLIProvidersAreRegisteredAndSelectable() async throws {
         let container = Container()
         container.registerDependencies()
         let providerService = try #require(container.resolve(ProviderServiceProtocol.self))
         let settingsViewModel = MainScreen.SettingsPageViewModel(providerService: providerService)
 
-        #expect(settingsViewModel.providers.contains { $0.id == CodexCLIProvider.providerId && $0.name == "Codex CLI" })
+        #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.codexCLI.id && $0.name == "Codex CLI" })
+        #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.cursorCLI.id && $0.name == "Cursor CLI" })
 
-        settingsViewModel.selectProvider(id: CodexCLIProvider.providerId)
+        settingsViewModel.selectProvider(id: MCPProviderDescriptor.cursorCLI.id)
 
-        #expect(providerService.activeProviderId == CodexCLIProvider.providerId)
-        #expect(settingsViewModel.activeProviderName == "Codex CLI")
+        #expect(providerService.activeProviderId == MCPProviderDescriptor.cursorCLI.id)
+        #expect(settingsViewModel.activeProviderName == "Cursor CLI")
     }
 
     @MainActor
@@ -848,10 +856,15 @@ private func collectAIEvents(from provider: AIProvider, request: AIRequest) asyn
 }
 
 @MainActor
-private func makeAIRequest(prompt: String, workingDirectory: String? = nil) -> AIRequest {
+private func makeAIRequest(
+    prompt: String,
+    providerId: String = MCPProviderDescriptor.codexCLI.id,
+    model: String = "codex-cli",
+    workingDirectory: String? = nil
+) -> AIRequest {
     AIRequest(
         runId: UUID(),
-        agent: Agent(role: .coder, providerId: CodexCLIProvider.providerId, model: "codex-cli"),
+        agent: Agent(role: .coder, providerId: providerId, model: model),
         messages: [.init(role: .user, content: prompt)],
         workingDirectory: workingDirectory
     )
@@ -881,6 +894,28 @@ private struct TestAIProvider: AIProvider {
             continuation.yield(.messageCompleted("Hello from test provider."))
             continuation.yield(.tokenUsage(TokenUsage(inputTokens: 3, outputTokens: 5)))
             continuation.yield(.finished)
+            continuation.finish()
+        }
+    }
+}
+
+@MainActor
+private final class FakeMCPProviderClient: MCPProviderClientProtocol {
+    private let events: [MCPProviderEvent]
+    private(set) var requests: [MCPProviderRequest] = []
+
+    init(events: [MCPProviderEvent]) {
+        self.events = events
+    }
+
+    func streamEvents(for request: MCPProviderRequest) async throws -> AsyncThrowingStream<MCPProviderEvent, Error> {
+        requests.append(request)
+
+        let events = events
+        return AsyncThrowingStream { continuation in
+            for event in events {
+                continuation.yield(event)
+            }
             continuation.finish()
         }
     }

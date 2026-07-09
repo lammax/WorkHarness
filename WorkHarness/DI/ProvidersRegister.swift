@@ -9,11 +9,17 @@ import Swinject
 
 extension Container {
     func registerProviders() {
+        register(MCPProviderClientProtocol.self) { _ in
+            MCPProviderClient()
+        }.inObjectScope(.container)
+
         register(ProviderRegistry.self) { resolver in
-            ProviderRegistry(
+            let mcpClient = resolver.resolve(MCPProviderClientProtocol.self)!
+            return ProviderRegistry(
                 providers: [
                     MockAIProvider(),
-                    CodexCLIProvider(processRunner: resolver.resolve(ProcessRunnerProtocol.self)!)
+                    MCPBackedAIProvider(descriptor: .codexCLI, client: mcpClient),
+                    MCPBackedAIProvider(descriptor: .cursorCLI, client: mcpClient)
                 ],
                 defaultProviderId: MockAIProvider.providerId
             )
