@@ -11,6 +11,7 @@ extension Container {
     func registerDependencies() {
         registerRepositories()
         registerProcessRunner()
+        registerAgentRuntime()
         registerProviders()
         registerEngine()
         registerServices()

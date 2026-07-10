@@ -161,6 +161,7 @@ struct WorkHarnessTests {
         let runService = try #require(container.resolve(RunServiceProtocol.self))
         let approvalService = try #require(container.resolve(ApprovalServiceProtocol.self))
         let processRunner = try #require(container.resolve(ProcessRunnerProtocol.self))
+        let agentRuntimeRegistry = try #require(container.resolve(AgentRuntimeRegistry.self))
         let contextBuilder = try #require(container.resolve(ContextBuilderProtocol.self))
         let toolRegistry = try #require(container.resolve(ToolRegistry.self))
         let mcpToolClient = try #require(container.resolve(MCPToolClientProtocol.self))
@@ -181,6 +182,7 @@ struct WorkHarnessTests {
         #expect(runService.runs.isEmpty)
         #expect(approvalService.pendingRequests.isEmpty)
         #expect(processRunner is ProcessRunner)
+        #expect(agentRuntimeRegistry.runtimes.isEmpty)
         #expect(contextBuilder is ContextBuilder)
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
         #expect(mcpToolClient is MCPToolClient)
@@ -1005,6 +1007,19 @@ struct WorkHarnessTests {
         #expect(session.capabilities.supports(.canPlan))
         #expect(connection.messages.map(\.method) == ["initialize", "session/run"])
         #expect(events.contains(.messageCompleted("Subprocess done.")))
+    }
+
+    @MainActor
+    @Test func acpAgentFactoryCreatesProviderAgnosticRuntime() throws {
+        let definition = ACPAgentDefinition(
+            id: "configured.acp",
+            displayName: "Configured ACP Agent",
+            subprocess: ACPSubprocessConfiguration(executableURL: URL(fileURLWithPath: "/usr/bin/true"))
+        )
+        let runtime = ACPAgentFactory(definition: definition).makeRuntime()
+
+        #expect(runtime.id == "configured.acp")
+        #expect(runtime.displayName == "Configured ACP Agent")
     }
 
     @MainActor
