@@ -61,6 +61,8 @@ extension MainScreen {
                     id: provider.id,
                     name: provider.displayName,
                     isActive: provider.id == activeProviderId,
+                    transport: provider.capabilities.supportsMCP ? SettingsPageDesign.ProviderFallback.mcpBacked : SettingsPageDesign.ProviderFallback.internalProvider,
+                    availability: provider.capabilities.supportsLocalExecution ? SettingsPageDesign.ProviderFallback.local : SettingsPageDesign.ProviderFallback.remote,
                     capabilities: capabilityRows(for: provider.capabilities)
                 )
             }
@@ -187,6 +189,8 @@ extension MainScreen {
         var id: String
         var name: String
         var isActive: Bool
+        var transport: String
+        var availability: String
         var capabilities: [ProviderCapabilityRow]
     }
 

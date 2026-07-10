@@ -127,6 +127,8 @@ WorkHarness already has:
 - Durable Local LLM endpoint and model settings.
 - Durable default token budget settings.
 - Settings page controls that save and reset app parameters.
+- Explicit Execution Backend selector showing the provider used by the next Run.
+- Provider transport and locality labels in Settings.
 - Tests passing for the current stable slice.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
@@ -600,6 +602,7 @@ Scope:
 - Durable default output token budget.
 - Save and reset actions.
 - Settings ViewModel writes through `AppSettingsServiceProtocol`.
+- Explicitly show and select the backend used by the next Run.
 - Provider MCP client reads configurable MCP/Local LLM settings.
 - `HarnessEngine` reads default token budgets from AppSettings.
 - Tests for persistence, ViewModel save flow and engine budget usage.

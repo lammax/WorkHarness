@@ -29,6 +29,7 @@ extension MainScreen {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Design.Content.sectionSpacing) {
+                            executionBackend
                             appSettings
 
                             HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
@@ -60,6 +61,54 @@ extension MainScreen {
                 }
             }
             .padding(Design.Header.padding)
+        }
+
+        private var executionBackend: some View {
+            VStack(alignment: .leading, spacing: Design.ExecutionBackend.spacing) {
+                HStack {
+                    Label(Design.ExecutionBackend.title, systemImage: Design.ExecutionBackend.icon)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text(Design.ExecutionBackend.nextRunLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker(Design.ExecutionBackend.pickerTitle, selection: Binding(
+                    get: { viewModel.activeProviderId ?? "" },
+                    set: { providerId in
+                        guard !providerId.isEmpty else { return }
+                        viewModel.selectProvider(id: providerId)
+                    }
+                )) {
+                    ForEach(viewModel.providers) { provider in
+                        Text(provider.name).tag(provider.id)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if let selectedProvider = viewModel.selectedProvider {
+                    HStack(spacing: Design.ExecutionBackend.detailSpacing) {
+                        Image(systemName: Design.ExecutionBackend.selectedIcon)
+                            .foregroundStyle(.green)
+
+                        VStack(alignment: .leading, spacing: Design.ExecutionBackend.detailTextSpacing) {
+                            Text(selectedProvider.name)
+                                .font(.body)
+                                .fontWeight(.semibold)
+                            Text("\(selectedProvider.transport) · \(selectedProvider.availability)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                }
+            }
+            .padding(Design.ExecutionBackend.padding)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Design.ExecutionBackend.cornerRadius))
         }
 
         private var appSettings: some View {

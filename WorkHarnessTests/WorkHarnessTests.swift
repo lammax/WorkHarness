@@ -1050,6 +1050,10 @@ struct WorkHarnessTests {
         #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.cursorCLI.id && $0.name == "Cursor CLI" })
         #expect(settingsViewModel.providers.contains { $0.id == MCPProviderDescriptor.localLLM.id && $0.name == "Local LLM" })
 
+        let cursor = try #require(settingsViewModel.providers.first { $0.id == MCPProviderDescriptor.cursorCLI.id })
+        #expect(cursor.transport == "MCP-backed")
+        #expect(cursor.availability == "Local")
+
         settingsViewModel.selectProvider(id: MCPProviderDescriptor.localLLM.id)
 
         #expect(providerService.activeProviderId == MCPProviderDescriptor.localLLM.id)

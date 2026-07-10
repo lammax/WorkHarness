@@ -26,6 +26,19 @@ extension MainScreen {
             static let sectionSpacing: CGFloat = 18
         }
 
+        enum ExecutionBackend {
+            static let title = "Execution Backend"
+            static let pickerTitle = "Backend for the next Run"
+            static let nextRunLabel = "Used by new Runs"
+            static let icon = "play.circle"
+            static let selectedIcon = "checkmark.circle.fill"
+            static let spacing: CGFloat = 12
+            static let detailSpacing: CGFloat = 8
+            static let detailTextSpacing: CGFloat = 3
+            static let padding: CGFloat = 12
+            static let cornerRadius: CGFloat = 8
+        }
+
         enum AppSettings {
             static let title = "Application Settings"
             static let safetyModeTitle = "Safety mode"
@@ -106,6 +119,10 @@ extension MainScreen {
             static let no = "No"
             static let tokensSuffix = "tokens"
             static let listSeparator = ", "
+            static let mcpBacked = "MCP-backed"
+            static let internalProvider = "Internal"
+            static let local = "Local"
+            static let remote = "Remote"
         }
 
         enum EmptyState {
