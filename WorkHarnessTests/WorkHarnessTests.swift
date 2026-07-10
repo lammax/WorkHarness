@@ -1056,6 +1056,47 @@ struct WorkHarnessTests {
         #expect(ACPAgentDefinitions.cursor()?.id == "cursor.acp")
     }
 
+    @Test func capabilityBasedAgentPlannerBuildsOrderedExecutionPlan() throws {
+        let planner = CapabilityBasedAgentPlanner()
+        let candidates = [
+            AgentCandidate(
+                agent: Agent(role: .research, providerId: "research", model: "research"),
+                capabilities: AgentCapabilities([.canPlan])
+            ),
+            AgentCandidate(
+                agent: Agent(role: .research, providerId: "coder", model: "coder"),
+                capabilities: AgentCapabilities([.canEditFiles, .canUseTools])
+            ),
+            AgentCandidate(
+                agent: Agent(role: .research, providerId: "review", model: "review"),
+                capabilities: AgentCapabilities([.canOpenDiff])
+            ),
+            AgentCandidate(
+                agent: Agent(role: .research, providerId: "tests", model: "tests"),
+                capabilities: AgentCapabilities([.canRunTests])
+            )
+        ]
+
+        let plan = try planner.plan(goal: "Implement feature", candidates: candidates)
+
+        #expect(plan.steps.map(\.role) == [.architect, .coder, .reviewer, .testRunner])
+        #expect(plan.steps.dropFirst().enumerated().allSatisfy { index, step in
+            step.dependsOn == [plan.steps[index].id]
+        })
+    }
+
+    @Test func capabilityBasedAgentPlannerFailsWhenCapabilityIsMissing() {
+        let planner = CapabilityBasedAgentPlanner()
+        let candidate = AgentCandidate(
+            agent: Agent(role: .coder, providerId: "coder", model: "coder"),
+            capabilities: AgentCapabilities([.canPlan])
+        )
+
+        #expect(throws: AgentPlannerError.noCandidate(role: .coder, requiredCapabilities: [.canEditFiles, .canUseTools])) {
+            try planner.plan(goal: "Implement feature", candidates: [candidate])
+        }
+    }
+
     @MainActor
     @Test func harnessEngineBuildsProviderContextThroughContextBuilder() async throws {
         let repository = InMemoryRunRepository()

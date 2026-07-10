@@ -219,6 +219,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 16 - Memory v1.
 - Step 17 - RAG v1.
 - Step 18 - ACP Agent Runtime v1.
+- Step 19 - Multi-Agent v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -869,6 +870,8 @@ WorkHarness can run at least one fake ACP agent through `AgentRuntime`, persist/
 
 ## Step 19 - Multi-Agent v1
 
+Status: In progress. Capability-based planning and a dependency-aware execution plan are implemented; runtime execution of multiple child sessions remains.
+
 Goal:
 Support real agentic development workflows.
 
@@ -885,6 +888,13 @@ Scope:
 - Child `AgentSession` support.
 - Run Timeline integration.
 - Tests.
+
+Implemented first slice:
+
+- `AgentCandidate` combines an agent configuration with discovered `AgentCapabilities`.
+- `CapabilityBasedAgentPlanner` selects candidates by capabilities, never by concrete provider or agent name.
+- `AgentExecutionPlan` and `AgentPlanStep` model the dependency-aware Architect → Coder → Reviewer → Test Runner graph.
+- Deterministic planner failure is returned when no candidate satisfies a required capability set.
 
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.
