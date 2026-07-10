@@ -21,6 +21,7 @@ enum ACPEvent: Equatable {
     case textDelta(String)
     case messageCompleted(String)
     case toolCallRequested(name: String, input: String)
+    case toolCallUpdated(name: String, input: String)
     case fileChanged(path: String)
     case approvalRequested(summary: String)
     case tokenUsage(TokenUsage)
@@ -54,8 +55,15 @@ protocol ACPTransport: AnyObject {
 protocol ACPConnection: AnyObject {
     func send(_ message: ACPMessage) async throws
     func request(method: String, params: [String: Any]) async throws -> [String: Any]
+    func respond(requestId: Int, result: [String: Any]) async throws
+    func setRequestHandler(_ handler: @escaping @MainActor (Int, String, [String: Any]) -> Void)
     func events() -> AsyncThrowingStream<ACPEvent, Error>
     func close() async
+}
+
+extension ACPConnection {
+    func respond(requestId: Int, result: [String: Any]) async throws {}
+    func setRequestHandler(_ handler: @escaping @MainActor (Int, String, [String: Any]) -> Void) {}
 }
 
 @MainActor
@@ -63,6 +71,7 @@ protocol ACPClient: AnyObject {
     var id: String { get }
     var displayName: String { get }
     func connect() async throws -> AgentSession
+    func configure(modelId: String?)
     func disconnect(sessionId: UUID) async
     func run(task: AgentTask, sessionId: UUID) async throws -> AsyncThrowingStream<ACPEvent, Error>
     func cancel(sessionId: UUID) async

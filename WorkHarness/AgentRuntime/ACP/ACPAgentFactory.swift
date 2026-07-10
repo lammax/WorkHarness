@@ -56,15 +56,18 @@ enum ACPAgentDefinitions {
         let candidates = ProcessInfo.processInfo.environment["PATH"]?
             .split(separator: ":")
             .map { URL(fileURLWithPath: String($0)).appendingPathComponent(name) } ?? []
-        let homePaths = [
-            ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0) },
-            FileManager.default.homeDirectoryForCurrentUser,
-            URL(fileURLWithPath: NSHomeDirectory())
-        ].compactMap { $0 }
-        let fallbacks = homePaths.map { $0.appendingPathComponent(".local/bin/\(name)") }
+        let userHome = URL(fileURLWithPath: "/Users/\(NSUserName())")
+        let fallbacks = [
+            userHome.appendingPathComponent(".local/bin/\(name)"),
+            URL(fileURLWithPath: "/opt/homebrew/bin/\(name)"),
+            URL(fileURLWithPath: "/usr/local/bin/\(name)")
+        ]
 
-        return (candidates + fallbacks).first {
+        let allCandidates = candidates + fallbacks
+        return allCandidates.first(where: {
             FileManager.default.isExecutableFile(atPath: $0.path)
-        }
+        }) ?? allCandidates.first(where: {
+            FileManager.default.fileExists(atPath: $0.path)
+        })
     }
 }

@@ -127,6 +127,7 @@ struct AgentExecution {
 protocol AgentRuntime: AnyObject {
     var id: String { get }
     var displayName: String { get }
+    func configure(modelId: String?)
     func connect() async throws -> AgentSession
     func disconnect(sessionId: UUID) async
     func capabilities(sessionId: UUID) -> AgentCapabilities?

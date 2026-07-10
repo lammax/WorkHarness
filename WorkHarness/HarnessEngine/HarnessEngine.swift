@@ -18,6 +18,7 @@ final class HarnessEngine {
     private let memoryService: MemoryServiceProtocol?
     private let ragService: RAGServiceProtocol?
     private let appSettingsService: AppSettingsServiceProtocol?
+    private let agentRuntimeRegistry: AgentRuntimeRegistry
 
     init(
         repository: RunRepository,
@@ -28,7 +29,8 @@ final class HarnessEngine {
         contextFoldingService: ContextFoldingServiceProtocol? = nil,
         memoryService: MemoryServiceProtocol? = nil,
         ragService: RAGServiceProtocol? = nil,
-        appSettingsService: AppSettingsServiceProtocol? = nil
+        appSettingsService: AppSettingsServiceProtocol? = nil,
+        agentRuntimeRegistry: AgentRuntimeRegistry? = nil
     ) {
         self.repository = repository
         self.recorder = recorder
@@ -39,6 +41,7 @@ final class HarnessEngine {
         self.memoryService = memoryService
         self.ragService = ragService
         self.appSettingsService = appSettingsService
+        self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
     }
 
     var providerName: String {
@@ -64,6 +67,10 @@ final class HarnessEngine {
     func startRun(goal: String) async -> UUID? {
         let trimmedGoal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedGoal.isEmpty else { return nil }
+
+        if let runtime = selectedAgentRuntime() {
+            return await startAgentRuntimeRun(goal: trimmedGoal, runtime: runtime)
+        }
 
         let provider: any AIProvider
         do {
@@ -92,6 +99,16 @@ final class HarnessEngine {
     func sendMessage(runId: UUID, message: String) async {
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty, let run = repository.run(withId: runId), let agent = run.agents.first else { return }
+
+        if let runtime = runtime(for: agent) {
+            recorder.record(runId: runId, type: .userMessage, message: trimmedMessage)
+            repository.updateRun(runId) { run in
+                run.status = .running
+            }
+            await runAgentRuntimeTask(runId: runId, prompt: trimmedMessage, agent: agent, runtime: runtime)
+            return
+        }
+
         let provider: any AIProvider
 
         do {
@@ -117,7 +134,7 @@ final class HarnessEngine {
                 runId: runId,
                 agent: agent,
                 messages: [.init(role: .user, content: prompt)],
-                context: context(for: runId, prompt: prompt, agent: agent, provider: provider, ragResults: ragResults).contextItems,
+                context: context(for: runId, prompt: prompt, agent: agent, providerId: provider.id, ragResults: ragResults).contextItems,
                 tools: agent.tools,
                 budget: defaultTokenBudget(for: agent)
             )
@@ -159,12 +176,12 @@ final class HarnessEngine {
         }
     }
 
-    private func context(for runId: UUID, prompt: String, agent: Agent, provider: any AIProvider, ragResults: [RAGCitation] = []) -> ContextSnapshot {
+    private func context(for runId: UUID, prompt: String, agent: Agent, providerId: String, ragResults: [RAGCitation] = []) -> ContextSnapshot {
         let currentProject = projectService?.currentProject
         let snapshot = contextBuilder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
-            providerId: provider.id,
+            providerId: providerId,
             userMessage: prompt,
             currentProject: currentProject,
             rootPath: currentProject?.rootPath,
@@ -180,7 +197,7 @@ final class HarnessEngine {
             message: snapshot.summary,
             metadata: [
                 "contextSnapshotId": snapshot.id.uuidString,
-                "providerId": provider.id,
+                "providerId": providerId,
                 "agentId": agent.id.uuidString,
                 "tokenEstimate": "\(snapshot.tokenCount)",
                 "ragResultCount": "\(snapshot.includedRAGResults.count)"
@@ -188,6 +205,107 @@ final class HarnessEngine {
         )
 
         return snapshot
+    }
+
+    private func startAgentRuntimeRun(goal: String, runtime: AgentRuntime) async -> UUID {
+        let agent = Agent(
+            role: .coder,
+            providerId: "agent-runtime:\(runtime.id)",
+            model: runtime.displayName,
+            contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
+        )
+        let run = Run(goal: goal, mode: .codingLoop, agents: [agent])
+        repository.insert(run)
+        recorder.record(runId: run.id, type: .runCreated, message: goal)
+        recorder.record(runId: run.id, type: .userMessage, message: goal)
+        await runAgentRuntimeTask(runId: run.id, prompt: goal, agent: agent, runtime: runtime)
+        return run.id
+    }
+
+    private func runAgentRuntimeTask(runId: UUID, prompt: String, agent: Agent, runtime: AgentRuntime) async {
+        do {
+            let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
+            let snapshot = context(
+                for: runId,
+                prompt: prompt,
+                agent: agent,
+                providerId: runtime.id,
+                ragResults: ragResults
+            )
+            runtime.configure(modelId: appSettingsService?.defaultAgentModelId)
+            let session = try await runtime.connect()
+            recorder.record(
+                runId: runId,
+                type: .agentStarted,
+                message: "\(runtime.displayName) session started.",
+                metadata: ["runtimeId": runtime.id, "sessionId": session.id.uuidString]
+            )
+            let execution = try await runtime.run(
+                task: AgentTask(
+                    runId: runId,
+                    prompt: prompt,
+                    context: snapshot,
+                    workingDirectory: projectService?.currentProject?.rootPath
+                ),
+                sessionId: session.id
+            )
+            let mapper = ACPRunEventMapper(recorder: recorder)
+            var assistantMessage = ""
+            var hasStreamedText = false
+
+            for try await event in execution.events {
+                switch event {
+                case .textDelta(let delta):
+                    assistantMessage += delta
+                    hasStreamedText = true
+                    recorder.record(runId: runId, type: .providerStreamDelta, message: delta, metadata: ["source": "acp"])
+                case .messageCompleted(let message):
+                    assistantMessage = message
+                case .tokenUsage(let usage):
+                    mapper.record(runId: runId, event: event)
+                    repository.updateRun(runId) { run in
+                        run.tokenUsage = usage
+                        run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
+                    }
+                case .finished(let response):
+                    if !assistantMessage.isEmpty && !hasStreamedText {
+                        recorder.record(runId: runId, type: .assistantMessage, message: assistantMessage, metadata: ["source": "acp"])
+                    }
+                    mapper.record(runId: runId, event: event)
+                    repository.updateRun(runId) { run in
+                        run.status = .completed
+                        if let usage = response.tokenUsage {
+                            run.tokenUsage = usage
+                            run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
+                        }
+                        run.artifacts.append(contentsOf: response.artifacts)
+                    }
+                case .failed(let message):
+                    mapper.record(runId: runId, event: event)
+                    failRun(runId, message: message)
+                case .started, .thinking, .toolCallRequested, .fileChanged, .approvalRequested, .artifactCreated:
+                    mapper.record(runId: runId, event: event)
+                    break
+                }
+            }
+            if repository.run(withId: runId)?.status == .completed {
+                recorder.record(runId: runId, type: .runCompleted, message: "Run completed through \(runtime.displayName).")
+            }
+            await runtime.disconnect(sessionId: session.id)
+        } catch {
+            failRun(runId, message: error.localizedDescription)
+        }
+    }
+
+    private func selectedAgentRuntime() -> AgentRuntime? {
+        guard let runtimeId = appSettingsService?.defaultAgentRuntimeId else { return nil }
+        return agentRuntimeRegistry.runtime(id: runtimeId)
+    }
+
+    private func runtime(for agent: Agent) -> AgentRuntime? {
+        let prefix = "agent-runtime:"
+        guard agent.providerId.hasPrefix(prefix) else { return nil }
+        return agentRuntimeRegistry.runtime(id: String(agent.providerId.dropFirst(prefix.count)))
     }
 
     private func ragResults(for prompt: String, agent: Agent, runId: UUID) async -> [RAGCitation] {

@@ -73,7 +73,7 @@ struct MCPProviderDescriptor: Equatable {
 }
 
 struct MCPProviderConfiguration: Equatable {
-    static let defaultServerBasePath = "/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server"
+    nonisolated static let defaultServerBasePath = "/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server"
 
     var serverBasePath: String
     var localLLMEndpointURL: String

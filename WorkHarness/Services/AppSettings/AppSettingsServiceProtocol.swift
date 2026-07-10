@@ -9,6 +9,7 @@
 protocol AppSettingsServiceProtocol: BaseServiceProtocol {
     var defaultProviderId: String? { get set }
     var defaultAgentRuntimeId: String? { get set }
+    var defaultAgentModelId: String { get set }
     var defaultSafetyMode: SafetyMode { get set }
     var mcpServerBasePath: String { get set }
     var localLLMEndpoint: String { get set }
@@ -24,12 +25,13 @@ extension AppSettingsServiceProtocol {
 }
 
 enum AppSettingsDefaults {
-    static let defaultSafetyMode: SafetyMode = .askBeforeWrite
-    static let mcpServerBasePath = MCPProviderConfiguration.defaultServerBasePath
-    static let localLLMEndpoint = "http://127.0.0.1:3007/mcp"
-    static let localLLMModel = "local-private"
-    static let defaultMaxInputTokens = 16_000
-    static let defaultMaxOutputTokens = 2_000
-    static let ragAnswerMode: RAGAnswerMode = .disabled
-    static let ragRetrievalSettings = RAGRetrievalSettings.default
+    nonisolated static let defaultSafetyMode: SafetyMode = .askBeforeWrite
+    nonisolated static let defaultAgentModelId = "composer-2.5[fast=true]"
+    nonisolated static let mcpServerBasePath = "/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server"
+    nonisolated static let localLLMEndpoint = "http://127.0.0.1:3007/mcp"
+    nonisolated static let localLLMModel = "local-private"
+    nonisolated static let defaultMaxInputTokens = 16_000
+    nonisolated static let defaultMaxOutputTokens = 2_000
+    nonisolated static let ragAnswerMode: RAGAnswerMode = .disabled
+    nonisolated static let ragRetrievalSettings = RAGRetrievalSettings()
 }

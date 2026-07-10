@@ -53,7 +53,7 @@ struct RAGRetrievalSettings: Codable, Equatable {
     var similarityThreshold: Double = 0.25
     var relevanceFilterMode: RAGRelevanceFilterMode = .similarityThreshold
 
-    static let `default` = RAGRetrievalSettings()
+    nonisolated static let `default` = RAGRetrievalSettings()
 }
 
 enum RAGAnswerMode: String, Codable, CaseIterable, Equatable {

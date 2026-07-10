@@ -9,6 +9,7 @@
 final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
     var defaultProviderId: String?
     var defaultAgentRuntimeId: String?
+    var defaultAgentModelId: String
     var defaultSafetyMode: SafetyMode
     var mcpServerBasePath: String
     var localLLMEndpoint: String
@@ -21,6 +22,7 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
     init(
         defaultProviderId: String? = nil,
         defaultAgentRuntimeId: String? = nil,
+        defaultAgentModelId: String = AppSettingsDefaults.defaultAgentModelId,
         defaultSafetyMode: SafetyMode = AppSettingsDefaults.defaultSafetyMode,
         mcpServerBasePath: String = AppSettingsDefaults.mcpServerBasePath,
         localLLMEndpoint: String = AppSettingsDefaults.localLLMEndpoint,
@@ -32,6 +34,7 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
     ) {
         self.defaultProviderId = defaultProviderId
         self.defaultAgentRuntimeId = defaultAgentRuntimeId
+        self.defaultAgentModelId = defaultAgentModelId
         self.defaultSafetyMode = defaultSafetyMode
         self.mcpServerBasePath = mcpServerBasePath
         self.localLLMEndpoint = localLLMEndpoint

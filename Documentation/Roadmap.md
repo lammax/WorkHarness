@@ -144,6 +144,10 @@ WorkHarness already has:
 - Generic `ACPAgentFactory` for registering executable-backed agent definitions.
 - Cursor ACP executable discovery and `cursor.acp` runtime registration.
 - Durable Agent runtime selection in Settings → Execution & Providers.
+- Selected AgentRuntime execution path through `HarnessEngine` with ContextSnapshot and RunEvent mapping.
+- Cursor ACP model picker with durable selection and `session/set_config_option` forwarding.
+- ACP text delta aggregation for a single growing assistant block in Chat UI.
+- App Sandbox disabled for the local-first macOS harness so approved subprocess/MCP/ACP integrations can execute external agents.
 - MCP-backed RAG client and service boundary.
 - RAG index/search/clear operations routed to the existing `RAGMCPServer`.
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
@@ -808,6 +812,7 @@ Implemented foundation:
 - `ACPAgentDefinition` and `ACPAgentFactory` for provider-agnostic runtime creation.
 - Cursor ACP discovery through `cursor-agent acp`, including initialize, optional `cursor_login` authentication and `session/new` handshake.
 - Settings stores the selected AgentRuntime id independently from the LLM provider id.
+- A selected ACP runtime now creates coding Runs and receives `AgentTask` context; provider chat remains the fallback when no Agent runtime is selected.
 - Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
 
 Remaining in Step 18:

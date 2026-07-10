@@ -19,6 +19,10 @@ final class ACPClientRuntime: AgentRuntime {
     var id: String { client.id }
     var displayName: String { client.displayName }
 
+    func configure(modelId: String?) {
+        client.configure(modelId: modelId)
+    }
+
     func connect() async throws -> AgentSession {
         let session = try await client.connect()
         sessions[session.id] = session
@@ -112,6 +116,8 @@ final class ACPClientRuntime: AgentRuntime {
             .messageCompleted(message)
         case .toolCallRequested(let name, let input):
             .toolCallRequested(name: name, input: input)
+        case .toolCallUpdated:
+            .thinking("")
         case .fileChanged(let path):
             .fileChanged(path: path)
         case .approvalRequested(let summary):

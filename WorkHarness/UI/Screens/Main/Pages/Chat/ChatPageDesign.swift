@@ -40,6 +40,7 @@ extension MainScreen {
         }
 
         enum EventRow {
+            static let assistantLabel = "Assistant"
             static let rowSpacing: CGFloat = 10
             static let iconSize: CGFloat = 22
             static let iconFontSize: CGFloat = 14

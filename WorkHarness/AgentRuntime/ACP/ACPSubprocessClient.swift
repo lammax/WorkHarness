@@ -17,6 +17,7 @@ final class ACPSubprocessClient: ACPClient {
     private var connection: ACPConnection?
     private var sessions: [UUID: AgentSession] = [:]
     private var remoteSessionIDs: [UUID: String] = [:]
+    private var modelId: String?
 
     init(id: String, displayName: String, transport: ACPTransport, workingDirectory: URL? = nil) {
         self.id = id
@@ -25,9 +26,23 @@ final class ACPSubprocessClient: ACPClient {
         self.workingDirectory = workingDirectory
     }
 
+    func configure(modelId: String?) {
+        self.modelId = modelId
+    }
+
     func connect() async throws -> AgentSession {
         let connection = try await transport.connect()
         self.connection = connection
+        connection.setRequestHandler { [weak self, weak connection] requestId, method, params in
+            Task { @MainActor in
+                await self?.handleAgentRequest(
+                    requestId: requestId,
+                    method: method,
+                    params: params,
+                    connection: connection
+                )
+            }
+        }
 
         let initializeResult = try await connection.request(method: "initialize", params: [
             "protocolVersion": 1,
@@ -49,6 +64,14 @@ final class ACPSubprocessClient: ACPClient {
         ])
         guard let remoteSessionID = sessionResult["sessionId"] as? String else {
             throw ACPError.transport("Cursor ACP did not return a sessionId.")
+        }
+
+        if let modelId {
+            _ = try await connection.request(method: "session/set_config_option", params: [
+                "sessionId": remoteSessionID,
+                "configId": "model",
+                "value": modelId
+            ])
         }
 
         let capabilities = Self.capabilities(from: initializeResult["agentCapabilities"] as? [String: Any])
@@ -124,6 +147,39 @@ final class ACPSubprocessClient: ACPClient {
     private func sendControlMessageOrThrow(method: String, sessionId: UUID) async throws {
         guard let connection, let remoteSessionID = remoteSessionIDs[sessionId] else { throw ACPError.notConnected }
         _ = try await connection.request(method: method, params: ["sessionId": remoteSessionID])
+    }
+
+    private func handleAgentRequest(
+        requestId: Int,
+        method: String,
+        params: [String: Any],
+        connection: ACPConnection?
+    ) async {
+        guard let connection else { return }
+
+        switch method {
+        case "session/request_permission":
+            // ACP owns the agent's permission prompt for now. The unified
+            // WorkHarness approval bridge will replace this default later.
+            let options = params["options"] as? [[String: Any]] ?? []
+            let optionId = options.first(where: { option in
+                let kind = (option["kind"] as? String ?? "").lowercased()
+                let id = (option["optionId"] as? String ?? "").lowercased()
+                return kind.contains("allow") || id.contains("allow")
+            })?["optionId"] as? String ?? "allow-once"
+            try? await connection.respond(requestId: requestId, result: [
+                "outcome": [
+                    "outcome": "selected",
+                    "optionId": optionId
+                ]
+            ])
+        case "cursor/ask_question":
+            try? await connection.respond(requestId: requestId, result: ["answers": []])
+        case "cursor/create_plan":
+            try? await connection.respond(requestId: requestId, result: [:])
+        default:
+            try? await connection.respond(requestId: requestId, result: [:])
+        }
     }
 
     private static func capabilities(from values: [String: Any]?) -> AgentCapabilities {

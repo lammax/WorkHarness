@@ -154,6 +154,13 @@ extension MainScreen {
                     Label(activeRuntime.name, systemImage: Design.AgentRuntime.icon)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Picker(Design.AgentRuntime.modelPickerTitle, selection: $viewModel.selectedAgentModelId) {
+                        ForEach(CursorACPModelOption.allCases) { model in
+                            Text(model.title).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
 
                 if let selectedProvider = viewModel.selectedProvider {

@@ -971,6 +971,32 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func harnessEngineRunsSelectedACPAgentThroughRunFlow() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.acp")
+        let registry = AgentRuntimeRegistry()
+        registry.register(ACPClientRuntime(client: FakeACPClient()))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            contextBuilder: ContextBuilder(),
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        let runId = try #require(await engine.startRun(goal: "Run through Cursor"))
+        let run = try #require(repository.run(withId: runId))
+
+        #expect(run.mode == .codingLoop)
+        #expect(run.agents.first?.providerId == "agent-runtime:fake.acp")
+        #expect(run.status == .completed)
+        #expect(run.events.contains { $0.type == .fileChanged && $0.message == "Sources/App.swift" })
+        #expect(run.events.contains { $0.type == .runCompleted })
+    }
+
+    @MainActor
     @Test func acpCodecEncodesJSONRPCLineAndDecodesAgentEvents() throws {
         let request = ACPMessage(id: 7, method: "session/start", params: ["project": "/tmp/project"])
         let encoded = try ACPCodec.encode(request)
@@ -1023,6 +1049,11 @@ struct WorkHarnessTests {
 
         #expect(runtime.id == "configured.acp")
         #expect(runtime.displayName == "Configured ACP Agent")
+    }
+
+    @MainActor
+    @Test func cursorACPDefinitionIsDiscoveredWhenCursorIsInstalled() {
+        #expect(ACPAgentDefinitions.cursor()?.id == "cursor.acp")
     }
 
     @MainActor
@@ -1791,6 +1822,11 @@ private final class FakeACPClient: ACPClient {
     let id = "fake.acp"
     let displayName = "Fake ACP Agent"
     private let sessionId = UUID()
+    private var modelId: String?
+
+    func configure(modelId: String?) {
+        self.modelId = modelId
+    }
 
     func connect() async throws -> AgentSession {
         AgentSession(

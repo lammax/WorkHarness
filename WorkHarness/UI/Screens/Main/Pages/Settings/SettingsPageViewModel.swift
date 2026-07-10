@@ -20,6 +20,7 @@ extension MainScreen {
         private(set) var activeProviderId: String?
         private(set) var activeAgentRuntimeId: String?
         private(set) var agentRuntimes: [AgentRuntimeItem] = []
+        var selectedAgentModelId: String
         private(set) var errorMessage: String?
         var selectedSafetyMode: SafetyMode
         var mcpServerBasePath: String
@@ -38,11 +39,12 @@ extension MainScreen {
         init(
             providerService: ProviderServiceProtocol,
             appSettingsService: AppSettingsServiceProtocol,
-            agentRuntimeRegistry: AgentRuntimeRegistry = AgentRuntimeRegistry()
+            agentRuntimeRegistry: AgentRuntimeRegistry? = nil
         ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
-            self.agentRuntimeRegistry = agentRuntimeRegistry
+            self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
+            self.selectedAgentModelId = appSettingsService.defaultAgentModelId
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
             self.localLLMEndpoint = appSettingsService.localLLMEndpoint
@@ -131,6 +133,7 @@ extension MainScreen {
             appSettingsService.localLLMModel = localLLMModel
             appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
             appSettingsService.defaultMaxOutputTokens = defaultMaxOutputTokens
+            appSettingsService.defaultAgentModelId = selectedAgentModelId
             appSettingsService.ragAnswerMode = ragAnswerMode
             appSettingsService.ragRetrievalSettings = currentRAGRetrievalSettings
 
@@ -139,6 +142,7 @@ extension MainScreen {
             localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            selectedAgentModelId = appSettingsService.defaultAgentModelId
             loadRAGSettingsFromService()
             errorMessage = nil
         }
@@ -155,6 +159,7 @@ extension MainScreen {
             localLLMModel = AppSettingsDefaults.localLLMModel
             defaultMaxInputTokens = AppSettingsDefaults.defaultMaxInputTokens
             defaultMaxOutputTokens = AppSettingsDefaults.defaultMaxOutputTokens
+            selectedAgentModelId = AppSettingsDefaults.defaultAgentModelId
             ragAnswerMode = AppSettingsDefaults.ragAnswerMode
             ragChunkingStrategy = AppSettingsDefaults.ragRetrievalSettings.chunkingStrategy
             ragRetrievalMode = AppSettingsDefaults.ragRetrievalSettings.retrievalMode
@@ -207,6 +212,7 @@ extension MainScreen {
             localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            selectedAgentModelId = appSettingsService.defaultAgentModelId
             loadRAGSettingsFromService()
         }
 
@@ -240,6 +246,7 @@ extension MainScreen {
                 localLLMModel: localLLMModel,
                 defaultMaxInputTokens: defaultMaxInputTokens,
                 defaultMaxOutputTokens: defaultMaxOutputTokens,
+                agentModelId: selectedAgentModelId,
                 ragAnswerMode: ragAnswerMode,
                 ragRetrievalSettings: currentRAGRetrievalSettings
             )
@@ -253,6 +260,7 @@ extension MainScreen {
                 localLLMModel: appSettingsService.localLLMModel,
                 defaultMaxInputTokens: appSettingsService.defaultMaxInputTokens,
                 defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens,
+                agentModelId: appSettingsService.defaultAgentModelId,
                 ragAnswerMode: appSettingsService.ragAnswerMode,
                 ragRetrievalSettings: appSettingsService.ragRetrievalSettings
             )
@@ -266,6 +274,7 @@ extension MainScreen {
         var localLLMModel: String
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
+        var agentModelId: String
         var ragAnswerMode: RAGAnswerMode
         var ragRetrievalSettings: RAGRetrievalSettings
     }

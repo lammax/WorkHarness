@@ -36,6 +36,24 @@ extension MainScreen {
             selectedRun?.events ?? []
         }
 
+        var displayEvents: [RunEvent] {
+            selectedRunEvents.reduce(into: [RunEvent]()) { result, event in
+                guard event.type == .providerStreamDelta, event.metadata["source"] == "acp" else {
+                    result.append(event)
+                    return
+                }
+
+                guard let lastIndex = result.indices.last,
+                      result[lastIndex].type == .providerStreamDelta,
+                      result[lastIndex].metadata["source"] == "acp" else {
+                    result.append(event)
+                    return
+                }
+
+                result[lastIndex].message += event.message
+            }
+        }
+
         var providerName: String {
             runService.providerName
         }

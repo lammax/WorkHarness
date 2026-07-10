@@ -46,6 +46,7 @@ final class ACPSubprocessConnection: ACPConnection {
     private let output: FileHandle
     private var continuations: [UUID: AsyncThrowingStream<ACPEvent, Error>.Continuation] = [:]
     private var responseContinuations: [Int: CheckedContinuation<[String: Any], Error>] = [:]
+    private var requestHandler: (@MainActor (Int, String, [String: Any]) -> Void)?
     private var nextRequestID = 10
     private var isClosed = false
 
@@ -57,9 +58,21 @@ final class ACPSubprocessConnection: ACPConnection {
         let inputPipe = Pipe()
         let outputPipe = Pipe()
         let process = Process()
+        var environment = ProcessInfo.processInfo.environment
+        if let configuredEnvironment = configuration.environment {
+            environment.merge(configuredEnvironment) { _, configured in configured }
+        }
+        let userHome = "/Users/\(NSUserName())"
+        if environment["HOME"]?.hasPrefix("/Users/") != true {
+            environment["HOME"] = userHome
+        }
+        let userPath = "\(userHome)/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        environment["PATH"] = [userPath, environment["PATH"] ?? ""]
+            .filter { !$0.isEmpty }
+            .joined(separator: ":")
         process.executableURL = configuration.executableURL
         process.arguments = configuration.arguments
-        process.environment = configuration.environment
+        process.environment = environment
         process.currentDirectoryURL = configuration.workingDirectoryURL
         process.standardInput = inputPipe
         process.standardOutput = outputPipe
@@ -115,15 +128,29 @@ final class ACPSubprocessConnection: ACPConnection {
         }
     }
 
+    func respond(requestId: Int, result: [String: Any]) async throws {
+        guard !isClosed else { throw ACPError.transport("ACP connection is closed.") }
+        let object: [String: Any] = [
+            "jsonrpc": "2.0",
+            "id": requestId,
+            "result": result
+        ]
+        let data = try JSONSerialization.data(withJSONObject: object)
+        do {
+            try input.write(contentsOf: data + Data([0x0A]))
+        } catch {
+            throw ACPError.transport(error.localizedDescription)
+        }
+    }
+
+    func setRequestHandler(_ handler: @escaping @MainActor (Int, String, [String: Any]) -> Void) {
+        requestHandler = handler
+    }
+
     func events() -> AsyncThrowingStream<ACPEvent, Error> {
         AsyncThrowingStream { continuation in
             let subscriberId = UUID()
             self.continuations[subscriberId] = continuation
-            continuation.onTermination = { @Sendable [weak self] _ in
-                Task { @MainActor in
-                    self?.continuations.removeValue(forKey: subscriberId)
-                }
-            }
         }
     }
 
@@ -152,6 +179,11 @@ final class ACPSubprocessConnection: ACPConnection {
             guard let data = line.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
 
+            if let id = object["id"] as? Int, let method = object["method"] as? String {
+                requestHandler?(id, method, object["params"] as? [String: Any] ?? [:])
+                continue
+            }
+
             if let id = object["id"] as? Int {
                 if let error = object["error"] as? [String: Any] {
                     let message = error["message"] as? String ?? "Unknown ACP error."
@@ -164,6 +196,7 @@ final class ACPSubprocessConnection: ACPConnection {
             }
 
             guard let event = try? ACPCodec.decodeEvent(from: data) else { continue }
+            if case .toolCallUpdated = event { continue }
             continuations.values.forEach { $0.yield(event) }
         }
     }
@@ -234,7 +267,7 @@ enum ACPCodec {
                 input: String(describing: update["rawInput"] ?? update["content"] ?? "")
             )
         case "tool_call_update":
-            return .toolCallRequested(
+            return .toolCallUpdated(
                 name: update["title"] as? String ?? "tool",
                 input: String(describing: update["rawOutput"] ?? update["content"] ?? "")
             )

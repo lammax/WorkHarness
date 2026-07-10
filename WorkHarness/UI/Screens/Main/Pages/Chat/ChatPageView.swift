@@ -19,26 +19,18 @@ extension MainScreen {
 
                 Divider()
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: Design.Timeline.spacing) {
-                            if viewModel.selectedRunEvents.isEmpty {
-                                EmptyChatStateView()
-                            } else {
-                                ForEach(viewModel.selectedRunEvents) { event in
-                                    RunEventRow(event: event)
-                                        .id(event.id)
-                                }
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: Design.Timeline.spacing) {
+                        if viewModel.displayEvents.isEmpty {
+                            EmptyChatStateView()
+                        } else {
+                            ForEach(viewModel.displayEvents) { event in
+                                RunEventRow(event: event)
+                                    .id(event.id)
                             }
                         }
-                        .padding(Design.Timeline.padding)
                     }
-                    .onChange(of: viewModel.selectedRunEvents.count) {
-                        guard let last = viewModel.selectedRunEvents.last else { return }
-                        withAnimation {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
+                    .padding(Design.Timeline.padding)
                 }
 
                 Divider()
@@ -108,7 +100,7 @@ extension MainScreen {
 
                 VStack(alignment: .leading, spacing: Design.contentSpacing) {
                     HStack(spacing: Design.metadataSpacing) {
-                        Text(event.type.label)
+                            Text(event.type == .providerStreamDelta && event.metadata["source"] == "acp" ? Design.assistantLabel : event.type.label)
                             .font(.caption)
                             .fontWeight(.semibold)
                         Text(event.createdAt, style: .time)

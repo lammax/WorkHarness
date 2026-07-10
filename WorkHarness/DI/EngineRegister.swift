@@ -31,7 +31,8 @@ extension Container {
                 contextFoldingService: resolver.resolve(ContextFoldingServiceProtocol.self)!,
                 memoryService: resolver.resolve(MemoryServiceProtocol.self)!,
                 ragService: resolver.resolve(RAGServiceProtocol.self)!,
-                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!
             )
         }.inObjectScope(.container)
     }
