@@ -12,11 +12,19 @@ extension MainScreen {
         typealias Design = ComposerViewDesign
 
         @Binding var text: String
+        @Binding var mode: RunMode
         let isSending: Bool
         let onSend: () -> Void
 
         var body: some View {
-            HStack(alignment: .bottom, spacing: Design.spacing) {
+            VStack(alignment: .trailing, spacing: Design.spacing) {
+                Picker(Design.modeLabel, selection: $mode) {
+                    Text(Design.simpleModeLabel).tag(RunMode.simpleChat)
+                    Text(Design.multiAgentModeLabel).tag(RunMode.multiAgent)
+                }
+                .pickerStyle(.segmented)
+
+                HStack(alignment: .bottom, spacing: Design.spacing) {
                 TextField(Design.placeholder, text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(Design.minLineLimit...Design.maxLineLimit)
@@ -31,6 +39,7 @@ extension MainScreen {
                 .buttonStyle(.borderedProminent)
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
                 .help(Design.sendHelp)
+                }
             }
         }
 

@@ -33,6 +33,10 @@ final class RunService: RunServiceProtocol {
         await harnessEngine.startRun(goal: goal)
     }
 
+    func startRun(goal: String, mode: RunMode) async -> UUID? {
+        await harnessEngine.startRun(goal: goal, mode: mode)
+    }
+
     func sendMessage(runId: UUID, message: String) async {
         await harnessEngine.sendMessage(runId: runId, message: message)
     }

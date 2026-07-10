@@ -16,6 +16,9 @@ extension MainScreen {
         static let maxLineLimit = 6
         static let buttonIconSize: CGFloat = 20
         static let placeholder = "Describe the run goal..."
+        static let modeLabel = "Run mode"
+        static let simpleModeLabel = "Chat"
+        static let multiAgentModeLabel = "Multi-Agent"
         static let sendingIcon = "hourglass"
         static let sendIcon = "paperplane.fill"
         static let sendHelp = "Send"

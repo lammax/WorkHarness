@@ -870,7 +870,7 @@ WorkHarness can run at least one fake ACP agent through `AgentRuntime`, persist/
 
 ## Step 19 - Multi-Agent v1
 
-Status: In progress. Capability-based planning and a dependency-aware execution plan are implemented; runtime execution of multiple child sessions remains.
+Status: In progress. Capability-based planning, dependency-aware execution and a user-visible Multi-Agent run mode are implemented; richer per-agent configuration and parallel execution remain.
 
 Goal:
 Support real agentic development workflows.
@@ -897,6 +897,9 @@ Implemented first slice:
 - Deterministic planner failure is returned when no candidate satisfies a required capability set.
 - `MultiAgentCoordinator` executes dependency-ordered child sessions and aggregates their output, usage, artifacts and RunEvents.
 - Child session start/finish metadata includes plan, step, role, agent and session identifiers.
+- Chat composer exposes an explicit `Chat / Multi-Agent` run mode selector.
+- `RunService` and `HarnessEngine` execute Multi-Agent runs through the same Run-centric path.
+- The current MVP can execute Architect, Coder, Reviewer and Test Runner roles sequentially on one selected ACP runtime.
 
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.

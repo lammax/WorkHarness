@@ -21,6 +21,13 @@ extension Container {
             RunRecorder(repository: resolver.resolve(RunRepository.self)!)
         }.inObjectScope(.container)
 
+        register(MultiAgentCoordinator.self) { resolver in
+            MultiAgentCoordinator(
+                repository: resolver.resolve(RunRepository.self)!,
+                recorder: resolver.resolve(RunRecorder.self)!
+            )
+        }.inObjectScope(.container)
+
         register(HarnessEngine.self) { resolver in
             HarnessEngine(
                 repository: resolver.resolve(RunRepository.self)!,
@@ -32,7 +39,8 @@ extension Container {
                 memoryService: resolver.resolve(MemoryServiceProtocol.self)!,
                 ragService: resolver.resolve(RAGServiceProtocol.self)!,
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
-                agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!
+                agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!,
+                multiAgentCoordinator: resolver.resolve(MultiAgentCoordinator.self)!
             )
         }.inObjectScope(.container)
     }

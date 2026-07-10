@@ -19,6 +19,7 @@ final class HarnessEngine {
     private let ragService: RAGServiceProtocol?
     private let appSettingsService: AppSettingsServiceProtocol?
     private let agentRuntimeRegistry: AgentRuntimeRegistry
+    private let multiAgentCoordinator: MultiAgentCoordinator
 
     init(
         repository: RunRepository,
@@ -30,7 +31,8 @@ final class HarnessEngine {
         memoryService: MemoryServiceProtocol? = nil,
         ragService: RAGServiceProtocol? = nil,
         appSettingsService: AppSettingsServiceProtocol? = nil,
-        agentRuntimeRegistry: AgentRuntimeRegistry? = nil
+        agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
+        multiAgentCoordinator: MultiAgentCoordinator? = nil
     ) {
         self.repository = repository
         self.recorder = recorder
@@ -42,6 +44,7 @@ final class HarnessEngine {
         self.ragService = ragService
         self.appSettingsService = appSettingsService
         self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
+        self.multiAgentCoordinator = multiAgentCoordinator ?? MultiAgentCoordinator(repository: repository, recorder: recorder)
     }
 
     var providerName: String {
@@ -94,6 +97,53 @@ final class HarnessEngine {
 
         await runSimpleChatLoop(runId: run.id, prompt: trimmedGoal, agent: agent, provider: provider)
         return run.id
+    }
+
+    func startRun(goal: String, mode: RunMode) async -> UUID? {
+        guard mode == .multiAgent else { return await startRun(goal: goal) }
+        return await startMultiAgentRun(goal: goal)
+    }
+
+    private func startMultiAgentRun(goal: String) async -> UUID? {
+        guard let runtime = selectedAgentRuntime() else {
+            return createFailedRun(goal: goal, message: "Select an ACP agent runtime before starting a multi-agent run.")
+        }
+
+        let agent = Agent(
+            role: .coder,
+            providerId: "agent-runtime:\(runtime.id)",
+            model: runtime.displayName,
+            contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
+        )
+        let run = Run(goal: goal, mode: .multiAgent, agents: [agent])
+        repository.insert(run)
+        recorder.record(runId: run.id, type: .runCreated, message: goal, metadata: ["mode": RunMode.multiAgent.rawValue])
+        recorder.record(runId: run.id, type: .userMessage, message: goal)
+
+        let candidate = AgentCandidate(
+            agent: agent,
+            capabilities: AgentCapabilities([
+                .canPlan, .canEditFiles, .canUseTools, .canOpenDiff, .canRunTests
+            ])
+        )
+        do {
+            let plan = try CapabilityBasedAgentPlanner().plan(goal: goal, candidates: [candidate])
+            let snapshot = context(for: run.id, prompt: goal, agent: agent, providerId: runtime.id)
+            _ = try await multiAgentCoordinator.execute(
+                plan: plan,
+                candidates: [candidate],
+                runtimes: [agent.id: runtime],
+                runId: run.id,
+                context: snapshot,
+                workingDirectory: projectService?.currentProject?.rootPath
+            )
+            repository.updateRun(run.id) { $0.status = .completed }
+            recorder.record(runId: run.id, type: .runCompleted, message: "Multi-agent run completed.", metadata: ["planId": plan.id.uuidString])
+            return run.id
+        } catch {
+            failRun(run.id, message: error.localizedDescription)
+            return run.id
+        }
     }
 
     func sendMessage(runId: UUID, message: String) async {

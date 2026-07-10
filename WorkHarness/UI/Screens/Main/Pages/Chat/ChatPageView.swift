@@ -37,6 +37,7 @@ extension MainScreen {
 
                 ComposerView(
                     text: $viewModel.draftMessage,
+                    mode: $viewModel.draftRunMode,
                     isSending: viewModel.isSending,
                     onSend: viewModel.submitDraft
                 )
