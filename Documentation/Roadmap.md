@@ -895,6 +895,8 @@ Implemented first slice:
 - `CapabilityBasedAgentPlanner` selects candidates by capabilities, never by concrete provider or agent name.
 - `AgentExecutionPlan` and `AgentPlanStep` model the dependency-aware Architect → Coder → Reviewer → Test Runner graph.
 - Deterministic planner failure is returned when no candidate satisfies a required capability set.
+- `MultiAgentCoordinator` executes dependency-ordered child sessions and aggregates their output, usage, artifacts and RunEvents.
+- Child session start/finish metadata includes plan, step, role, agent and session identifiers.
 
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.

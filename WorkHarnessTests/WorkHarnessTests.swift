@@ -1098,6 +1098,31 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func multiAgentCoordinatorExecutesPlanInDependencyOrder() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let run = Run(goal: "Multi-agent task", mode: .multiAgent)
+        repository.insert(run)
+        let runtime = ACPClientRuntime(client: FakeACPClient())
+        let agent = Agent(role: .coder, providerId: "fake.acp", model: "fake")
+        let candidate = AgentCandidate(agent: agent, capabilities: AgentCapabilities([.canUseTools]))
+        let first = AgentPlanStep(role: .coder, agentId: agent.id, requiredCapabilities: [])
+        let second = AgentPlanStep(role: .reviewer, agentId: agent.id, requiredCapabilities: [], dependsOn: [first.id])
+        let plan = AgentExecutionPlan(goal: run.goal, steps: [first, second])
+
+        let result = try await MultiAgentCoordinator(repository: repository, recorder: recorder).execute(
+            plan: plan,
+            candidates: [candidate],
+            runtimes: [agent.id: runtime],
+            runId: run.id
+        )
+
+        #expect(result.steps.map(\.stepId) == [first.id, second.id])
+        #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentStarted }.count == 2)
+        #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentFinished }.count == 2)
+    }
+
+    @MainActor
     @Test func harnessEngineBuildsProviderContextThroughContextBuilder() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
