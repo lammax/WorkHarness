@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension MainScreen {
     struct MainSidebarView: View {
@@ -213,9 +214,20 @@ extension MainScreen {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel(Design.nameLabel)
 
-                TextField(Design.rootPathPlaceholder, text: $screenModel.projectDraftRootPath)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel(Design.rootPathLabel)
+                HStack(spacing: Design.fieldSpacing) {
+                    TextField(Design.rootPathPlaceholder, text: $screenModel.projectDraftRootPath)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel(Design.rootPathLabel)
+
+                    Button {
+                        screenModel.isProjectFolderImporterPresented = true
+                    } label: {
+                        Image(systemName: Design.chooseFolderIcon)
+                    }
+                    .buttonStyle(.bordered)
+                    .help(Design.chooseFolderButtonTitle)
+                    .accessibilityLabel(Design.chooseFolderButtonTitle)
+                }
 
                 if let error = screenModel.projectFormError {
                     Text(error)
@@ -236,6 +248,20 @@ extension MainScreen {
             }
             .padding(Design.formPadding)
             .frame(width: Design.formWidth)
+            .fileImporter(
+                isPresented: $screenModel.isProjectFolderImporterPresented,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        screenModel.setProjectDraftRootPath(url.path)
+                    }
+                case .failure(let error):
+                    screenModel.setProjectFormError(error.localizedDescription)
+                }
+            }
         }
     }
 

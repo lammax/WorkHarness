@@ -42,6 +42,8 @@ extension MainScreen {
                 static let namePlaceholder = "WorkHarness"
                 static let rootPathLabel = "Root Path"
                 static let rootPathPlaceholder = "/Users/me/Projects/App"
+                static let chooseFolderButtonTitle = "Choose project folder"
+                static let chooseFolderIcon = "folder"
                 static let cancelButtonTitle = "Cancel"
                 static let createButtonTitle = "Create"
                 static let nameRequiredMessage = "Project name is required."
@@ -49,6 +51,7 @@ extension MainScreen {
                 static let textSpacing: CGFloat = 2
                 static let formWidth: CGFloat = 420
                 static let formSpacing: CGFloat = 14
+                static let fieldSpacing: CGFloat = 8
                 static let formPadding: CGFloat = 20
                 static let rowSpacing: CGFloat = 3
             }

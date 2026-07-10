@@ -24,6 +24,7 @@ extension MainScreen {
         private(set) var detailPage: (any BasePageProtocol)?
         private(set) var activeApprovalRequestId: ApprovalRequest.ID?
         var isProjectFormPresented = false
+        var isProjectFolderImporterPresented = false
         var isApprovalSheetPresented = false
         var projectDraftName = ""
         var projectDraftRootPath = ""
@@ -129,7 +130,17 @@ extension MainScreen {
 
         func dismissProjectForm() {
             isProjectFormPresented = false
+            isProjectFolderImporterPresented = false
             projectFormError = nil
+        }
+
+        func setProjectDraftRootPath(_ path: String) {
+            projectDraftRootPath = path
+            projectFormError = nil
+        }
+
+        func setProjectFormError(_ message: String) {
+            projectFormError = message
         }
 
         func addProjectFromDraft() {

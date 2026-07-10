@@ -514,6 +514,19 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func mainScreenProjectSelectorAcceptsFolderPickerPath() async throws {
+        let screenModel = makeMainScreenViewModel(projectService: ProjectService(repository: InMemoryProjectRepository()))
+
+        screenModel.showProjectForm()
+        screenModel.setProjectDraftRootPath("/tmp/SelectedProject")
+        screenModel.projectDraftName = "Selected Project"
+        screenModel.addProjectFromDraft()
+
+        #expect(screenModel.projects.first?.rootPath == "/tmp/SelectedProject")
+        #expect(screenModel.projectFormError == nil)
+    }
+
+    @MainActor
     @Test func mainScreenSelectsProjectThroughProjectService() async throws {
         let projectService = ProjectService(repository: InMemoryProjectRepository())
         let firstProject = projectService.addProject(name: "First", rootPath: "/tmp/First")
