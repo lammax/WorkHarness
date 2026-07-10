@@ -136,6 +136,9 @@ WorkHarness already has:
 - Memory write policy rejecting empty, oversized and sensitive content.
 - `memorySaved` RunEvents for run-linked memory writes.
 - Basic Memory page for the selected project.
+- AgentRuntime foundation with capability-based agent sessions.
+- ACP client/runtime contracts isolated under `AgentRuntime/ACP`.
+- ACP event mapping into existing `RunEvent` timeline concepts.
 - MCP-backed RAG client and service boundary.
 - RAG index/search/clear operations routed to the existing `RAGMCPServer`.
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
@@ -715,6 +718,8 @@ Relevant indexed knowledge can be retrieved with citations and inserted into con
 
 ## Step 18 - ACP Agent Runtime v1
 
+Status: In progress. AgentRuntime/ACP foundation is implemented; local ACP subprocess transport remains.
+
 Goal:
 Introduce one agent runtime abstraction so WorkHarness can run coding agents without depending on Codex, Cursor, Claude Code, Gemini CLI, OpenHands or any future concrete agent.
 
@@ -785,6 +790,20 @@ Scope:
 - Ensure agents receive `ContextSnapshot` from `ContextBuilder`; agents do not own memory.
 - Log diffs, commands, tool calls and artifacts through the Run/AgentSession event pipeline.
 - Add tests with fake ACP transports and fake agents.
+
+Implemented foundation:
+
+- `AgentRuntime`, `AgentTask`, `AgentSession`, `AgentExecution`, `AgentEvent` and capability models.
+- `AgentRuntimeRegistry` and `AgentFactory` boundaries.
+- `ACPMessage`, `ACPEvent`, `ACPConnection`, `ACPTransport`, `ACPClient` and `ACPError` isolation types.
+- `ACPClientRuntime` lifecycle, session state, cancellation, pause/resume and event mapping.
+- `ACPRunEventMapper` for agent output, tool requests, file changes, approvals, usage, artifacts and failures.
+- Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
+
+Remaining in Step 18:
+
+- Implement the production JSON-RPC 2.0 stdin/stdout ACP subprocess transport on top of the process boundary.
+- Connect real ACP-compatible agents through `AgentFactory` without changing `HarnessEngine`.
 
 Agent capabilities:
 

@@ -921,6 +921,41 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func acpRuntimeRunsFakeAgentAndMapsEventsToRunTimeline() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Implement ACP runtime")
+        repository.insert(run)
+        let recorder = RunRecorder(repository: repository)
+        let client = FakeACPClient()
+        let runtime = ACPClientRuntime(client: client)
+        let registry = AgentRuntimeRegistry()
+        registry.register(runtime)
+
+        let session = try await runtime.connect()
+        let task = AgentTask(runId: run.id, prompt: run.goal)
+        let execution = try await runtime.run(task: task, sessionId: session.id)
+        let mapper = ACPRunEventMapper(recorder: recorder)
+        var events: [AgentEvent] = []
+
+        for try await event in execution.events {
+            events.append(event)
+            mapper.record(runId: run.id, event: event)
+        }
+
+        let timeline = try #require(repository.run(withId: run.id)?.events)
+
+        #expect(registry.runtime(id: "fake.acp") === runtime)
+        #expect(session.capabilities.supports(.canEditFiles))
+        #expect(events.contains(.started))
+        #expect(events.contains(.textDelta("Patch ready.")))
+        #expect(events.contains(.fileChanged(path: "Sources/App.swift")))
+        #expect(timeline.contains { $0.type == .agentStarted })
+        #expect(timeline.contains { $0.type == .providerStreamDelta && $0.message == "Patch ready." })
+        #expect(timeline.contains { $0.type == .fileChanged && $0.message == "Sources/App.swift" })
+        #expect(timeline.contains { $0.type == .agentFinished })
+    }
+
+    @MainActor
     @Test func harnessEngineBuildsProviderContextThroughContextBuilder() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -1656,6 +1691,39 @@ private final class FakeMCPProviderClient: MCPProviderClientProtocol {
             continuation.finish()
         }
     }
+}
+
+@MainActor
+private final class FakeACPClient: ACPClient {
+    let id = "fake.acp"
+    let displayName = "Fake ACP Agent"
+    private let sessionId = UUID()
+
+    func connect() async throws -> AgentSession {
+        AgentSession(
+            id: sessionId,
+            agentId: id,
+            state: .connected,
+            capabilities: AgentCapabilities([.canEditFiles, .canStreamTokens, .canOpenDiff])
+        )
+    }
+
+    func disconnect(sessionId: UUID) async {}
+
+    func run(task: AgentTask, sessionId: UUID) async throws -> AsyncThrowingStream<ACPEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(.started)
+            continuation.yield(.textDelta("Patch ready."))
+            continuation.yield(.fileChanged(path: "Sources/App.swift"))
+            continuation.yield(.messageCompleted("Done."))
+            continuation.yield(.finished(AgentResponse(message: "Done.", tokenUsage: TokenUsage(inputTokens: 2, outputTokens: 3), artifacts: [])))
+            continuation.finish()
+        }
+    }
+
+    func cancel(sessionId: UUID) async {}
+    func pause(sessionId: UUID) async throws {}
+    func resume(sessionId: UUID) async throws {}
 }
 
 @MainActor
