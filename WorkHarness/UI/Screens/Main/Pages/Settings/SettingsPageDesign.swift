@@ -26,6 +26,16 @@ extension MainScreen {
             static let sectionSpacing: CGFloat = 18
         }
 
+        enum Tabs {
+            static let title = "Settings sections"
+            static let executionTitle = "Execution & Providers"
+            static let applicationTitle = "Application"
+            static let ragTitle = "RAG"
+            static let executionIcon = "play.circle"
+            static let applicationIcon = "gearshape"
+            static let ragIcon = "books.vertical"
+        }
+
         enum ExecutionBackend {
             static let title = "Execution Backend"
             static let pickerTitle = "Backend for the next Run"
@@ -68,6 +78,28 @@ extension MainScreen {
             static let title = "Providers"
             static let width: CGFloat = 280
             static let spacing: CGFloat = 10
+        }
+
+        enum RAGSettings {
+            static let title = "Project Knowledge (RAG)"
+            static let icon = "books.vertical"
+            static let sourceLabel = "MCP Server · 127.0.0.1:3003"
+            static let answerModeTitle = "RAG for new Runs"
+            static let chunkingTitle = "Indexed chunk strategy"
+            static let retrievalTitle = "Retrieval mode"
+            static let filterTitle = "Relevance filter"
+            static let topKBeforeTitle = "Before filter"
+            static let topKAfterTitle = "After filter"
+            static let thresholdTitle = "Similarity threshold"
+            static let spacing: CGFloat = 12
+            static let controlSpacing: CGFloat = 6
+            static let fieldSpacing: CGFloat = 18
+            static let padding: CGFloat = 12
+            static let cornerRadius: CGFloat = 8
+            static let topKBeforeRange = 1...30
+            static let topKAfterRange = 1...20
+            static let thresholdRange = 0.0...1.0
+            static let thresholdStep = 0.01
         }
 
         enum ProviderRow {

@@ -14,6 +14,8 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
     var localLLMModel: String
     var defaultMaxInputTokens: Int
     var defaultMaxOutputTokens: Int
+    var ragAnswerMode: RAGAnswerMode
+    var ragRetrievalSettings: RAGRetrievalSettings
 
     init(
         defaultProviderId: String? = nil,
@@ -22,7 +24,9 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
         localLLMEndpoint: String = AppSettingsDefaults.localLLMEndpoint,
         localLLMModel: String = AppSettingsDefaults.localLLMModel,
         defaultMaxInputTokens: Int = AppSettingsDefaults.defaultMaxInputTokens,
-        defaultMaxOutputTokens: Int = AppSettingsDefaults.defaultMaxOutputTokens
+        defaultMaxOutputTokens: Int = AppSettingsDefaults.defaultMaxOutputTokens,
+        ragAnswerMode: RAGAnswerMode = AppSettingsDefaults.ragAnswerMode,
+        ragRetrievalSettings: RAGRetrievalSettings = AppSettingsDefaults.ragRetrievalSettings
     ) {
         self.defaultProviderId = defaultProviderId
         self.defaultSafetyMode = defaultSafetyMode
@@ -31,5 +35,7 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
         self.localLLMModel = localLLMModel
         self.defaultMaxInputTokens = defaultMaxInputTokens
         self.defaultMaxOutputTokens = defaultMaxOutputTokens
+        self.ragAnswerMode = ragAnswerMode
+        self.ragRetrievalSettings = ragRetrievalSettings
     }
 }

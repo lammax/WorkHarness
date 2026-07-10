@@ -14,6 +14,8 @@ protocol AppSettingsServiceProtocol: BaseServiceProtocol {
     var localLLMModel: String { get set }
     var defaultMaxInputTokens: Int { get set }
     var defaultMaxOutputTokens: Int { get set }
+    var ragAnswerMode: RAGAnswerMode { get set }
+    var ragRetrievalSettings: RAGRetrievalSettings { get set }
 }
 
 extension AppSettingsServiceProtocol {
@@ -27,4 +29,6 @@ enum AppSettingsDefaults {
     static let localLLMModel = "local-private"
     static let defaultMaxInputTokens = 16_000
     static let defaultMaxOutputTokens = 2_000
+    static let ragAnswerMode: RAGAnswerMode = .disabled
+    static let ragRetrievalSettings = RAGRetrievalSettings.default
 }

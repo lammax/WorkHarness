@@ -24,6 +24,13 @@ extension MainScreen {
         var localLLMModel: String
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
+        var ragAnswerMode: RAGAnswerMode
+        var ragChunkingStrategy: RAGChunkingStrategy
+        var ragRetrievalMode: RAGRetrievalMode
+        var ragRelevanceFilterMode: RAGRelevanceFilterMode
+        var ragTopKBeforeFiltering: Int
+        var ragTopKAfterFiltering: Int
+        var ragSimilarityThreshold: Double
 
         init(providerService: ProviderServiceProtocol, appSettingsService: AppSettingsServiceProtocol) {
             self.providerService = providerService
@@ -34,6 +41,13 @@ extension MainScreen {
             self.localLLMModel = appSettingsService.localLLMModel
             self.defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             self.defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            self.ragAnswerMode = appSettingsService.ragAnswerMode
+            self.ragChunkingStrategy = appSettingsService.ragRetrievalSettings.chunkingStrategy
+            self.ragRetrievalMode = appSettingsService.ragRetrievalSettings.retrievalMode
+            self.ragRelevanceFilterMode = appSettingsService.ragRetrievalSettings.relevanceFilterMode
+            self.ragTopKBeforeFiltering = appSettingsService.ragRetrievalSettings.topKBeforeFiltering
+            self.ragTopKAfterFiltering = appSettingsService.ragRetrievalSettings.topKAfterFiltering
+            self.ragSimilarityThreshold = appSettingsService.ragRetrievalSettings.similarityThreshold
             reloadProviders()
         }
 
@@ -85,12 +99,15 @@ extension MainScreen {
             appSettingsService.localLLMModel = localLLMModel
             appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
             appSettingsService.defaultMaxOutputTokens = defaultMaxOutputTokens
+            appSettingsService.ragAnswerMode = ragAnswerMode
+            appSettingsService.ragRetrievalSettings = currentRAGRetrievalSettings
 
             mcpServerBasePath = appSettingsService.mcpServerBasePath
             localLLMEndpoint = appSettingsService.localLLMEndpoint
             localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            loadRAGSettingsFromService()
             errorMessage = nil
         }
 
@@ -106,6 +123,13 @@ extension MainScreen {
             localLLMModel = AppSettingsDefaults.localLLMModel
             defaultMaxInputTokens = AppSettingsDefaults.defaultMaxInputTokens
             defaultMaxOutputTokens = AppSettingsDefaults.defaultMaxOutputTokens
+            ragAnswerMode = AppSettingsDefaults.ragAnswerMode
+            ragChunkingStrategy = AppSettingsDefaults.ragRetrievalSettings.chunkingStrategy
+            ragRetrievalMode = AppSettingsDefaults.ragRetrievalSettings.retrievalMode
+            ragRelevanceFilterMode = AppSettingsDefaults.ragRetrievalSettings.relevanceFilterMode
+            ragTopKBeforeFiltering = AppSettingsDefaults.ragRetrievalSettings.topKBeforeFiltering
+            ragTopKAfterFiltering = AppSettingsDefaults.ragRetrievalSettings.topKAfterFiltering
+            ragSimilarityThreshold = AppSettingsDefaults.ragRetrievalSettings.similarityThreshold
             errorMessage = nil
         }
 
@@ -151,6 +175,29 @@ extension MainScreen {
             localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            loadRAGSettingsFromService()
+        }
+
+        private func loadRAGSettingsFromService() {
+            let settings = appSettingsService.ragRetrievalSettings
+            ragAnswerMode = appSettingsService.ragAnswerMode
+            ragChunkingStrategy = settings.chunkingStrategy
+            ragRetrievalMode = settings.retrievalMode
+            ragRelevanceFilterMode = settings.relevanceFilterMode
+            ragTopKBeforeFiltering = settings.topKBeforeFiltering
+            ragTopKAfterFiltering = settings.topKAfterFiltering
+            ragSimilarityThreshold = settings.similarityThreshold
+        }
+
+        private var currentRAGRetrievalSettings: RAGRetrievalSettings {
+            RAGRetrievalSettings(
+                chunkingStrategy: ragChunkingStrategy,
+                retrievalMode: ragRetrievalMode,
+                topKBeforeFiltering: ragTopKBeforeFiltering,
+                topKAfterFiltering: ragTopKAfterFiltering,
+                similarityThreshold: ragSimilarityThreshold,
+                relevanceFilterMode: ragRelevanceFilterMode
+            )
         }
 
         private var currentAppSettingsSnapshot: EditableAppSettingsSnapshot {
@@ -160,7 +207,9 @@ extension MainScreen {
                 localLLMEndpoint: localLLMEndpoint,
                 localLLMModel: localLLMModel,
                 defaultMaxInputTokens: defaultMaxInputTokens,
-                defaultMaxOutputTokens: defaultMaxOutputTokens
+                defaultMaxOutputTokens: defaultMaxOutputTokens,
+                ragAnswerMode: ragAnswerMode,
+                ragRetrievalSettings: currentRAGRetrievalSettings
             )
         }
 
@@ -171,7 +220,9 @@ extension MainScreen {
                 localLLMEndpoint: appSettingsService.localLLMEndpoint,
                 localLLMModel: appSettingsService.localLLMModel,
                 defaultMaxInputTokens: appSettingsService.defaultMaxInputTokens,
-                defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens
+                defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens,
+                ragAnswerMode: appSettingsService.ragAnswerMode,
+                ragRetrievalSettings: appSettingsService.ragRetrievalSettings
             )
         }
     }
@@ -183,6 +234,8 @@ extension MainScreen {
         var localLLMModel: String
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
+        var ragAnswerMode: RAGAnswerMode
+        var ragRetrievalSettings: RAGRetrievalSettings
     }
 
     struct ProviderSettingsItem: Identifiable, Equatable {

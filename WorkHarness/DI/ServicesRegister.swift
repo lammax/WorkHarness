@@ -49,5 +49,13 @@ extension Container {
                 recorder: resolver.resolve(RunRecorder.self)!
             )
         }.inObjectScope(.container)
+
+        register(RAGMCPClientProtocol.self) { _ in
+            RAGMCPClient()
+        }.inObjectScope(.container)
+
+        register(RAGServiceProtocol.self) { resolver in
+            RAGService(client: resolver.resolve(RAGMCPClientProtocol.self)!)
+        }.inObjectScope(.container)
     }
 }

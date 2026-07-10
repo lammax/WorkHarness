@@ -99,6 +99,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
     var contextItems: [String]
     var includedFiles: [String]
     var includedMemories: [String]
+    var includedRAGResults: [RAGCitation]
     var includedSummaries: [String]
     var tokenCount: Int
     var createdAt: Date
@@ -116,6 +117,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
         contextItems: [String] = [],
         includedFiles: [String] = [],
         includedMemories: [String] = [],
+        includedRAGResults: [RAGCitation] = [],
         includedSummaries: [String] = [],
         tokenCount: Int = 0,
         createdAt: Date = Date()
@@ -132,6 +134,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
         self.contextItems = contextItems
         self.includedFiles = includedFiles
         self.includedMemories = includedMemories
+        self.includedRAGResults = includedRAGResults
         self.includedSummaries = includedSummaries
         self.tokenCount = tokenCount
         self.createdAt = createdAt

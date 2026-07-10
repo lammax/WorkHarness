@@ -17,6 +17,8 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         static let localLLMModel = "appSettings.localLLMModel"
         static let defaultMaxInputTokens = "appSettings.defaultMaxInputTokens"
         static let defaultMaxOutputTokens = "appSettings.defaultMaxOutputTokens"
+        static let ragAnswerMode = "appSettings.ragAnswerMode"
+        static let ragRetrievalSettings = "appSettings.ragRetrievalSettings"
     }
 
     private let defaults: UserDefaults
@@ -93,6 +95,33 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         }
         set {
             setPositiveInt(newValue, key: Key.defaultMaxOutputTokens, defaultValue: AppSettingsDefaults.defaultMaxOutputTokens)
+        }
+    }
+
+    var ragAnswerMode: RAGAnswerMode {
+        get {
+            guard let rawValue = defaults.string(forKey: Key.ragAnswerMode),
+                  let value = RAGAnswerMode(rawValue: rawValue) else {
+                return AppSettingsDefaults.ragAnswerMode
+            }
+            return value
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Key.ragAnswerMode)
+        }
+    }
+
+    var ragRetrievalSettings: RAGRetrievalSettings {
+        get {
+            guard let data = defaults.data(forKey: Key.ragRetrievalSettings),
+                  let value = try? JSONDecoder().decode(RAGRetrievalSettings.self, from: data) else {
+                return AppSettingsDefaults.ragRetrievalSettings
+            }
+            return value
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: Key.ragRetrievalSettings)
         }
     }
 

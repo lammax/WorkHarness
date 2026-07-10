@@ -16,6 +16,7 @@ final class HarnessEngine {
     private let contextBuilder: ContextBuilderProtocol
     private let contextFoldingService: ContextFoldingServiceProtocol
     private let memoryService: MemoryServiceProtocol?
+    private let ragService: RAGServiceProtocol?
     private let appSettingsService: AppSettingsServiceProtocol?
 
     init(
@@ -26,6 +27,7 @@ final class HarnessEngine {
         contextBuilder: ContextBuilderProtocol? = nil,
         contextFoldingService: ContextFoldingServiceProtocol? = nil,
         memoryService: MemoryServiceProtocol? = nil,
+        ragService: RAGServiceProtocol? = nil,
         appSettingsService: AppSettingsServiceProtocol? = nil
     ) {
         self.repository = repository
@@ -35,6 +37,7 @@ final class HarnessEngine {
         self.contextBuilder = contextBuilder ?? ContextBuilder()
         self.contextFoldingService = contextFoldingService ?? ContextFoldingService()
         self.memoryService = memoryService
+        self.ragService = ragService
         self.appSettingsService = appSettingsService
     }
 
@@ -72,7 +75,8 @@ final class HarnessEngine {
         let agent = Agent(
             role: .coder,
             providerId: provider.id,
-            model: provider.capabilities.supportedModels.first ?? "mock"
+            model: provider.capabilities.supportedModels.first ?? "mock",
+            contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
         )
         let run = Run(goal: trimmedGoal, agents: [agent])
 
@@ -108,11 +112,12 @@ final class HarnessEngine {
         recorder.record(runId: runId, type: .providerRequestStarted, message: provider.displayName, metadata: ["providerId": provider.id, "agentId": agent.id.uuidString])
 
         do {
+            let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
             let request = AIRequest(
                 runId: runId,
                 agent: agent,
                 messages: [.init(role: .user, content: prompt)],
-                context: context(for: runId, prompt: prompt, agent: agent, provider: provider).contextItems,
+                context: context(for: runId, prompt: prompt, agent: agent, provider: provider, ragResults: ragResults).contextItems,
                 tools: agent.tools,
                 budget: defaultTokenBudget(for: agent)
             )
@@ -154,7 +159,7 @@ final class HarnessEngine {
         }
     }
 
-    private func context(for runId: UUID, prompt: String, agent: Agent, provider: any AIProvider) -> ContextSnapshot {
+    private func context(for runId: UUID, prompt: String, agent: Agent, provider: any AIProvider, ragResults: [RAGCitation] = []) -> ContextSnapshot {
         let currentProject = projectService?.currentProject
         let snapshot = contextBuilder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
@@ -165,6 +170,7 @@ final class HarnessEngine {
             rootPath: currentProject?.rootPath,
             contextFoldSummary: latestContextFoldSummary(for: runId),
             memoryItems: currentProjectMemory(for: currentProject),
+            ragResults: ragResults,
             tokenBudget: defaultTokenBudget(for: agent)
         ))
 
@@ -176,11 +182,30 @@ final class HarnessEngine {
                 "contextSnapshotId": snapshot.id.uuidString,
                 "providerId": provider.id,
                 "agentId": agent.id.uuidString,
-                "tokenEstimate": "\(snapshot.tokenCount)"
+                "tokenEstimate": "\(snapshot.tokenCount)",
+                "ragResultCount": "\(snapshot.includedRAGResults.count)"
             ]
         )
 
         return snapshot
+    }
+
+    private func ragResults(for prompt: String, agent: Agent, runId: UUID) async -> [RAGCitation] {
+        guard agent.contextPolicy.includeRAG, let ragService else { return [] }
+        do {
+            return try await ragService.search(
+                question: prompt,
+                settings: appSettingsService?.ragRetrievalSettings ?? .default
+            ).citations
+        } catch {
+            recorder.record(
+                runId: runId,
+                type: .toolCallFailed,
+                message: error.localizedDescription,
+                metadata: ["toolId": "rag.search"]
+            )
+            return []
+        }
     }
 
     private func currentProjectMemory(for project: Project?) -> [String] {

@@ -23,6 +23,7 @@ struct ContextBuildInput: Equatable {
     var contextFoldSummary: ContextFoldSummary?
     var selectedFiles: [String]
     var memoryItems: [String]
+    var ragResults: [RAGCitation]
     var tokenBudget: TokenBudget?
 
     init(
@@ -36,6 +37,7 @@ struct ContextBuildInput: Equatable {
         contextFoldSummary: ContextFoldSummary? = nil,
         selectedFiles: [String] = [],
         memoryItems: [String] = [],
+        ragResults: [RAGCitation] = [],
         tokenBudget: TokenBudget? = nil
     ) {
         self.runId = runId
@@ -48,6 +50,7 @@ struct ContextBuildInput: Equatable {
         self.contextFoldSummary = contextFoldSummary
         self.selectedFiles = selectedFiles
         self.memoryItems = memoryItems
+        self.ragResults = ragResults
         self.tokenBudget = tokenBudget
     }
 }

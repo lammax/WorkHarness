@@ -8,10 +8,33 @@
 import SwiftUI
 
 extension MainScreen {
+    private enum SettingsTab: String, CaseIterable {
+        case execution
+        case application
+        case rag
+
+        var title: String {
+            switch self {
+            case .execution: SettingsPageDesign.Tabs.executionTitle
+            case .application: SettingsPageDesign.Tabs.applicationTitle
+            case .rag: SettingsPageDesign.Tabs.ragTitle
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .execution: SettingsPageDesign.Tabs.executionIcon
+            case .application: SettingsPageDesign.Tabs.applicationIcon
+            case .rag: SettingsPageDesign.Tabs.ragIcon
+            }
+        }
+    }
+
     struct SettingsPageView: View {
         typealias Design = SettingsPageDesign
 
         @Bindable var viewModel: SettingsPageViewModel
+        @State private var selectedTab: SettingsTab = .execution
 
         var body: some View {
             VStack(alignment: .leading, spacing: Design.Layout.spacing) {
@@ -19,28 +42,32 @@ extension MainScreen {
 
                 Divider()
 
-                if viewModel.providers.isEmpty {
-                    ContentUnavailableView(
-                        Design.EmptyState.title,
-                        systemImage: Design.EmptyState.icon,
-                        description: Text(Design.EmptyState.description)
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Design.Content.sectionSpacing) {
-                            executionBackend
-                            appSettings
-
-                            HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
-                                providerList
-                                Divider()
-                                providerDetails
-                            }
-                        }
-                        .padding(Design.Content.padding)
+                Picker(Design.Tabs.title, selection: $selectedTab) {
+                    ForEach(SettingsTab.allCases, id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.icon).tag(tab)
                     }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Design.Content.padding)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Design.Content.sectionSpacing) {
+                        tabContent
+                    }
+                    .padding(Design.Content.padding)
+                }
+            }
+        }
+
+        @ViewBuilder
+        private var tabContent: some View {
+            switch selectedTab {
+            case .execution:
+                executionTab
+            case .application:
+                appSettings
+            case .rag:
+                ragSettings
             }
         }
 
@@ -61,6 +88,27 @@ extension MainScreen {
                 }
             }
             .padding(Design.Header.padding)
+        }
+
+        private var executionTab: some View {
+            Group {
+                if viewModel.providers.isEmpty {
+                    ContentUnavailableView(
+                        Design.EmptyState.title,
+                        systemImage: Design.EmptyState.icon,
+                        description: Text(Design.EmptyState.description)
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    executionBackend
+
+                    HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
+                        providerList
+                        Divider()
+                        providerDetails
+                    }
+                }
+            }
         }
 
         private var executionBackend: some View {
@@ -197,6 +245,70 @@ extension MainScreen {
                 }
             }
             .frame(width: Design.ProviderList.width, alignment: .topLeading)
+        }
+
+        private var ragSettings: some View {
+            VStack(alignment: .leading, spacing: Design.RAGSettings.spacing) {
+                HStack {
+                    Label(Design.RAGSettings.title, systemImage: Design.RAGSettings.icon)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text(Design.RAGSettings.sourceLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker(Design.RAGSettings.answerModeTitle, selection: $viewModel.ragAnswerMode) {
+                    ForEach(RAGAnswerMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker(Design.RAGSettings.chunkingTitle, selection: $viewModel.ragChunkingStrategy) {
+                    ForEach(RAGChunkingStrategy.allCases, id: \.self) { strategy in
+                        Text(strategy.title).tag(strategy)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker(Design.RAGSettings.retrievalTitle, selection: $viewModel.ragRetrievalMode) {
+                    ForEach(RAGRetrievalMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker(Design.RAGSettings.filterTitle, selection: $viewModel.ragRelevanceFilterMode) {
+                    ForEach(RAGRelevanceFilterMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                HStack(spacing: Design.RAGSettings.fieldSpacing) {
+                    Stepper(
+                        "\(Design.RAGSettings.topKBeforeTitle): \(viewModel.ragTopKBeforeFiltering)",
+                        value: $viewModel.ragTopKBeforeFiltering,
+                        in: Design.RAGSettings.topKBeforeRange
+                    )
+
+                    Stepper(
+                        "\(Design.RAGSettings.topKAfterTitle): \(viewModel.ragTopKAfterFiltering)",
+                        value: $viewModel.ragTopKAfterFiltering,
+                        in: Design.RAGSettings.topKAfterRange
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: Design.RAGSettings.controlSpacing) {
+                    Text("\(Design.RAGSettings.thresholdTitle): \(viewModel.ragSimilarityThreshold, specifier: "%.2f")")
+                    Slider(value: $viewModel.ragSimilarityThreshold, in: Design.RAGSettings.thresholdRange, step: Design.RAGSettings.thresholdStep)
+                }
+            }
+            .padding(Design.RAGSettings.padding)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Design.RAGSettings.cornerRadius))
         }
 
         @ViewBuilder

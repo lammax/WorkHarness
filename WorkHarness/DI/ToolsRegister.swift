@@ -15,6 +15,7 @@ extension Container {
                 FileWriteTool(),
                 ShellTool(),
                 GitTool(),
+                RAGSearchTool(),
                 MCPToolAdapter()
             ])
         }.inObjectScope(.container)

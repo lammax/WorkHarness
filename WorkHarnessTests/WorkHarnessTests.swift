@@ -199,12 +199,13 @@ struct WorkHarnessTests {
             FileWriteTool(),
             ShellTool(),
             GitTool(),
-            MCPToolAdapter()
+            MCPToolAdapter(),
+            RAGSearchTool()
         ])
 
         let ids = registry.availableTools.map(\.id).sorted()
 
-        #expect(ids == ["file.read", "file.write", "git.run", "mcp.invoke", "shell.run"])
+        #expect(ids == ["file.read", "file.write", "git.run", "mcp.invoke", "rag.search", "shell.run"])
         #expect(try registry.tool(id: "file.read").permission == .readOnly)
         #expect(try registry.tool(id: "file.write").permission == .workspaceWrite)
     }
@@ -945,6 +946,57 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func harnessEnginePassesDurableRAGSettingsIntoContext() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let settings = RAGRetrievalSettings(
+            chunkingStrategy: .structure,
+            retrievalMode: .basic,
+            topKBeforeFiltering: 16,
+            topKAfterFiltering: 4,
+            similarityThreshold: 0.6,
+            relevanceFilterMode: .heuristic
+        )
+        let appSettings = InMemoryAppSettingsService(
+            ragAnswerMode: .enabled,
+            ragRetrievalSettings: settings
+        )
+        let ragService = FakeRAGService(result: RAGSearchResult(
+            answer: "MCP answer",
+            citations: [RAGCitation(
+                source: "README.md",
+                section: "Architecture",
+                chunkID: 1,
+                quote: "RAG is MCP-backed.",
+                score: 0.88
+            )],
+            isUnknown: false,
+            retrieval: RAGRetrievalSummary(
+                originalQuestion: "Use RAG",
+                searchQuery: "Use RAG",
+                candidatesBeforeFiltering: 16,
+                chunksAfterFiltering: 4,
+                bestScore: 0.88
+            )
+        ))
+        let provider = RecordingAIProvider()
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(provider),
+            contextBuilder: ContextBuilder(),
+            ragService: ragService,
+            appSettingsService: appSettings
+        )
+
+        _ = await engine.startRun(goal: "Use RAG")
+
+        #expect(ragService.lastSettings == settings)
+        #expect(provider.requests.first?.context.contains { $0.contains("RAG is MCP-backed.") } == true)
+        #expect(repository.runs.first?.agents.first?.contextPolicy.includeRAG == true)
+    }
+
+    @MainActor
     @Test func contextBuilderIncludesProjectMemoryItems() async throws {
         let project = Project(name: "Memory Project")
         let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
@@ -960,6 +1012,32 @@ struct WorkHarnessTests {
 
         #expect(snapshot.includedMemories == ["The project uses MCP boundaries."])
         #expect(snapshot.summary.contains("Project memory:"))
+    }
+
+    @MainActor
+    @Test func contextBuilderIncludesRAGCitations() async throws {
+        let project = Project(name: "RAG Project")
+        let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
+        let citation = RAGCitation(
+            source: "Docs/Architecture.md",
+            section: "MCP",
+            chunkID: 3,
+            quote: "All tools cross the MCP boundary.",
+            score: 0.91
+        )
+
+        let snapshot = ContextBuilder().buildSnapshot(from: ContextBuildInput(
+            runId: UUID(),
+            agent: agent,
+            providerId: agent.providerId,
+            userMessage: "How do tools work?",
+            currentProject: project,
+            ragResults: [citation]
+        ))
+
+        #expect(snapshot.includedRAGResults == [citation])
+        #expect(snapshot.summary.contains("RAG results:"))
+        #expect(snapshot.summary.contains("All tools cross the MCP boundary."))
     }
 
     @MainActor
@@ -1182,6 +1260,13 @@ struct WorkHarnessTests {
         viewModel.localLLMModel = "qwen-local"
         viewModel.defaultMaxInputTokens = 4_096
         viewModel.defaultMaxOutputTokens = 512
+        viewModel.ragAnswerMode = .enabled
+        viewModel.ragChunkingStrategy = .structure
+        viewModel.ragRetrievalMode = .basic
+        viewModel.ragRelevanceFilterMode = .heuristic
+        viewModel.ragTopKBeforeFiltering = 18
+        viewModel.ragTopKAfterFiltering = 7
+        viewModel.ragSimilarityThreshold = 0.42
 
         #expect(viewModel.hasUnsavedAppSettingsChanges)
         #expect(viewModel.appSettingsStatus == "Unsaved changes")
@@ -1194,7 +1279,39 @@ struct WorkHarnessTests {
         #expect(appSettings.localLLMModel == "qwen-local")
         #expect(appSettings.defaultMaxInputTokens == 4_096)
         #expect(appSettings.defaultMaxOutputTokens == 512)
+        #expect(appSettings.ragAnswerMode == .enabled)
+        #expect(appSettings.ragRetrievalSettings.chunkingStrategy == .structure)
+        #expect(appSettings.ragRetrievalSettings.retrievalMode == .basic)
+        #expect(appSettings.ragRetrievalSettings.relevanceFilterMode == .heuristic)
+        #expect(appSettings.ragRetrievalSettings.topKBeforeFiltering == 18)
+        #expect(appSettings.ragRetrievalSettings.topKAfterFiltering == 7)
+        #expect(appSettings.ragRetrievalSettings.similarityThreshold == 0.42)
         #expect(!viewModel.hasUnsavedAppSettingsChanges)
+    }
+
+    @MainActor
+    @Test func userDefaultsAppSettingsPersistsRAGSettings() throws {
+        let defaults = try #require(UserDefaults(suiteName: "WorkHarnessTests.RAGSettings.\(UUID().uuidString)"))
+        let first = UserDefaultsAppSettingsService(defaults: defaults)
+        first.ragAnswerMode = .enabled
+        first.ragRetrievalSettings = RAGRetrievalSettings(
+            chunkingStrategy: .structure,
+            retrievalMode: .basic,
+            topKBeforeFiltering: 20,
+            topKAfterFiltering: 6,
+            similarityThreshold: 0.5,
+            relevanceFilterMode: .heuristic
+        )
+
+        let second = UserDefaultsAppSettingsService(defaults: defaults)
+
+        #expect(second.ragAnswerMode == .enabled)
+        #expect(second.ragRetrievalSettings.chunkingStrategy == .structure)
+        #expect(second.ragRetrievalSettings.retrievalMode == .basic)
+        #expect(second.ragRetrievalSettings.topKBeforeFiltering == 20)
+        #expect(second.ragRetrievalSettings.topKAfterFiltering == 6)
+        #expect(second.ragRetrievalSettings.similarityThreshold == 0.5)
+        #expect(second.ragRetrievalSettings.relevanceFilterMode == .heuristic)
     }
 
     @MainActor
@@ -1539,6 +1656,37 @@ private final class FakeMCPProviderClient: MCPProviderClientProtocol {
             continuation.finish()
         }
     }
+}
+
+@MainActor
+private final class FakeRAGService: RAGServiceProtocol {
+    let result: RAGSearchResult
+    private(set) var lastSettings: RAGRetrievalSettings?
+
+    init(result: RAGSearchResult) {
+        self.result = result
+    }
+
+    func index(zipURL: URL, strategy: RAGChunkingStrategy, replaceExisting: Bool) async throws -> RAGIndexingSummary {
+        RAGIndexingSummary(
+            strategy: strategy,
+            documentCount: 0,
+            chunkCount: 0,
+            averageTokens: 0,
+            minTokens: 0,
+            maxTokens: 0,
+            embeddingModel: "fake",
+            databasePath: zipURL.path,
+            duration: 0
+        )
+    }
+
+    func search(question: String, settings: RAGRetrievalSettings) async throws -> RAGSearchResult {
+        lastSettings = settings
+        return result
+    }
+
+    func clearIndex() async throws {}
 }
 
 @MainActor

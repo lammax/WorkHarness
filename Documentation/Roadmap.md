@@ -136,6 +136,11 @@ WorkHarness already has:
 - Memory write policy rejecting empty, oversized and sensitive content.
 - `memorySaved` RunEvents for run-linked memory writes.
 - Basic Memory page for the selected project.
+- MCP-backed RAG client and service boundary.
+- RAG index/search/clear operations routed to the existing `RAGMCPServer`.
+- RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
+- MCP-backed `RAGSearchTool` descriptor.
+- Durable RAG settings with Settings UI controls for enablement, chunking, retrieval, filtering, Top-K and threshold.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
 
@@ -198,6 +203,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 14 - Settings v1.
 - Step 15 - Context Folding v1.
 - Step 16 - Memory v1.
+- Step 17 - RAG v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -679,6 +685,8 @@ Stable project knowledge can be saved, read and shown through a basic app surfac
 
 ## Step 17 - RAG v1
 
+Status: Done.
+
 Goal:
 Search project knowledge and files.
 
@@ -692,6 +700,15 @@ Scope:
 - Citations/metadata.
 - `ContextBuilder` integration.
 - Tests.
+
+Implementation notes:
+
+- WorkHarness does not duplicate chunking, embeddings or vector storage. These responsibilities remain in the existing `RAGMCPServer` at `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server`.
+- `RAGMCPClient` follows the MCP JSON-RPC lifecycle and calls `rag_index_zip`, `rag_answer` and `rag_clear_index`.
+- `RAGService` is the application boundary used by `HarnessEngine`; the engine requests RAG only when `Agent.contextPolicy.includeRAG` is enabled.
+- `RAGCitation` preserves source, section, chunk id, quote and relevance score for auditability and context replay.
+- The default chat path remains deterministic when the RAG server is unavailable because RAG inclusion is opt-in.
+- RAG settings follow the existing editable Settings draft/save/revert/defaults flow and are passed into the next Run through `AppSettingsServiceProtocol`.
 
 Done when:
 Relevant indexed knowledge can be retrieved with citations and inserted into context through the approved context path.

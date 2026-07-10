@@ -42,6 +42,14 @@ final class ContextBuilder: ContextBuilderProtocol {
             contextItems.append("Project memory:\n\(input.memoryItems.joined(separator: "\n"))")
         }
 
+        if !input.ragResults.isEmpty {
+            let results = input.ragResults.map { citation in
+                let quote = citation.quote.map { "\nQuote: \($0)" } ?? ""
+                return "\(citation.displayText)\(quote)"
+            }
+            contextItems.append("RAG results:\n\(results.joined(separator: "\n"))")
+        }
+
         let summary = contextItems.isEmpty
             ? "No additional context was included."
             : contextItems.joined(separator: "\n")
@@ -58,6 +66,7 @@ final class ContextBuilder: ContextBuilderProtocol {
             contextItems: contextItems,
             includedFiles: input.selectedFiles,
             includedMemories: input.memoryItems,
+            includedRAGResults: input.ragResults,
             includedSummaries: includedSummaries,
             tokenCount: estimateTokenCount(for: contextItems)
         )

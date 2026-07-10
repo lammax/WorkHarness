@@ -82,6 +82,7 @@ struct ContextPolicy: Codable, Equatable {
     var includeGitDiff: Bool = true
     var includeRecentRunSummary: Bool = true
     var includeMemoryFacts: Bool = true
+    var includeRAG: Bool = false
 }
 
 struct MemoryPolicy: Codable, Equatable {
