@@ -143,6 +143,14 @@ final class SQLiteDatabase {
             value TEXT
         )
         """)
+        try execute("""
+        CREATE TABLE IF NOT EXISTS memory_items (
+            id TEXT PRIMARY KEY NOT NULL,
+            project_id TEXT,
+            payload BLOB NOT NULL,
+            created_at REAL NOT NULL
+        )
+        """)
     }
 
     private var errorMessage: String {

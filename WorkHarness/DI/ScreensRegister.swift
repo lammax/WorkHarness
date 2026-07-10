@@ -28,12 +28,20 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(MainScreen.MemoryPageViewModel.self) { resolver in
+            MainScreen.MemoryPageViewModel(
+                memoryService: resolver.resolve(MemoryServiceProtocol.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(MainScreenProtocol.self) { resolver in
             MainScreen(
                 chatPageViewModel: resolver.resolve(MainScreen.ChatPageViewModel.self)!,
                 runsPageViewModel: resolver.resolve(MainScreen.RunsPageViewModel.self)!,
                 statsPageViewModel: resolver.resolve(MainScreen.StatsPageViewModel.self)!,
                 settingsPageViewModel: resolver.resolve(MainScreen.SettingsPageViewModel.self)!,
+                memoryPageViewModel: resolver.resolve(MainScreen.MemoryPageViewModel.self)!,
                 approvalService: resolver.resolve(ApprovalServiceProtocol.self)!,
                 projectService: resolver.resolve(ProjectServiceProtocol.self)!
             )

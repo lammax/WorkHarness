@@ -14,6 +14,7 @@ final class MainScreen {
         runsPageViewModel: RunsPageViewModel,
         statsPageViewModel: StatsPageViewModel,
         settingsPageViewModel: SettingsPageViewModel,
+        memoryPageViewModel: MemoryPageViewModel,
         approvalService: ApprovalServiceProtocol,
         projectService: ProjectServiceProtocol
     ) {
@@ -22,6 +23,7 @@ final class MainScreen {
             runsPageViewModel: runsPageViewModel,
             statsPageViewModel: statsPageViewModel,
             settingsPageViewModel: settingsPageViewModel,
+            memoryPageViewModel: memoryPageViewModel,
             approvalService: approvalService,
             projectService: projectService
         )

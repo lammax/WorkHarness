@@ -29,6 +29,7 @@ extension Container {
                 projectService: resolver.resolve(ProjectServiceProtocol.self)!,
                 contextBuilder: resolver.resolve(ContextBuilderProtocol.self)!,
                 contextFoldingService: resolver.resolve(ContextFoldingServiceProtocol.self)!,
+                memoryService: resolver.resolve(MemoryServiceProtocol.self)!,
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
             )
         }.inObjectScope(.container)

@@ -48,5 +48,13 @@ extension Container {
         register(RunRepository.self) { resolver in
             resolver.resolve(SQLiteRunRepository.self)!
         }.inObjectScope(.container)
+
+        register(SQLiteMemoryRepository.self) { resolver in
+            SQLiteMemoryRepository(database: resolver.resolve(SQLiteDatabase.self)!)
+        }.inObjectScope(.container)
+
+        register(MemoryRepositoryProtocol.self) { resolver in
+            resolver.resolve(SQLiteMemoryRepository.self)!
+        }.inObjectScope(.container)
     }
 }

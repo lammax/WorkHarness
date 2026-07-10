@@ -115,6 +115,7 @@ struct WorkHarnessTests {
             runsPageViewModel: runsPageViewModel,
             statsPageViewModel: statsPageViewModel,
             settingsPageViewModel: settingsPageViewModel,
+            memoryPageViewModel: makeMemoryPageViewModel(projectService: projectService),
             approvalService: approvalService,
             projectService: projectService
         )
@@ -346,6 +347,7 @@ struct WorkHarnessTests {
                 providerService: makeProviderService(TestAIProvider()),
                 appSettingsService: InMemoryAppSettingsService()
             ),
+            memoryPageViewModel: makeMemoryPageViewModel(projectService: projectService),
             approvalService: makeApprovalService(),
             projectService: projectService
         )
@@ -435,6 +437,45 @@ struct WorkHarnessTests {
         #expect(restoredRun.goal == "Persist run")
         #expect(restoredRun.events.map(\.id) == [event.id])
         #expect(restoredRun.events.first?.message == "Stored")
+    }
+
+    @MainActor
+    @Test func sqliteMemoryRepositoryPersistsProjectMemoryAcrossInstances() async throws {
+        let databaseURL = try makeTemporaryDatabaseURL()
+        let project = Project(name: "Memory Project")
+        let firstRepository = try SQLiteMemoryRepository(database: SQLiteDatabase(url: databaseURL))
+        let item = MemoryItem(projectId: project.id, content: "The project uses MCP boundaries.")
+
+        firstRepository.insert(item)
+
+        let restoredRepository = try SQLiteMemoryRepository(database: SQLiteDatabase(url: databaseURL))
+
+        #expect(restoredRepository.items(for: project.id) == [item])
+    }
+
+    @MainActor
+    @Test func memoryServiceRejectsSensitiveContentAndRecordsMemoryEvent() throws {
+        let runRepository = InMemoryRunRepository()
+        let run = Run(goal: "Memory run")
+        runRepository.insert(run)
+        let service = MemoryService(
+            repository: InMemoryMemoryRepository(),
+            recorder: RunRecorder(repository: runRepository)
+        )
+        let project = Project(name: "Memory Project")
+
+        let item = try service.saveProjectMemory(
+            content: "  The project uses MCP boundaries.  ",
+            projectId: project.id,
+            runId: run.id
+        )
+
+        #expect(item.content == "The project uses MCP boundaries.")
+        #expect(runRepository.run(withId: run.id)?.events.first?.type == .memorySaved)
+
+        #expect(throws: MemoryServiceError.sensitiveContent) {
+            try service.saveProjectMemory(content: "api_key = do-not-store", projectId: project.id)
+        }
     }
 
     @MainActor
@@ -904,6 +945,24 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func contextBuilderIncludesProjectMemoryItems() async throws {
+        let project = Project(name: "Memory Project")
+        let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
+
+        let snapshot = ContextBuilder().buildSnapshot(from: ContextBuildInput(
+            runId: UUID(),
+            agent: agent,
+            providerId: agent.providerId,
+            userMessage: "Continue",
+            currentProject: project,
+            memoryItems: ["The project uses MCP boundaries."]
+        ))
+
+        #expect(snapshot.includedMemories == ["The project uses MCP boundaries."])
+        #expect(snapshot.summary.contains("Project memory:"))
+    }
+
+    @MainActor
     @Test func contextFoldingPreservesDecisionsFailuresAndNextActions() throws {
         let runId = UUID()
         var run = Run(id: runId, goal: "Finish the feature", status: .failed)
@@ -1344,7 +1403,20 @@ private func makeMainScreenViewModel(
             providerService: makeProviderService(TestAIProvider()),
             appSettingsService: InMemoryAppSettingsService()
         ),
+        memoryPageViewModel: makeMemoryPageViewModel(projectService: projectService),
         approvalService: approvalService ?? makeApprovalService(),
+        projectService: projectService
+    )
+}
+
+@MainActor
+private func makeMemoryPageViewModel(projectService: ProjectServiceProtocol) -> MainScreen.MemoryPageViewModel {
+    let runRepository = InMemoryRunRepository()
+    return MainScreen.MemoryPageViewModel(
+        memoryService: MemoryService(
+            repository: InMemoryMemoryRepository(),
+            recorder: RunRecorder(repository: runRepository)
+        ),
         projectService: projectService
     )
 }

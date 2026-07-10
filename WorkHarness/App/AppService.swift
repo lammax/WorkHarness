@@ -13,4 +13,5 @@ enum AppService {
     case runs
     case statistics
     case tools
+    case memory
 }

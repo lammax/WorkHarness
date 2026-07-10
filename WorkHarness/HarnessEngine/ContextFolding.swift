@@ -44,7 +44,7 @@ final class ContextFoldingService: ContextFoldingServiceProtocol {
     private func decisionText(for event: RunEvent) -> String? {
         switch event.type {
         case .approvalGranted, .approvalRejected, .fileChanged, .validationFinished, .finalSummary:
-            return "(event.type.label): (event.message)"
+            return "\(event.type.label): \(event.message)"
         default:
             return nil
         }
@@ -53,7 +53,7 @@ final class ContextFoldingService: ContextFoldingServiceProtocol {
     private func failureText(for event: RunEvent) -> String? {
         switch event.type {
         case .providerRequestFailed, .toolCallFailed, .error, .runFailed:
-            return "(event.type.label): (event.message)"
+            return "\(event.type.label): \(event.message)"
         default:
             return nil
         }

@@ -38,6 +38,10 @@ final class ContextBuilder: ContextBuilderProtocol {
             contextItems.append("Selected files: \(input.selectedFiles.joined(separator: ", "))")
         }
 
+        if !input.memoryItems.isEmpty {
+            contextItems.append("Project memory:\n\(input.memoryItems.joined(separator: "\n"))")
+        }
+
         let summary = contextItems.isEmpty
             ? "No additional context was included."
             : contextItems.joined(separator: "\n")
@@ -53,6 +57,7 @@ final class ContextBuilder: ContextBuilderProtocol {
             summary: summary,
             contextItems: contextItems,
             includedFiles: input.selectedFiles,
+            includedMemories: input.memoryItems,
             includedSummaries: includedSummaries,
             tokenCount: estimateTokenCount(for: contextItems)
         )

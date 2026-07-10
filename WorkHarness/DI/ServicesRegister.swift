@@ -42,5 +42,12 @@ extension Container {
         register(UsageStatisticsServiceProtocol.self) { resolver in
             UsageStatisticsService(runService: resolver.resolve(RunServiceProtocol.self)!)
         }.inObjectScope(.container)
+
+        register(MemoryServiceProtocol.self) { resolver in
+            MemoryService(
+                repository: resolver.resolve(MemoryRepositoryProtocol.self)!,
+                recorder: resolver.resolve(RunRecorder.self)!
+            )
+        }.inObjectScope(.container)
     }
 }

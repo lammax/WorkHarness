@@ -82,6 +82,10 @@ struct MemoryItem: Identifiable, Codable, Equatable {
     }
 }
 
+enum MemoryScope: String, Codable, CaseIterable, Equatable {
+    case project
+}
+
 struct ContextSnapshot: Identifiable, Codable, Equatable {
     let id: UUID
     var runId: UUID

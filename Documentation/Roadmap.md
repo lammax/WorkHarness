@@ -130,6 +130,12 @@ WorkHarness already has:
 - Explicit Execution Backend selector showing the provider used by the next Run.
 - Provider transport and locality labels in Settings.
 - Tests passing for the current stable slice.
+- Project Memory v1.
+- `MemoryRepositoryProtocol` with SQLite-backed storage.
+- `MemoryServiceProtocol` with project memory write/read boundaries.
+- Memory write policy rejecting empty, oversized and sensitive content.
+- `memorySaved` RunEvents for run-linked memory writes.
+- Basic Memory page for the selected project.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
 
@@ -191,6 +197,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 13 - Token / Cost Statistics v1.
 - Step 14 - Settings v1.
 - Step 15 - Context Folding v1.
+- Step 16 - Memory v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -645,6 +652,8 @@ A long Run can be compacted into a useful summary.
 
 ## Step 16 - Memory v1
 
+Status: Done.
+
 Goal:
 Persist stable project knowledge.
 
@@ -657,6 +666,8 @@ Scope:
 - Memory read policy.
 - Memory events.
 - Basic Memory page.
+- SQLite-backed project memory persistence.
+- Project memory inclusion in `ContextBuilder` and `ContextSnapshot.includedMemories`.
 - Tests.
 
 Do not add yet:

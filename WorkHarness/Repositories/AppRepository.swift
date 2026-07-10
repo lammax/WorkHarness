@@ -9,4 +9,5 @@ enum AppRepository {
     case approvals
     case projects
     case runs
+    case memory
 }

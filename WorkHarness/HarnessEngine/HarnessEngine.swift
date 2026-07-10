@@ -15,6 +15,7 @@ final class HarnessEngine {
     private let projectService: ProjectServiceProtocol?
     private let contextBuilder: ContextBuilderProtocol
     private let contextFoldingService: ContextFoldingServiceProtocol
+    private let memoryService: MemoryServiceProtocol?
     private let appSettingsService: AppSettingsServiceProtocol?
 
     init(
@@ -24,6 +25,7 @@ final class HarnessEngine {
         projectService: ProjectServiceProtocol? = nil,
         contextBuilder: ContextBuilderProtocol? = nil,
         contextFoldingService: ContextFoldingServiceProtocol? = nil,
+        memoryService: MemoryServiceProtocol? = nil,
         appSettingsService: AppSettingsServiceProtocol? = nil
     ) {
         self.repository = repository
@@ -32,6 +34,7 @@ final class HarnessEngine {
         self.projectService = projectService
         self.contextBuilder = contextBuilder ?? ContextBuilder()
         self.contextFoldingService = contextFoldingService ?? ContextFoldingService()
+        self.memoryService = memoryService
         self.appSettingsService = appSettingsService
     }
 
@@ -161,6 +164,7 @@ final class HarnessEngine {
             currentProject: currentProject,
             rootPath: currentProject?.rootPath,
             contextFoldSummary: latestContextFoldSummary(for: runId),
+            memoryItems: currentProjectMemory(for: currentProject),
             tokenBudget: defaultTokenBudget(for: agent)
         ))
 
@@ -177,6 +181,11 @@ final class HarnessEngine {
         )
 
         return snapshot
+    }
+
+    private func currentProjectMemory(for project: Project?) -> [String] {
+        guard let project else { return [] }
+        return memoryService?.items(for: project.id).map(\.content) ?? []
     }
 
     private func latestContextFoldSummary(for runId: UUID) -> ContextFoldSummary? {
