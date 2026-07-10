@@ -143,6 +143,7 @@ WorkHarness already has:
 - ACP subprocess client with initialize handshake, capability discovery and session controls.
 - Generic `ACPAgentFactory` for registering executable-backed agent definitions.
 - Cursor ACP executable discovery and `cursor.acp` runtime registration.
+- Durable Agent runtime selection in Settings → Execution & Providers.
 - MCP-backed RAG client and service boundary.
 - RAG index/search/clear operations routed to the existing `RAGMCPServer`.
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
@@ -806,6 +807,7 @@ Implemented foundation:
 - `ACPSubprocessClient` for initialize, run, cancel, pause, resume and disconnect messages.
 - `ACPAgentDefinition` and `ACPAgentFactory` for provider-agnostic runtime creation.
 - Cursor ACP discovery through `cursor-agent acp`, including initialize, optional `cursor_login` authentication and `session/new` handshake.
+- Settings stores the selected AgentRuntime id independently from the LLM provider id.
 - Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
 
 Remaining in Step 18:

@@ -1303,6 +1303,29 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func settingsPageViewModelSelectsACPAgentRuntime() async throws {
+        let appSettings = InMemoryAppSettingsService()
+        let registry = AgentRuntimeRegistry()
+        let runtime = ACPClientRuntime(client: FakeACPClient())
+        registry.register(runtime)
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: appSettings
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        viewModel.selectAgentRuntime(id: runtime.id)
+
+        #expect(viewModel.activeAgentRuntimeId == runtime.id)
+        #expect(appSettings.defaultAgentRuntimeId == runtime.id)
+        #expect(viewModel.agentRuntimes.first?.isActive == true)
+    }
+
+    @MainActor
     @Test func settingsPageViewModelLoadsProvidersFromProviderService() async throws {
         let providerService = ProviderService(
             registry: ProviderRegistry(providers: [TestAIProvider(), AlternateAIProvider()]),

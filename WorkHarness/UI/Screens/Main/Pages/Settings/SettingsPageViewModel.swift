@@ -14,9 +14,12 @@ extension MainScreen {
     final class SettingsPageViewModel {
         private let providerService: ProviderServiceProtocol
         private let appSettingsService: AppSettingsServiceProtocol
+        private let agentRuntimeRegistry: AgentRuntimeRegistry
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
+        private(set) var activeAgentRuntimeId: String?
+        private(set) var agentRuntimes: [AgentRuntimeItem] = []
         private(set) var errorMessage: String?
         var selectedSafetyMode: SafetyMode
         var mcpServerBasePath: String
@@ -32,9 +35,14 @@ extension MainScreen {
         var ragTopKAfterFiltering: Int
         var ragSimilarityThreshold: Double
 
-        init(providerService: ProviderServiceProtocol, appSettingsService: AppSettingsServiceProtocol) {
+        init(
+            providerService: ProviderServiceProtocol,
+            appSettingsService: AppSettingsServiceProtocol,
+            agentRuntimeRegistry: AgentRuntimeRegistry = AgentRuntimeRegistry()
+        ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
+            self.agentRuntimeRegistry = agentRuntimeRegistry
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
             self.localLLMEndpoint = appSettingsService.localLLMEndpoint
@@ -49,6 +57,7 @@ extension MainScreen {
             self.ragTopKAfterFiltering = appSettingsService.ragRetrievalSettings.topKAfterFiltering
             self.ragSimilarityThreshold = appSettingsService.ragRetrievalSettings.similarityThreshold
             reloadProviders()
+            reloadAgentRuntimes()
         }
 
         var activeProviderName: String {
@@ -80,6 +89,29 @@ extension MainScreen {
                     capabilities: capabilityRows(for: provider.capabilities)
                 )
             }
+        }
+
+        func reloadAgentRuntimes() {
+            activeAgentRuntimeId = appSettingsService.defaultAgentRuntimeId
+            agentRuntimes = agentRuntimeRegistry.runtimes.map {
+                AgentRuntimeItem(
+                    id: $0.id,
+                    name: $0.displayName,
+                    isActive: $0.id == activeAgentRuntimeId
+                )
+            }
+        }
+
+        func selectAgentRuntime(id runtimeId: String?) {
+            guard let runtimeId, agentRuntimeRegistry.runtime(id: runtimeId) != nil else {
+                appSettingsService.defaultAgentRuntimeId = nil
+                activeAgentRuntimeId = nil
+                reloadAgentRuntimes()
+                return
+            }
+            appSettingsService.defaultAgentRuntimeId = runtimeId
+            activeAgentRuntimeId = runtimeId
+            reloadAgentRuntimes()
         }
 
         func selectProvider(id providerId: String) {
@@ -245,6 +277,12 @@ extension MainScreen {
         var transport: String
         var availability: String
         var capabilities: [ProviderCapabilityRow]
+    }
+
+    struct AgentRuntimeItem: Identifiable, Equatable {
+        var id: String
+        var name: String
+        var isActive: Bool
     }
 
     struct ProviderCapabilityRow: Identifiable, Equatable {

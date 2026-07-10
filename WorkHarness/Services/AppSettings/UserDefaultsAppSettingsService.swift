@@ -11,6 +11,7 @@ import Foundation
 final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
     private enum Key {
         static let defaultProviderId = "appSettings.defaultProviderId"
+        static let defaultAgentRuntimeId = "appSettings.defaultAgentRuntimeId"
         static let defaultSafetyMode = "appSettings.defaultSafetyMode"
         static let mcpServerBasePath = "appSettings.mcpServerBasePath"
         static let localLLMEndpoint = "appSettings.localLLMEndpoint"
@@ -36,6 +37,17 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
                 defaults.set(newValue, forKey: Key.defaultProviderId)
             } else {
                 defaults.removeObject(forKey: Key.defaultProviderId)
+            }
+        }
+    }
+
+    var defaultAgentRuntimeId: String? {
+        get { defaults.string(forKey: Key.defaultAgentRuntimeId) }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: Key.defaultAgentRuntimeId)
+            } else {
+                defaults.removeObject(forKey: Key.defaultAgentRuntimeId)
             }
         }
     }

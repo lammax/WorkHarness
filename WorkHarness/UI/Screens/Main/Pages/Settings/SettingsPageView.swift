@@ -137,6 +137,25 @@ extension MainScreen {
                 }
                 .pickerStyle(.menu)
 
+                Picker(Design.AgentRuntime.pickerTitle, selection: Binding(
+                    get: { viewModel.activeAgentRuntimeId ?? "" },
+                    set: { runtimeId in
+                        viewModel.selectAgentRuntime(id: runtimeId.isEmpty ? nil : runtimeId)
+                    }
+                )) {
+                    Text(Design.AgentRuntime.noneTitle).tag("")
+                    ForEach(viewModel.agentRuntimes) { runtime in
+                        Text(runtime.name).tag(runtime.id)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if let activeRuntime = viewModel.agentRuntimes.first(where: { $0.id == viewModel.activeAgentRuntimeId }) {
+                    Label(activeRuntime.name, systemImage: Design.AgentRuntime.icon)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let selectedProvider = viewModel.selectedProvider {
                     HStack(spacing: Design.ExecutionBackend.detailSpacing) {
                         Image(systemName: Design.ExecutionBackend.selectedIcon)

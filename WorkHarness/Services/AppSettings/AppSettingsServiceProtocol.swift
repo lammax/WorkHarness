@@ -8,6 +8,7 @@
 @MainActor
 protocol AppSettingsServiceProtocol: BaseServiceProtocol {
     var defaultProviderId: String? { get set }
+    var defaultAgentRuntimeId: String? { get set }
     var defaultSafetyMode: SafetyMode { get set }
     var mcpServerBasePath: String { get set }
     var localLLMEndpoint: String { get set }

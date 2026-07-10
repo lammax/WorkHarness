@@ -49,6 +49,12 @@ extension MainScreen {
             static let cornerRadius: CGFloat = 8
         }
 
+        enum AgentRuntime {
+            static let pickerTitle = "Agent runtime for the next Run"
+            static let noneTitle = "No ACP agent"
+            static let icon = "person.crop.circle.badge.checkmark"
+        }
+
         enum AppSettings {
             static let title = "Application Settings"
             static let safetyModeTitle = "Safety mode"

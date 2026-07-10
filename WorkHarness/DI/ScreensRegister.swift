@@ -24,7 +24,8 @@ extension Container {
         register(MainScreen.SettingsPageViewModel.self) { resolver in
             MainScreen.SettingsPageViewModel(
                 providerService: resolver.resolve(ProviderServiceProtocol.self)!,
-                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!
             )
         }.inObjectScope(.container)
 
