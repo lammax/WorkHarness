@@ -45,6 +45,8 @@ final class ACPSubprocessConnection: ACPConnection {
     private let input: FileHandle
     private let output: FileHandle
     private var continuations: [UUID: AsyncThrowingStream<ACPEvent, Error>.Continuation] = [:]
+    private var responseContinuations: [Int: CheckedContinuation<[String: Any], Error>] = [:]
+    private var nextRequestID = 10
     private var isClosed = false
 
     init(configuration: ACPSubprocessConfiguration) throws {
@@ -90,6 +92,29 @@ final class ACPSubprocessConnection: ACPConnection {
         }
     }
 
+    func request(method: String, params: [String: Any]) async throws -> [String: Any] {
+        guard !isClosed else { throw ACPError.transport("ACP connection is closed.") }
+        let id = nextRequestID
+        nextRequestID += 1
+        let object: [String: Any] = [
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params
+        ]
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            responseContinuations[id] = continuation
+            do {
+                try input.write(contentsOf: data + Data([0x0A]))
+            } catch {
+                responseContinuations.removeValue(forKey: id)
+                continuation.resume(throwing: ACPError.transport(error.localizedDescription))
+            }
+        }
+    }
+
     func events() -> AsyncThrowingStream<ACPEvent, Error> {
         AsyncThrowingStream { continuation in
             let subscriberId = UUID()
@@ -113,6 +138,8 @@ final class ACPSubprocessConnection: ACPConnection {
         try? output.close()
         continuations.values.forEach { $0.finish() }
         continuations.removeAll()
+        responseContinuations.values.forEach { $0.resume(throwing: ACPError.transport("ACP connection closed.")) }
+        responseContinuations.removeAll()
     }
 
     private func consume(_ data: Data) {
@@ -122,7 +149,21 @@ final class ACPSubprocessConnection: ACPConnection {
         }
 
         for line in text.split(whereSeparator: \.isNewline) {
-            guard let event = try? ACPCodec.decodeEvent(from: Data(line.utf8)) else { continue }
+            guard let data = line.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+
+            if let id = object["id"] as? Int {
+                if let error = object["error"] as? [String: Any] {
+                    let message = error["message"] as? String ?? "Unknown ACP error."
+                    responseContinuations.removeValue(forKey: id)?.resume(throwing: ACPError.transport(message))
+                } else {
+                    let result = object["result"] as? [String: Any] ?? [:]
+                    responseContinuations.removeValue(forKey: id)?.resume(returning: result)
+                }
+                continue
+            }
+
+            guard let event = try? ACPCodec.decodeEvent(from: data) else { continue }
             continuations.values.forEach { $0.yield(event) }
         }
     }
@@ -161,6 +202,10 @@ enum ACPCodec {
             return .fileChanged(path: string("path", from: params))
         case "approval/requested":
             return .approvalRequested(summary: string("summary", from: params))
+        case "session/request_permission":
+            return .approvalRequested(summary: string("title", from: params))
+        case "session/update":
+            return try decodeSessionUpdate(params)
         case "session/finished":
             return .finished(AgentResponse(message: string("message", from: params), tokenUsage: nil, artifacts: []))
         case "session/failed":
@@ -172,5 +217,29 @@ enum ACPCodec {
 
     private static func string(_ key: String, from params: [String: Any]) -> String {
         params[key] as? String ?? ""
+    }
+
+    private static func decodeSessionUpdate(_ params: [String: Any]) throws -> ACPEvent {
+        let update = params["update"] as? [String: Any] ?? params
+        switch update["sessionUpdate"] as? String {
+        case "agent_message_chunk":
+            let content = update["content"] as? [String: Any]
+            return .textDelta(content?["text"] as? String ?? "")
+        case "agent_thought_chunk":
+            let content = update["content"] as? [String: Any]
+            return .thinking(content?["text"] as? String ?? "")
+        case "tool_call":
+            return .toolCallRequested(
+                name: update["title"] as? String ?? "tool",
+                input: String(describing: update["rawInput"] ?? update["content"] ?? "")
+            )
+        case "tool_call_update":
+            return .toolCallRequested(
+                name: update["title"] as? String ?? "tool",
+                input: String(describing: update["rawOutput"] ?? update["content"] ?? "")
+            )
+        default:
+            throw ACPError.unsupported("session/update")
+        }
     }
 }

@@ -32,8 +32,39 @@ final class ACPAgentFactory: AgentFactory {
         let client = ACPSubprocessClient(
             id: definition.id,
             displayName: definition.displayName,
-            transport: transport
+            transport: transport,
+            workingDirectory: definition.subprocess.workingDirectoryURL
         )
         return ACPClientRuntime(client: client)
+    }
+}
+
+enum ACPAgentDefinitions {
+    static func cursor() -> ACPAgentDefinition? {
+        guard let executableURL = findExecutable(named: "cursor-agent") else { return nil }
+        return ACPAgentDefinition(
+            id: "cursor.acp",
+            displayName: "Cursor ACP",
+            subprocess: ACPSubprocessConfiguration(
+                executableURL: executableURL,
+                arguments: ["acp"]
+            )
+        )
+    }
+
+    private static func findExecutable(named name: String) -> URL? {
+        let candidates = ProcessInfo.processInfo.environment["PATH"]?
+            .split(separator: ":")
+            .map { URL(fileURLWithPath: String($0)).appendingPathComponent(name) } ?? []
+        let homePaths = [
+            ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0) },
+            FileManager.default.homeDirectoryForCurrentUser,
+            URL(fileURLWithPath: NSHomeDirectory())
+        ].compactMap { $0 }
+        let fallbacks = homePaths.map { $0.appendingPathComponent(".local/bin/\(name)") }
+
+        return (candidates + fallbacks).first {
+            FileManager.default.isExecutableFile(atPath: $0.path)
+        }
     }
 }

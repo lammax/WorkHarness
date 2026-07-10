@@ -10,7 +10,11 @@ import Swinject
 extension Container {
     func registerAgentRuntime() {
         register(AgentRuntimeRegistry.self) { _ in
-            AgentRuntimeRegistry()
+            let registry = AgentRuntimeRegistry()
+            if let definition = ACPAgentDefinitions.cursor() {
+                registry.register(ACPAgentFactory(definition: definition).makeRuntime())
+            }
+            return registry
         }.inObjectScope(.container)
     }
 }

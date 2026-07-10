@@ -13,71 +13,91 @@ final class ACPSubprocessClient: ACPClient {
     let displayName: String
 
     private let transport: ACPTransport
+    private let workingDirectory: URL?
     private var connection: ACPConnection?
     private var sessions: [UUID: AgentSession] = [:]
+    private var remoteSessionIDs: [UUID: String] = [:]
 
-    init(id: String, displayName: String, transport: ACPTransport) {
+    init(id: String, displayName: String, transport: ACPTransport, workingDirectory: URL? = nil) {
         self.id = id
         self.displayName = displayName
         self.transport = transport
+        self.workingDirectory = workingDirectory
     }
 
     func connect() async throws -> AgentSession {
         let connection = try await transport.connect()
         self.connection = connection
 
-        let events = connection.events()
-        try await connection.send(ACPMessage(
-            id: 1,
-            method: "initialize",
-            params: [
-                "protocolVersion": "2024-11-05",
-                "clientName": "WorkHarness"
-            ]
-        ))
+        let initializeResult = try await connection.request(method: "initialize", params: [
+            "protocolVersion": 1,
+            "clientCapabilities": [
+                "fs": ["readTextFile": false, "writeTextFile": false],
+                "terminal": false
+            ],
+            "clientInfo": ["name": "WorkHarness", "version": "0.1.0"]
+        ])
 
-        for try await event in events {
-            switch event {
-            case .connected(let capabilities):
-                let session = AgentSession(
-                    agentId: id,
-                    state: .connected,
-                    capabilities: capabilities
-                )
-                sessions[session.id] = session
-                return session
-            case .failed(let message):
-                throw ACPError.transport(message)
-            case .started, .thinking, .textDelta, .messageCompleted, .toolCallRequested, .fileChanged, .approvalRequested, .tokenUsage, .artifactCreated, .finished:
-                continue
-            }
+        if let authMethods = initializeResult["authMethods"] as? [[String: Any]],
+           authMethods.contains(where: { ($0["id"] as? String) == "cursor_login" }) {
+            _ = try? await connection.request(method: "authenticate", params: ["methodId": "cursor_login"])
         }
 
-        throw ACPError.transport("ACP agent closed before completing initialize handshake.")
+        let sessionResult = try await connection.request(method: "session/new", params: [
+            "cwd": workingDirectory?.path ?? FileManager.default.currentDirectoryPath,
+            "mcpServers": []
+        ])
+        guard let remoteSessionID = sessionResult["sessionId"] as? String else {
+            throw ACPError.transport("Cursor ACP did not return a sessionId.")
+        }
+
+        let capabilities = Self.capabilities(from: initializeResult["agentCapabilities"] as? [String: Any])
+        let session = AgentSession(agentId: id, state: .connected, capabilities: capabilities)
+        sessions[session.id] = session
+        remoteSessionIDs[session.id] = remoteSessionID
+        return session
     }
 
     func disconnect(sessionId: UUID) async {
         await connection?.close()
         connection = nil
         sessions.removeValue(forKey: sessionId)
+        remoteSessionIDs.removeValue(forKey: sessionId)
     }
 
     func run(task: AgentTask, sessionId: UUID) async throws -> AsyncThrowingStream<ACPEvent, Error> {
-        guard sessions[sessionId] != nil, let connection else {
+        guard sessions[sessionId] != nil, let remoteSessionID = remoteSessionIDs[sessionId], let connection else {
             throw ACPError.sessionNotFound(sessionId)
         }
 
-        let events = connection.events()
-        try await connection.send(ACPMessage(
-            id: 2,
-            method: "session/run",
-            params: [
-                "sessionId": sessionId.uuidString,
-                "taskId": task.id.uuidString,
-                "prompt": task.prompt,
-                "workingDirectory": task.workingDirectory ?? ""
-            ]
-        ))
+        let sourceEvents = connection.events()
+        let events = AsyncThrowingStream<ACPEvent, Error> { continuation in
+            Task { @MainActor in
+                do {
+                    for try await event in sourceEvents {
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            Task { @MainActor in
+                do {
+                    let result = try await connection.request(method: "session/prompt", params: [
+                        "sessionId": remoteSessionID,
+                        "prompt": [["type": "text", "text": task.prompt]]
+                    ])
+                    let stopReason = result["stopReason"] as? String ?? "completed"
+                    continuation.yield(.finished(AgentResponse(message: stopReason, tokenUsage: nil, artifacts: [])))
+                    continuation.finish()
+                } catch {
+                    continuation.yield(.failed(error.localizedDescription))
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
         sessions[sessionId]?.state = .running
         return events
     }
@@ -102,11 +122,15 @@ final class ACPSubprocessClient: ACPClient {
     }
 
     private func sendControlMessageOrThrow(method: String, sessionId: UUID) async throws {
-        guard let connection else { throw ACPError.notConnected }
-        try await connection.send(ACPMessage(
-            id: 3,
-            method: method,
-            params: ["sessionId": sessionId.uuidString]
-        ))
+        guard let connection, let remoteSessionID = remoteSessionIDs[sessionId] else { throw ACPError.notConnected }
+        _ = try await connection.request(method: method, params: ["sessionId": remoteSessionID])
+    }
+
+    private static func capabilities(from values: [String: Any]?) -> AgentCapabilities {
+        guard let values else { return AgentCapabilities() }
+        var capabilities: Set<AgentCapability> = [.canStreamTokens, .canUseTools]
+        if values["promptCapabilities"] != nil { capabilities.insert(.canPlan) }
+        if values["sessionCapabilities"] != nil { capabilities.insert(.canReadGit) }
+        return AgentCapabilities(capabilities)
     }
 }

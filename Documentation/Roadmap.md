@@ -142,6 +142,7 @@ WorkHarness already has:
 - ACP subprocess transport with JSON-lines stdin/stdout and event codec.
 - ACP subprocess client with initialize handshake, capability discovery and session controls.
 - Generic `ACPAgentFactory` for registering executable-backed agent definitions.
+- Cursor ACP executable discovery and `cursor.acp` runtime registration.
 - MCP-backed RAG client and service boundary.
 - RAG index/search/clear operations routed to the existing `RAGMCPServer`.
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
@@ -721,7 +722,7 @@ Relevant indexed knowledge can be retrieved with citations and inserted into con
 
 ## Step 18 - ACP Agent Runtime v1
 
-Status: In progress. AgentRuntime/ACP foundation is implemented; local ACP subprocess transport remains.
+Status: In progress. Cursor ACP connection is working; approval/tool bridging and production session UI remain.
 
 Goal:
 Introduce one agent runtime abstraction so WorkHarness can run coding agents without depending on Codex, Cursor, Claude Code, Gemini CLI, OpenHands or any future concrete agent.
@@ -804,12 +805,15 @@ Implemented foundation:
 - `ACPSubprocessTransport`, `ACPSubprocessConnection` and `ACPCodec` for local process communication.
 - `ACPSubprocessClient` for initialize, run, cancel, pause, resume and disconnect messages.
 - `ACPAgentDefinition` and `ACPAgentFactory` for provider-agnostic runtime creation.
+- Cursor ACP discovery through `cursor-agent acp`, including initialize, optional `cursor_login` authentication and `session/new` handshake.
 - Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
 
 Remaining in Step 18:
 
 - Connect real ACP-compatible agents through `AgentFactory` without changing `HarnessEngine`.
 - Complete ACP handshake/session capability discovery for each real ACP agent implementation.
+- Route Cursor permission requests through `ApprovalService` and return decisions over ACP.
+- Route Cursor tool calls through the Harness Tool Runtime / MCP tool boundary.
 
 Agent capabilities:
 

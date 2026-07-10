@@ -182,7 +182,7 @@ struct WorkHarnessTests {
         #expect(runService.runs.isEmpty)
         #expect(approvalService.pendingRequests.isEmpty)
         #expect(processRunner is ProcessRunner)
-        #expect(agentRuntimeRegistry.runtimes.isEmpty)
+        #expect(agentRuntimeRegistry.runtimes.count <= 1)
         #expect(contextBuilder is ContextBuilder)
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
         #expect(mcpToolClient is MCPToolClient)
@@ -1005,8 +1005,11 @@ struct WorkHarnessTests {
         }
 
         #expect(session.capabilities.supports(.canPlan))
-        #expect(connection.messages.map(\.method) == ["initialize", "session/run"])
-        #expect(events.contains(.messageCompleted("Subprocess done.")))
+        #expect(connection.messages.map(\.method) == ["initialize", "session/new", "session/prompt"])
+        #expect(events.contains { event in
+            if case .finished = event { return true }
+            return false
+        })
     }
 
     @MainActor
@@ -1823,6 +1826,22 @@ private final class FakeACPConnection: ACPConnection {
             }
         default:
             break
+        }
+    }
+
+    func request(method: String, params: [String: Any]) async throws -> [String: Any] {
+        messages.append(ACPMessage(id: messages.count + 1, method: method, params: [:]))
+        switch method {
+        case "initialize":
+            return ["agentCapabilities": ["promptCapabilities": [:]]]
+        case "authenticate":
+            return [:]
+        case "session/new":
+            return ["sessionId": "remote-session"]
+        case "session/prompt":
+            return ["stopReason": "completed"]
+        default:
+            return [:]
         }
     }
 

@@ -53,6 +53,7 @@ protocol ACPTransport: AnyObject {
 @MainActor
 protocol ACPConnection: AnyObject {
     func send(_ message: ACPMessage) async throws
+    func request(method: String, params: [String: Any]) async throws -> [String: Any]
     func events() -> AsyncThrowingStream<ACPEvent, Error>
     func close() async
 }
