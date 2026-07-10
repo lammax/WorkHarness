@@ -139,6 +139,7 @@ WorkHarness already has:
 - AgentRuntime foundation with capability-based agent sessions.
 - ACP client/runtime contracts isolated under `AgentRuntime/ACP`.
 - ACP event mapping into existing `RunEvent` timeline concepts.
+- ACP subprocess transport with JSON-lines stdin/stdout and event codec.
 - MCP-backed RAG client and service boundary.
 - RAG index/search/clear operations routed to the existing `RAGMCPServer`.
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
@@ -798,12 +799,13 @@ Implemented foundation:
 - `ACPMessage`, `ACPEvent`, `ACPConnection`, `ACPTransport`, `ACPClient` and `ACPError` isolation types.
 - `ACPClientRuntime` lifecycle, session state, cancellation, pause/resume and event mapping.
 - `ACPRunEventMapper` for agent output, tool requests, file changes, approvals, usage, artifacts and failures.
+- `ACPSubprocessTransport`, `ACPSubprocessConnection` and `ACPCodec` for local process communication.
 - Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
 
 Remaining in Step 18:
 
-- Implement the production JSON-RPC 2.0 stdin/stdout ACP subprocess transport on top of the process boundary.
 - Connect real ACP-compatible agents through `AgentFactory` without changing `HarnessEngine`.
+- Complete ACP handshake/session capability discovery for each real ACP agent implementation.
 
 Agent capabilities:
 

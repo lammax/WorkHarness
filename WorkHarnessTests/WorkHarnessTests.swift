@@ -956,6 +956,21 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func acpCodecEncodesJSONRPCLineAndDecodesAgentEvents() throws {
+        let request = ACPMessage(id: 7, method: "session/start", params: ["project": "/tmp/project"])
+        let encoded = try ACPCodec.encode(request)
+        let encodedText = try #require(String(data: encoded, encoding: .utf8))
+        #expect(encodedText.hasSuffix("\n"))
+        #expect(encodedText.contains("session"))
+
+        let event = try ACPCodec.decodeEvent(from: Data("""
+        {"method":"file/changed","params":{"path":"Sources/App.swift"}}
+        """.utf8))
+
+        #expect(event == .fileChanged(path: "Sources/App.swift"))
+    }
+
+    @MainActor
     @Test func harnessEngineBuildsProviderContextThroughContextBuilder() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
