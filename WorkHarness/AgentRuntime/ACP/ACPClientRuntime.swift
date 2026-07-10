@@ -23,6 +23,10 @@ final class ACPClientRuntime: AgentRuntime {
         client.configure(modelId: modelId)
     }
 
+    func configure(modelId: String?, runId: UUID?) {
+        client.configure(modelId: modelId, runId: runId)
+    }
+
     func connect() async throws -> AgentSession {
         let session = try await client.connect()
         sessions[session.id] = session

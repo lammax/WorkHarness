@@ -137,6 +137,12 @@ protocol AgentRuntime: AnyObject {
     func resume(sessionId: UUID) async throws
 }
 
+extension AgentRuntime {
+    func configure(modelId: String?, runId: UUID?) {
+        configure(modelId: modelId)
+    }
+}
+
 @MainActor
 final class AgentRuntimeRegistry {
     private var runtimesById: [String: AgentRuntime] = [:]

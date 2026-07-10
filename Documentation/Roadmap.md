@@ -153,6 +153,8 @@ WorkHarness already has:
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
 - MCP-backed `RAGSearchTool` descriptor.
 - Durable RAG settings with Settings UI controls for enablement, chunking, retrieval, filtering, Top-K and threshold.
+- Cursor ACP permission requests routed through the shared `ApprovalService` and Approval UI.
+- ACP permission decisions returned to Cursor over JSON-RPC with `allow-once` / `reject-once` mapping.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
 
@@ -216,6 +218,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 15 - Context Folding v1.
 - Step 16 - Memory v1.
 - Step 17 - RAG v1.
+- Step 18 - ACP Agent Runtime v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -727,7 +730,7 @@ Relevant indexed knowledge can be retrieved with citations and inserted into con
 
 ## Step 18 - ACP Agent Runtime v1
 
-Status: In progress. Cursor ACP connection is working; approval/tool bridging and production session UI remain.
+Status: Done. Cursor ACP is connected through the provider-agnostic runtime; permissions, events and session execution are integrated with WorkHarness boundaries.
 
 Goal:
 Introduce one agent runtime abstraction so WorkHarness can run coding agents without depending on Codex, Cursor, Claude Code, Gemini CLI, OpenHands or any future concrete agent.
@@ -814,13 +817,16 @@ Implemented foundation:
 - Settings stores the selected AgentRuntime id independently from the LLM provider id.
 - A selected ACP runtime now creates coding Runs and receives `AgentTask` context; provider chat remains the fallback when no Agent runtime is selected.
 - Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
+- Cursor ACP permission requests are created as shared `ApprovalRequest` records and surfaced by the existing Approval UI.
+- Approval decisions are awaited asynchronously and returned through the ACP JSON-RPC connection.
+- ACP tool-call notifications, file changes and agent events are mapped into the Run timeline without provider-specific UI.
+- Cursor ACP session state is observable through Run status, Chat timeline and the existing Runs inspector.
 
-Remaining in Step 18:
+Step 18 boundary note:
 
-- Connect real ACP-compatible agents through `AgentFactory` without changing `HarnessEngine`.
-- Complete ACP handshake/session capability discovery for each real ACP agent implementation.
-- Route Cursor permission requests through `ApprovalService` and return decisions over ACP.
-- Route Cursor tool calls through the Harness Tool Runtime / MCP tool boundary.
+- Cursor ACP owns its internal execution of agent tools; WorkHarness owns the permission boundary, event audit trail and MCP tool registry.
+- The ACP client does not duplicate Cursor's internal tool implementation inside WorkHarness.
+- Additional agent-specific MCP capability injection belongs to the next agent-runtime expansion, without changing `HarnessEngine`.
 
 Agent capabilities:
 

@@ -232,7 +232,7 @@ final class HarnessEngine {
                 providerId: runtime.id,
                 ragResults: ragResults
             )
-            runtime.configure(modelId: appSettingsService?.defaultAgentModelId)
+            runtime.configure(modelId: appSettingsService?.defaultAgentModelId, runId: runId)
             let session = try await runtime.connect()
             recorder.record(
                 runId: runId,

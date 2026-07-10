@@ -14,20 +14,34 @@ final class ACPSubprocessClient: ACPClient {
 
     private let transport: ACPTransport
     private let workingDirectory: URL?
+    private let approvalService: ApprovalServiceProtocol?
     private var connection: ACPConnection?
     private var sessions: [UUID: AgentSession] = [:]
     private var remoteSessionIDs: [UUID: String] = [:]
     private var modelId: String?
+    private var runId: UUID?
 
-    init(id: String, displayName: String, transport: ACPTransport, workingDirectory: URL? = nil) {
+    init(
+        id: String,
+        displayName: String,
+        transport: ACPTransport,
+        workingDirectory: URL? = nil,
+        approvalService: ApprovalServiceProtocol? = nil
+    ) {
         self.id = id
         self.displayName = displayName
         self.transport = transport
         self.workingDirectory = workingDirectory
+        self.approvalService = approvalService
     }
 
     func configure(modelId: String?) {
         self.modelId = modelId
+    }
+
+    func configure(modelId: String?, runId: UUID?) {
+        self.modelId = modelId
+        self.runId = runId
     }
 
     func connect() async throws -> AgentSession {
@@ -159,14 +173,7 @@ final class ACPSubprocessClient: ACPClient {
 
         switch method {
         case "session/request_permission":
-            // ACP owns the agent's permission prompt for now. The unified
-            // WorkHarness approval bridge will replace this default later.
-            let options = params["options"] as? [[String: Any]] ?? []
-            let optionId = options.first(where: { option in
-                let kind = (option["kind"] as? String ?? "").lowercased()
-                let id = (option["optionId"] as? String ?? "").lowercased()
-                return kind.contains("allow") || id.contains("allow")
-            })?["optionId"] as? String ?? "allow-once"
+            let optionId = await permissionOptionId(params: params)
             try? await connection.respond(requestId: requestId, result: [
                 "outcome": [
                     "outcome": "selected",
@@ -179,6 +186,40 @@ final class ACPSubprocessClient: ACPClient {
             try? await connection.respond(requestId: requestId, result: [:])
         default:
             try? await connection.respond(requestId: requestId, result: [:])
+        }
+    }
+
+    private func permissionOptionId(params: [String: Any]) async -> String {
+        let options = params["options"] as? [[String: Any]] ?? []
+        let allowOption = options.first(where: { option in
+            let kind = (option["kind"] as? String ?? "").lowercased()
+            let id = (option["optionId"] as? String ?? "").lowercased()
+            return kind.contains("allow") || id.contains("allow")
+        })?["optionId"] as? String ?? "allow-once"
+
+        guard let approvalService, let runId else { return allowOption }
+        do {
+            let request = try approvalService.requestApproval(
+                runId: runId,
+                title: params["title"] as? String ?? "Approve Cursor action",
+                summary: params["description"] as? String ?? "Cursor requested permission to continue.",
+                mode: .askBeforeShell
+            )
+            let decision = await approvalService.waitForDecision(requestId: request.id)
+            guard decision == .granted else {
+                return options.first(where: { option in
+                    let kind = (option["kind"] as? String ?? "").lowercased()
+                    let id = (option["optionId"] as? String ?? "").lowercased()
+                    return kind.contains("reject") || id.contains("reject")
+                })?["optionId"] as? String ?? "reject-once"
+            }
+            return allowOption
+        } catch {
+            return options.first(where: { option in
+                let kind = (option["kind"] as? String ?? "").lowercased()
+                let id = (option["optionId"] as? String ?? "").lowercased()
+                return kind.contains("reject") || id.contains("reject")
+            })?["optionId"] as? String ?? "reject-once"
         }
     }
 

@@ -12,6 +12,7 @@ final class ApprovalService: ApprovalServiceProtocol {
     private let repository: ApprovalRepositoryProtocol
     private let runRepository: RunRepository
     private let recorder: RunRecorder
+    private var decisionWaiters: [UUID: CheckedContinuation<ApprovalStatus, Never>] = [:]
 
     init(repository: ApprovalRepositoryProtocol, runRepository: RunRepository, recorder: RunRecorder) {
         self.repository = repository
@@ -41,6 +42,15 @@ final class ApprovalService: ApprovalServiceProtocol {
             metadata: approvalMetadata(for: request)
         )
         return request
+    }
+
+    func waitForDecision(requestId: UUID) async -> ApprovalStatus {
+        guard let request = repository.request(withId: requestId) else { return .rejected }
+        guard request.status == .pending else { return request.status }
+
+        return await withCheckedContinuation { continuation in
+            decisionWaiters[requestId] = continuation
+        }
     }
 
     func approve(requestId: UUID) throws {
@@ -75,6 +85,7 @@ final class ApprovalService: ApprovalServiceProtocol {
             message: decidedRequest.title,
             metadata: approvalMetadata(for: decidedRequest)
         )
+        decisionWaiters.removeValue(forKey: requestId)?.resume(returning: status)
     }
 
     private func approvalMetadata(for request: ApprovalRequest) -> [String: String] {

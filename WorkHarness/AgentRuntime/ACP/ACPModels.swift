@@ -78,3 +78,9 @@ protocol ACPClient: AnyObject {
     func pause(sessionId: UUID) async throws
     func resume(sessionId: UUID) async throws
 }
+
+extension ACPClient {
+    func configure(modelId: String?, runId: UUID?) {
+        configure(modelId: modelId)
+    }
+}

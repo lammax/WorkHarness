@@ -22,9 +22,11 @@ struct ACPAgentDefinition: Equatable {
 @MainActor
 final class ACPAgentFactory: AgentFactory {
     private let definition: ACPAgentDefinition
+    private let approvalService: ApprovalServiceProtocol?
 
-    init(definition: ACPAgentDefinition) {
+    init(definition: ACPAgentDefinition, approvalService: ApprovalServiceProtocol? = nil) {
         self.definition = definition
+        self.approvalService = approvalService
     }
 
     func makeRuntime() -> AgentRuntime {
@@ -33,7 +35,8 @@ final class ACPAgentFactory: AgentFactory {
             id: definition.id,
             displayName: definition.displayName,
             transport: transport,
-            workingDirectory: definition.subprocess.workingDirectoryURL
+            workingDirectory: definition.subprocess.workingDirectoryURL,
+            approvalService: approvalService
         )
         return ACPClientRuntime(client: client)
     }

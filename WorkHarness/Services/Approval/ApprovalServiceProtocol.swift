@@ -14,6 +14,7 @@ protocol ApprovalServiceProtocol: BaseServiceProtocol {
 
     @discardableResult
     func requestApproval(runId: UUID, title: String, summary: String, mode: SafetyMode) throws -> ApprovalRequest
+    func waitForDecision(requestId: UUID) async -> ApprovalStatus
     func approve(requestId: UUID) throws
     func reject(requestId: UUID) throws
 }
