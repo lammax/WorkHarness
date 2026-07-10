@@ -984,6 +984,30 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func acpSubprocessClientPerformsHandshakeAndStartsSessionTask() async throws {
+        let connection = FakeACPConnection()
+        let client = ACPSubprocessClient(
+            id: "fake.subprocess",
+            displayName: "Fake Subprocess Agent",
+            transport: FakeACPTransport(connection: connection)
+        )
+
+        let session = try await client.connect()
+        let executionEvents = try await client.run(
+            task: AgentTask(runId: UUID(), prompt: "Do the task"),
+            sessionId: session.id
+        )
+        var events: [ACPEvent] = []
+        for try await event in executionEvents {
+            events.append(event)
+        }
+
+        #expect(session.capabilities.supports(.canPlan))
+        #expect(connection.messages.map(\.method) == ["initialize", "session/run"])
+        #expect(events.contains(.messageCompleted("Subprocess done.")))
+    }
+
+    @MainActor
     @Test func harnessEngineBuildsProviderContextThroughContextBuilder() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -1752,6 +1776,51 @@ private final class FakeACPClient: ACPClient {
     func cancel(sessionId: UUID) async {}
     func pause(sessionId: UUID) async throws {}
     func resume(sessionId: UUID) async throws {}
+}
+
+@MainActor
+private final class FakeACPTransport: ACPTransport {
+    let connection: FakeACPConnection
+
+    init(connection: FakeACPConnection) {
+        self.connection = connection
+    }
+
+    func connect() async throws -> ACPConnection {
+        connection
+    }
+}
+
+@MainActor
+private final class FakeACPConnection: ACPConnection {
+    private var continuations: [AsyncThrowingStream<ACPEvent, Error>.Continuation] = []
+    private(set) var messages: [ACPMessage] = []
+
+    func send(_ message: ACPMessage) async throws {
+        messages.append(message)
+        switch message.method {
+        case "initialize":
+            continuations.forEach { $0.yield(.connected(AgentCapabilities([.canPlan]))) }
+        case "session/run":
+            continuations.forEach {
+                $0.yield(.messageCompleted("Subprocess done."))
+                $0.finish()
+            }
+        default:
+            break
+        }
+    }
+
+    func events() -> AsyncThrowingStream<ACPEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func close() async {
+        continuations.forEach { $0.finish() }
+        continuations.removeAll()
+    }
 }
 
 @MainActor

@@ -44,7 +44,7 @@ final class ACPSubprocessConnection: ACPConnection {
     private let process: Process
     private let input: FileHandle
     private let output: FileHandle
-    private var continuation: AsyncThrowingStream<ACPEvent, Error>.Continuation?
+    private var continuations: [UUID: AsyncThrowingStream<ACPEvent, Error>.Continuation] = [:]
     private var isClosed = false
 
     init(configuration: ACPSubprocessConfiguration) throws {
@@ -92,10 +92,11 @@ final class ACPSubprocessConnection: ACPConnection {
 
     func events() -> AsyncThrowingStream<ACPEvent, Error> {
         AsyncThrowingStream { continuation in
-            self.continuation = continuation
+            let subscriberId = UUID()
+            self.continuations[subscriberId] = continuation
             continuation.onTermination = { @Sendable [weak self] _ in
                 Task { @MainActor in
-                    await self?.close()
+                    self?.continuations.removeValue(forKey: subscriberId)
                 }
             }
         }
@@ -110,19 +111,19 @@ final class ACPSubprocessConnection: ACPConnection {
         }
         try? input.close()
         try? output.close()
-        continuation?.finish()
-        continuation = nil
+        continuations.values.forEach { $0.finish() }
+        continuations.removeAll()
     }
 
     private func consume(_ data: Data) {
         guard let text = String(data: data, encoding: .utf8) else {
-            continuation?.yield(with: .failure(ACPError.transport("ACP output was not UTF-8.")))
+            continuations.values.forEach { $0.yield(with: .failure(ACPError.transport("ACP output was not UTF-8."))) }
             return
         }
 
         for line in text.split(whereSeparator: \.isNewline) {
             guard let event = try? ACPCodec.decodeEvent(from: Data(line.utf8)) else { continue }
-            continuation?.yield(event)
+            continuations.values.forEach { $0.yield(event) }
         }
     }
 }

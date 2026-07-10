@@ -140,6 +140,7 @@ WorkHarness already has:
 - ACP client/runtime contracts isolated under `AgentRuntime/ACP`.
 - ACP event mapping into existing `RunEvent` timeline concepts.
 - ACP subprocess transport with JSON-lines stdin/stdout and event codec.
+- ACP subprocess client with initialize handshake, capability discovery and session controls.
 - MCP-backed RAG client and service boundary.
 - RAG index/search/clear operations routed to the existing `RAGMCPServer`.
 - RAG citations mapped into `ContextSnapshot` through an opt-in agent context policy.
@@ -800,6 +801,7 @@ Implemented foundation:
 - `ACPClientRuntime` lifecycle, session state, cancellation, pause/resume and event mapping.
 - `ACPRunEventMapper` for agent output, tool requests, file changes, approvals, usage, artifacts and failures.
 - `ACPSubprocessTransport`, `ACPSubprocessConnection` and `ACPCodec` for local process communication.
+- `ACPSubprocessClient` for initialize, run, cancel, pause, resume and disconnect messages.
 - Deterministic fake-agent test proving ACP events are persisted as `RunEvent`s without concrete Codex/Cursor branching.
 
 Remaining in Step 18:
