@@ -20,6 +20,7 @@ struct ContextBuildInput: Equatable {
     var currentProject: Project?
     var rootPath: String?
     var recentRunSummary: String?
+    var contextFoldSummary: ContextFoldSummary?
     var selectedFiles: [String]
     var tokenBudget: TokenBudget?
 
@@ -31,6 +32,7 @@ struct ContextBuildInput: Equatable {
         currentProject: Project? = nil,
         rootPath: String? = nil,
         recentRunSummary: String? = nil,
+        contextFoldSummary: ContextFoldSummary? = nil,
         selectedFiles: [String] = [],
         tokenBudget: TokenBudget? = nil
     ) {
@@ -41,6 +43,7 @@ struct ContextBuildInput: Equatable {
         self.currentProject = currentProject
         self.rootPath = rootPath
         self.recentRunSummary = recentRunSummary
+        self.contextFoldSummary = contextFoldSummary
         self.selectedFiles = selectedFiles
         self.tokenBudget = tokenBudget
     }

@@ -188,6 +188,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 12 - Persistence v1.
 - Step 13 - Token / Cost Statistics v1.
 - Step 14 - Settings v1.
+- Step 15 - Context Folding v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -616,6 +617,8 @@ The user can change core WorkHarness parameters in Settings, persist them, and s
 
 ## Step 15 - Context Folding v1
 
+Status: Done.
+
 Goal:
 Long runs do not inflate context indefinitely.
 
@@ -628,6 +631,10 @@ Scope:
 - Failed attempts.
 - Next actions.
 - `ContextCompacted` event.
+- `ContextFoldingServiceProtocol` and deterministic `ContextFoldingService`.
+- Persisted fold summary payload in the append-only `contextCompacted` event.
+- Reuse of the latest folded summary in `ContextBuilder`.
+- `RunServiceProtocol.compactContext(runId:)` application boundary.
 - Tests.
 
 Done when:

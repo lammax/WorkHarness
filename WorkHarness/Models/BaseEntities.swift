@@ -134,6 +134,48 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
     }
 }
 
+struct ContextFoldSummary: Codable, Equatable {
+    var runSummary: String
+    var conversationSummary: String
+    var decisionLog: [String]
+    var currentState: String
+    var failedAttempts: [String]
+    var nextActions: [String]
+    var sourceEventCount: Int
+    var createdAt: Date
+
+    var renderedText: String {
+        [
+            "Run summary: \(runSummary)",
+            "Conversation: \(conversationSummary)",
+            "Decisions: \(decisionLog.joined(separator: "; "))",
+            "Current state: \(currentState)",
+            "Failed attempts: \(failedAttempts.joined(separator: "; "))",
+            "Next actions: \(nextActions.joined(separator: "; "))"
+        ].joined(separator: "\n")
+    }
+
+    init(
+        runSummary: String,
+        conversationSummary: String,
+        decisionLog: [String] = [],
+        currentState: String,
+        failedAttempts: [String] = [],
+        nextActions: [String] = [],
+        sourceEventCount: Int,
+        createdAt: Date = Date()
+    ) {
+        self.runSummary = runSummary
+        self.conversationSummary = conversationSummary
+        self.decisionLog = decisionLog
+        self.currentState = currentState
+        self.failedAttempts = failedAttempts
+        self.nextActions = nextActions
+        self.sourceEventCount = sourceEventCount
+        self.createdAt = createdAt
+    }
+}
+
 struct ApprovalRequest: Identifiable, Codable, Equatable {
     let id: UUID
     var runId: UUID

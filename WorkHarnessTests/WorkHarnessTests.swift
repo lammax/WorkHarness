@@ -904,6 +904,61 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func contextFoldingPreservesDecisionsFailuresAndNextActions() throws {
+        let runId = UUID()
+        var run = Run(id: runId, goal: "Finish the feature", status: .failed)
+        run.events = [
+            RunEvent(runId: runId, type: .userMessage, message: "Implement the feature"),
+            RunEvent(runId: runId, type: .assistantMessage, message: "I inspected the project."),
+            RunEvent(runId: runId, type: .approvalGranted, message: "Write approved"),
+            RunEvent(runId: runId, type: .providerRequestFailed, message: "Provider timed out")
+        ]
+
+        let summary = ContextFoldingService().fold(run: run)
+
+        #expect(summary.runSummary.contains("Finish the feature"))
+        #expect(summary.conversationSummary.contains("Implement the feature"))
+        #expect(summary.decisionLog.contains("Approval Granted: Write approved"))
+        #expect(summary.failedAttempts.contains("Provider Failed: Provider timed out"))
+        #expect(summary.currentState.contains("Failed"))
+        #expect(summary.nextActions.first?.contains("retry") == true)
+    }
+
+    @MainActor
+    @Test func compactContextAppendsEventAndSummaryCanBuildContext() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            contextBuilder: ContextBuilder(),
+            contextFoldingService: ContextFoldingService()
+        )
+
+        _ = await engine.startRun(goal: "Compact this run")
+        let runId = try #require(repository.runs.first?.id)
+        let summary = try #require(engine.compactContext(runId: runId))
+        let run = try #require(repository.run(withId: runId))
+        let compactedEvent = try #require(run.events.last { $0.type == .contextCompacted })
+
+        #expect(compactedEvent.message == summary.renderedText)
+        #expect(compactedEvent.metadata["sourceEventCount"] == "\(summary.sourceEventCount)")
+
+        let agent = try #require(run.agents.first)
+        let snapshot = ContextBuilder().buildSnapshot(from: ContextBuildInput(
+            runId: runId,
+            agent: agent,
+            providerId: agent.providerId,
+            userMessage: "Continue",
+            contextFoldSummary: summary
+        ))
+
+        #expect(snapshot.includedSummaries.contains(summary.renderedText))
+        #expect(snapshot.summary.contains("Folded context:"))
+    }
+
+    @MainActor
     @Test func mcpBackedProviderMapsStreamToAIEvents() async throws {
         let client = FakeMCPProviderClient(events: [
             .started,

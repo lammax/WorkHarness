@@ -29,6 +29,11 @@ final class ContextBuilder: ContextBuilderProtocol {
             includedSummaries.append(recentRunSummary)
         }
 
+        if let contextFoldSummary = input.contextFoldSummary {
+            contextItems.append("Folded context:\n\(contextFoldSummary.renderedText)")
+            includedSummaries.append(contextFoldSummary.renderedText)
+        }
+
         if !input.selectedFiles.isEmpty {
             contextItems.append("Selected files: \(input.selectedFiles.joined(separator: ", "))")
         }

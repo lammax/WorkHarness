@@ -14,6 +14,7 @@ final class HarnessEngine {
     private let providerService: ProviderServiceProtocol
     private let projectService: ProjectServiceProtocol?
     private let contextBuilder: ContextBuilderProtocol
+    private let contextFoldingService: ContextFoldingServiceProtocol
     private let appSettingsService: AppSettingsServiceProtocol?
 
     init(
@@ -22,6 +23,7 @@ final class HarnessEngine {
         providerService: ProviderServiceProtocol,
         projectService: ProjectServiceProtocol? = nil,
         contextBuilder: ContextBuilderProtocol? = nil,
+        contextFoldingService: ContextFoldingServiceProtocol? = nil,
         appSettingsService: AppSettingsServiceProtocol? = nil
     ) {
         self.repository = repository
@@ -29,11 +31,28 @@ final class HarnessEngine {
         self.providerService = providerService
         self.projectService = projectService
         self.contextBuilder = contextBuilder ?? ContextBuilder()
+        self.contextFoldingService = contextFoldingService ?? ContextFoldingService()
         self.appSettingsService = appSettingsService
     }
 
     var providerName: String {
         providerService.activeProviderName
+    }
+
+    func compactContext(runId: UUID) -> ContextFoldSummary? {
+        guard let run = repository.run(withId: runId) else { return nil }
+        let summary = contextFoldingService.fold(run: run)
+        let encodedSummary = (try? JSONEncoder().encode(summary)).flatMap { String(data: $0, encoding: .utf8) }
+        recorder.record(
+            runId: runId,
+            type: .contextCompacted,
+            message: summary.renderedText,
+            metadata: [
+                "sourceEventCount": "\(summary.sourceEventCount)",
+                "summaryJSON": encodedSummary ?? ""
+            ]
+        )
+        return summary
     }
 
     func startRun(goal: String) async -> UUID? {
@@ -141,6 +160,7 @@ final class HarnessEngine {
             userMessage: prompt,
             currentProject: currentProject,
             rootPath: currentProject?.rootPath,
+            contextFoldSummary: latestContextFoldSummary(for: runId),
             tokenBudget: defaultTokenBudget(for: agent)
         ))
 
@@ -157,6 +177,12 @@ final class HarnessEngine {
         )
 
         return snapshot
+    }
+
+    private func latestContextFoldSummary(for runId: UUID) -> ContextFoldSummary? {
+        guard let event = repository.run(withId: runId)?.events.last(where: { $0.type == .contextCompacted }),
+              let data = event.metadata["summaryJSON"]?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ContextFoldSummary.self, from: data)
     }
 
     private func defaultTokenBudget(for agent: Agent) -> TokenBudget {

@@ -15,6 +15,7 @@ protocol RunServiceProtocol: BaseServiceProtocol {
     func run(withId runId: UUID) -> Run?
     func startRun(goal: String) async -> UUID?
     func sendMessage(runId: UUID, message: String) async
+    func compactContext(runId: UUID) -> ContextFoldSummary?
 }
 
 extension RunServiceProtocol {

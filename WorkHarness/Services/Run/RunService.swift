@@ -36,4 +36,8 @@ final class RunService: RunServiceProtocol {
     func sendMessage(runId: UUID, message: String) async {
         await harnessEngine.sendMessage(runId: runId, message: message)
     }
+
+    func compactContext(runId: UUID) -> ContextFoldSummary? {
+        harnessEngine.compactContext(runId: runId)
+    }
 }
