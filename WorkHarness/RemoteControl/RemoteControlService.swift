@@ -50,8 +50,7 @@ final class RemoteControlService: RemoteControlServiceProtocol {
             appSettingsService.remoteControlToken = self.token
         }
         self.listener = Self.makeListener(port: self.port)
-        self.listener.parameters.requiredInterfaceType = .loopback
-        self.listener.parameters.allowLocalEndpointReuse = true
+        configureListener()
     }
 
     var service: AppService { .remoteControl }
@@ -80,8 +79,7 @@ final class RemoteControlService: RemoteControlServiceProtocol {
             appSettingsService.remoteControlToken = token
         }
         listener = Self.makeListener(port: port)
-        listener.parameters.requiredInterfaceType = .loopback
-        listener.parameters.allowLocalEndpointReuse = true
+        configureListener()
         try start()
     }
 
@@ -105,6 +103,13 @@ final class RemoteControlService: RemoteControlServiceProtocol {
                 })
             }
         }
+    }
+
+    private func configureListener() {
+        if !appSettingsService.remoteControlAllowLAN {
+            listener.parameters.requiredInterfaceType = .loopback
+        }
+        listener.parameters.allowLocalEndpointReuse = true
     }
 
     private func streamRunID(from data: Data) -> UUID? {
@@ -183,6 +188,26 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         switch (method, path) {
         case ("GET", "/health"):
             return HTTPResponse.json(status: 200, body: ["status": "ok", "version": "0.1.0"])
+        case ("GET", "/capabilities"):
+            return HTTPResponse.json(status: 200, value: RemoteCapabilitiesResponse(
+                version: "0.1.0",
+                port: port,
+                allowsLAN: appSettingsService.remoteControlAllowLAN,
+                endpoints: [
+                    "health",
+                    "capabilities",
+                    "project",
+                    "runs",
+                    "runs/{id}",
+                    "runs/{id}/events",
+                    "runs/{id}/stream",
+                    "approvals",
+                    "approvals/{id}/approve",
+                    "approvals/{id}/reject",
+                    "runs",
+                    "runs/{id}/cancel"
+                ]
+            ))
         case ("GET", "/runs"):
             return HTTPResponse.json(status: 200, value: runRepository.runs)
         case ("GET", "/project"):
@@ -301,4 +326,11 @@ private enum HTTPResponse {
 
 private struct RemoteStartRequest: Decodable {
     let goal: String
+}
+
+private struct RemoteCapabilitiesResponse: Encodable {
+    let version: String
+    let port: UInt16
+    let allowsLAN: Bool
+    let endpoints: [String]
 }

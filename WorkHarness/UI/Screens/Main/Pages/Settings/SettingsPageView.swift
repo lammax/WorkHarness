@@ -245,6 +245,8 @@ extension MainScreen {
                         .font(.headline)
 
                     Toggle(Design.AppSettings.remoteControlEnabledTitle, isOn: $viewModel.remoteControlEnabled)
+                    Toggle(Design.AppSettings.remoteControlAllowLANTitle, isOn: $viewModel.remoteControlAllowLAN)
+                        .disabled(!viewModel.remoteControlEnabled)
 
                     HStack {
                         Text(Design.AppSettings.remoteControlPortTitle)

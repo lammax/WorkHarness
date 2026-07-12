@@ -1501,6 +1501,7 @@ struct WorkHarnessTests {
         viewModel.defaultMaxInputTokens = 4_096
         viewModel.defaultMaxOutputTokens = 512
         viewModel.remoteControlEnabled = false
+        viewModel.remoteControlAllowLAN = true
         viewModel.remoteControlPort = 9797
         viewModel.remoteControlToken = "test-token"
         viewModel.ragAnswerMode = .enabled
@@ -1523,6 +1524,7 @@ struct WorkHarnessTests {
         #expect(appSettings.defaultMaxInputTokens == 4_096)
         #expect(appSettings.defaultMaxOutputTokens == 512)
         #expect(!appSettings.remoteControlEnabled)
+        #expect(appSettings.remoteControlAllowLAN)
         #expect(appSettings.remoteControlPort == 9797)
         #expect(appSettings.remoteControlToken == "test-token")
         #expect(appSettings.ragAnswerMode == .enabled)
@@ -1540,6 +1542,7 @@ struct WorkHarnessTests {
         let defaults = try #require(UserDefaults(suiteName: "WorkHarnessTests.RAGSettings.\(UUID().uuidString)"))
         let first = UserDefaultsAppSettingsService(defaults: defaults)
         first.remoteControlEnabled = false
+        first.remoteControlAllowLAN = true
         first.remoteControlPort = 9797
         first.remoteControlToken = "persisted-token"
         first.ragAnswerMode = .enabled
@@ -1556,6 +1559,7 @@ struct WorkHarnessTests {
 
         #expect(second.ragAnswerMode == .enabled)
         #expect(!second.remoteControlEnabled)
+        #expect(second.remoteControlAllowLAN)
         #expect(second.remoteControlPort == 9797)
         #expect(second.remoteControlToken == "persisted-token")
         #expect(second.ragRetrievalSettings.chunkingStrategy == .structure)

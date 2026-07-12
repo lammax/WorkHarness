@@ -64,6 +64,7 @@ extension MainScreen {
             static let localLLMModelTitle = "Local LLM model"
             static let remoteControlTitle = "Remote Control"
             static let remoteControlEnabledTitle = "Enable localhost API"
+            static let remoteControlAllowLANTitle = "Allow local network access"
             static let remoteControlPortTitle = "API port"
             static let remoteControlTokenTitle = "Bearer token"
             static let remoteControlTokenPlaceholder = "Leave empty to generate a local token"

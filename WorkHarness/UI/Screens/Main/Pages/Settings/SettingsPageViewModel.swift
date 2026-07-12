@@ -30,6 +30,7 @@ extension MainScreen {
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
         var remoteControlEnabled: Bool
+        var remoteControlAllowLAN: Bool
         var remoteControlPort: Int
         var remoteControlToken: String
         var ragAnswerMode: RAGAnswerMode
@@ -58,6 +59,7 @@ extension MainScreen {
             self.defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             self.defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             self.remoteControlEnabled = appSettingsService.remoteControlEnabled
+            self.remoteControlAllowLAN = appSettingsService.remoteControlAllowLAN
             self.remoteControlPort = appSettingsService.remoteControlPort
             self.remoteControlToken = appSettingsService.remoteControlToken
             self.ragAnswerMode = appSettingsService.ragAnswerMode
@@ -143,6 +145,7 @@ extension MainScreen {
             appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
             appSettingsService.defaultMaxOutputTokens = defaultMaxOutputTokens
             appSettingsService.remoteControlEnabled = remoteControlEnabled
+            appSettingsService.remoteControlAllowLAN = remoteControlAllowLAN
             appSettingsService.remoteControlPort = remoteControlPort
             appSettingsService.remoteControlToken = remoteControlToken
             appSettingsService.defaultAgentModelId = selectedAgentModelId
@@ -155,6 +158,7 @@ extension MainScreen {
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             remoteControlEnabled = appSettingsService.remoteControlEnabled
+            remoteControlAllowLAN = appSettingsService.remoteControlAllowLAN
             remoteControlPort = appSettingsService.remoteControlPort
             remoteControlToken = appSettingsService.remoteControlToken
             selectedAgentModelId = appSettingsService.defaultAgentModelId
@@ -180,6 +184,7 @@ extension MainScreen {
             defaultMaxInputTokens = AppSettingsDefaults.defaultMaxInputTokens
             defaultMaxOutputTokens = AppSettingsDefaults.defaultMaxOutputTokens
             remoteControlEnabled = AppSettingsDefaults.remoteControlEnabled
+            remoteControlAllowLAN = AppSettingsDefaults.remoteControlAllowLAN
             remoteControlPort = AppSettingsDefaults.remoteControlPort
             remoteControlToken = AppSettingsDefaults.remoteControlToken
             selectedAgentModelId = AppSettingsDefaults.defaultAgentModelId
@@ -236,6 +241,7 @@ extension MainScreen {
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             remoteControlEnabled = appSettingsService.remoteControlEnabled
+            remoteControlAllowLAN = appSettingsService.remoteControlAllowLAN
             remoteControlPort = appSettingsService.remoteControlPort
             remoteControlToken = appSettingsService.remoteControlToken
             selectedAgentModelId = appSettingsService.defaultAgentModelId
@@ -273,6 +279,7 @@ extension MainScreen {
                 defaultMaxInputTokens: defaultMaxInputTokens,
                 defaultMaxOutputTokens: defaultMaxOutputTokens,
                 remoteControlEnabled: remoteControlEnabled,
+                remoteControlAllowLAN: remoteControlAllowLAN,
                 remoteControlPort: remoteControlPort,
                 remoteControlToken: remoteControlToken,
                 agentModelId: selectedAgentModelId,
@@ -290,6 +297,7 @@ extension MainScreen {
                 defaultMaxInputTokens: appSettingsService.defaultMaxInputTokens,
                 defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens,
                 remoteControlEnabled: appSettingsService.remoteControlEnabled,
+                remoteControlAllowLAN: appSettingsService.remoteControlAllowLAN,
                 remoteControlPort: appSettingsService.remoteControlPort,
                 remoteControlToken: appSettingsService.remoteControlToken,
                 agentModelId: appSettingsService.defaultAgentModelId,
@@ -307,6 +315,7 @@ extension MainScreen {
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
         var remoteControlEnabled: Bool
+        var remoteControlAllowLAN: Bool
         var remoteControlPort: Int
         var remoteControlToken: String
         var agentModelId: String

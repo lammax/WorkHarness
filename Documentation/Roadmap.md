@@ -910,7 +910,7 @@ Multiple agent roles can participate in a Run while preserving Run/Event observa
 
 ## Step 20 - Remote Control v1
 
-Status: In progress. Localhost API foundation with bearer-token authentication, fixed-port binding, health, project, approval, run and run-event endpoints is implemented. Remote run start/cancel is routed through RunService, `/runs/{id}/stream` exposes an authenticated SSE event stream, and port/token/enabled state is configurable in Settings with first-run token persistence; mobile approval UX remains.
+Status: Done. WorkHarness exposes a bearer-authenticated local API with configurable binding, health, capability discovery, project, approval, run, run-event and SSE endpoints. Remote run start/cancel is routed through RunService, and port/token/enabled/LAN access state is configurable in Settings with first-run token persistence.
 
 Goal:
 Prepare for mobile control.
@@ -925,6 +925,7 @@ Scope:
 - Active run status.
 - Individual Run and append-only RunEvent inspection by Run ID.
 - Mobile-safe API.
+- Optional LAN binding for a future mobile client, disabled by default.
 - Mobile clients talk to Harness Remote API, not directly to ACP agents.
 - WorkHarness on Mac remains the owner of the embedded ACP Host.
 - Consider extracting a separate `HarnessDaemon` only after the in-app ACP Host is stable and mobile control needs a background station process.
@@ -932,6 +933,26 @@ Scope:
 
 Done when:
 The desktop app exposes controlled, authenticated Run state and approval operations for a future mobile client.
+
+## Step 21 - Mobile Remote Client v1
+
+Status: Planned. The WorkHarness API is ready for a separate mobile client; no mobile target is introduced into the macOS application until the API contract is stable.
+
+Goal:
+Provide a focused mobile control surface for monitoring Runs and handling approvals.
+
+Scope:
+
+- Mobile pairing and token entry.
+- Connection health and capability discovery through `/health` and `/capabilities`.
+- Run list, Run detail and live event stream.
+- Approval inbox with approve/reject actions.
+- Remote Run start and cancellation.
+- Clear connection, authentication and offline states.
+- Tests against a deterministic Remote Control API fixture.
+
+Done when:
+A mobile client can pair with WorkHarness, observe a Run and complete an approval flow without direct ACP or MCP access.
 
 # Architectural Direction
 

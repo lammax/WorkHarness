@@ -20,6 +20,7 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         static let defaultMaxInputTokens = "appSettings.defaultMaxInputTokens"
         static let defaultMaxOutputTokens = "appSettings.defaultMaxOutputTokens"
         static let remoteControlEnabled = "appSettings.remoteControlEnabled"
+        static let remoteControlAllowLAN = "appSettings.remoteControlAllowLAN"
         static let remoteControlPort = "appSettings.remoteControlPort"
         static let remoteControlToken = "appSettings.remoteControlToken"
         static let ragAnswerMode = "appSettings.ragAnswerMode"
@@ -122,6 +123,11 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
     var remoteControlEnabled: Bool {
         get { defaults.object(forKey: Key.remoteControlEnabled) as? Bool ?? AppSettingsDefaults.remoteControlEnabled }
         set { defaults.set(newValue, forKey: Key.remoteControlEnabled) }
+    }
+
+    var remoteControlAllowLAN: Bool {
+        get { defaults.object(forKey: Key.remoteControlAllowLAN) as? Bool ?? AppSettingsDefaults.remoteControlAllowLAN }
+        set { defaults.set(newValue, forKey: Key.remoteControlAllowLAN) }
     }
 
     var remoteControlPort: Int {
