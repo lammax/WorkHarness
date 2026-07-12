@@ -239,6 +239,24 @@ extension MainScreen {
                         text: $viewModel.localLLMModel
                     )
 
+                    Divider()
+
+                    Text(Design.AppSettings.remoteControlTitle)
+                        .font(.headline)
+
+                    Toggle(Design.AppSettings.remoteControlEnabledTitle, isOn: $viewModel.remoteControlEnabled)
+
+                    HStack {
+                        Text(Design.AppSettings.remoteControlPortTitle)
+                        Spacer()
+                        TextField("8787", value: $viewModel.remoteControlPort, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                    }
+
+                    SecureField(Design.AppSettings.remoteControlTokenPlaceholder, text: $viewModel.remoteControlToken)
+                        .textFieldStyle(.roundedBorder)
+
                     HStack(spacing: Design.AppSettings.fieldSpacing) {
                         TokenBudgetStepper(
                             title: Design.AppSettings.maxInputTokensTitle,

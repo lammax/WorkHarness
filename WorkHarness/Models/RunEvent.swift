@@ -60,6 +60,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
     case error
     case finalSummary
     case runCompleted
+    case runCancelled
     case runFailed
 
     var label: String {
@@ -91,6 +92,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
         case .error: "Error"
         case .finalSummary: "Summary"
         case .runCompleted: "Run Completed"
+        case .runCancelled: "Run Cancelled"
         case .runFailed: "Run Failed"
         }
     }

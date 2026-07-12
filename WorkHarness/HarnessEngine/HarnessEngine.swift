@@ -20,6 +20,7 @@ final class HarnessEngine {
     private let appSettingsService: AppSettingsServiceProtocol?
     private let agentRuntimeRegistry: AgentRuntimeRegistry
     private let multiAgentCoordinator: MultiAgentCoordinator
+    private var activeRuntimeSessions: [UUID: (runtime: AgentRuntime, sessionId: UUID)] = [:]
 
     init(
         repository: RunRepository,
@@ -100,11 +101,15 @@ final class HarnessEngine {
     }
 
     func startRun(goal: String, mode: RunMode) async -> UUID? {
-        guard mode == .multiAgent else { return await startRun(goal: goal) }
-        return await startMultiAgentRun(goal: goal)
+        await startRun(goal: goal, mode: mode, configuration: .default)
     }
 
-    private func startMultiAgentRun(goal: String) async -> UUID? {
+    func startRun(goal: String, mode: RunMode, configuration: MultiAgentRunConfiguration) async -> UUID? {
+        guard mode == .multiAgent else { return await startRun(goal: goal) }
+        return await startMultiAgentRun(goal: goal, configuration: configuration)
+    }
+
+    private func startMultiAgentRun(goal: String, configuration: MultiAgentRunConfiguration) async -> UUID? {
         guard let runtime = selectedAgentRuntime() else {
             return createFailedRun(goal: goal, message: "Select an ACP agent runtime before starting a multi-agent run.")
         }
@@ -127,7 +132,11 @@ final class HarnessEngine {
             ])
         )
         do {
-            let plan = try CapabilityBasedAgentPlanner().plan(goal: goal, candidates: [candidate])
+            let plan = try CapabilityBasedAgentPlanner().plan(
+                goal: goal,
+                candidates: [candidate],
+                configuration: configuration
+            )
             let snapshot = context(for: run.id, prompt: goal, agent: agent, providerId: runtime.id)
             _ = try await multiAgentCoordinator.execute(
                 plan: plan,
@@ -135,7 +144,8 @@ final class HarnessEngine {
                 runtimes: [agent.id: runtime],
                 runId: run.id,
                 context: snapshot,
-                workingDirectory: projectService?.currentProject?.rootPath
+                workingDirectory: projectService?.currentProject?.rootPath,
+                configuration: configuration
             )
             repository.updateRun(run.id) { $0.status = .completed }
             recorder.record(runId: run.id, type: .runCompleted, message: "Multi-agent run completed.", metadata: ["planId": plan.id.uuidString])
@@ -173,6 +183,18 @@ final class HarnessEngine {
             run.status = .running
         }
         await runSimpleChatLoop(runId: runId, prompt: trimmedMessage, agent: agent, provider: provider)
+    }
+
+    func cancelRun(runId: UUID) async {
+        guard let run = repository.run(withId: runId),
+              run.status == .running || run.status == .waitingForApproval else { return }
+
+        if let activeSession = activeRuntimeSessions[runId] {
+            await activeSession.runtime.cancel(sessionId: activeSession.sessionId)
+            activeRuntimeSessions.removeValue(forKey: runId)
+        }
+        repository.updateRun(runId) { $0.status = .cancelled }
+        recorder.record(runId: runId, type: .runCancelled, message: "Run cancelled.", metadata: ["reason": "remote-control"])
     }
 
     private func runSimpleChatLoop(runId: UUID, prompt: String, agent: Agent, provider: any AIProvider) async {
@@ -284,6 +306,7 @@ final class HarnessEngine {
             )
             runtime.configure(modelId: appSettingsService?.defaultAgentModelId, runId: runId)
             let session = try await runtime.connect()
+            activeRuntimeSessions[runId] = (runtime, session.id)
             recorder.record(
                 runId: runId,
                 type: .agentStarted,
@@ -338,12 +361,16 @@ final class HarnessEngine {
                     break
                 }
             }
+            activeRuntimeSessions.removeValue(forKey: runId)
             if repository.run(withId: runId)?.status == .completed {
                 recorder.record(runId: runId, type: .runCompleted, message: "Run completed through \(runtime.displayName).")
             }
             await runtime.disconnect(sessionId: session.id)
         } catch {
-            failRun(runId, message: error.localizedDescription)
+            activeRuntimeSessions.removeValue(forKey: runId)
+            if repository.run(withId: runId)?.status != .cancelled {
+                failRun(runId, message: error.localizedDescription)
+            }
         }
     }
 

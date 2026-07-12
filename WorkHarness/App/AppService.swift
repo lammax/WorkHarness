@@ -15,4 +15,5 @@ enum AppService {
     case tools
     case memory
     case rag
+    case remoteControl
 }

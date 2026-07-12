@@ -37,6 +37,14 @@ final class RunService: RunServiceProtocol {
         await harnessEngine.startRun(goal: goal, mode: mode)
     }
 
+    func startRun(goal: String, mode: RunMode, configuration: MultiAgentRunConfiguration) async -> UUID? {
+        await harnessEngine.startRun(goal: goal, mode: mode, configuration: configuration)
+    }
+
+    func cancelRun(runId: UUID) async {
+        await harnessEngine.cancelRun(runId: runId)
+    }
+
     func sendMessage(runId: UUID, message: String) async {
         await harnessEngine.sendMessage(runId: runId, message: message)
     }

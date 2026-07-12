@@ -16,6 +16,9 @@ protocol AppSettingsServiceProtocol: BaseServiceProtocol {
     var localLLMModel: String { get set }
     var defaultMaxInputTokens: Int { get set }
     var defaultMaxOutputTokens: Int { get set }
+    var remoteControlEnabled: Bool { get set }
+    var remoteControlPort: Int { get set }
+    var remoteControlToken: String { get set }
     var ragAnswerMode: RAGAnswerMode { get set }
     var ragRetrievalSettings: RAGRetrievalSettings { get set }
 }
@@ -32,6 +35,9 @@ enum AppSettingsDefaults {
     nonisolated static let localLLMModel = "local-private"
     nonisolated static let defaultMaxInputTokens = 16_000
     nonisolated static let defaultMaxOutputTokens = 2_000
+    nonisolated static let remoteControlEnabled = true
+    nonisolated static let remoteControlPort = 8787
+    nonisolated static let remoteControlToken = ""
     nonisolated static let ragAnswerMode: RAGAnswerMode = .disabled
     nonisolated static let ragRetrievalSettings = RAGRetrievalSettings()
 }

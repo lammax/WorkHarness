@@ -105,6 +105,7 @@ extension MainScreen {
                 case .error: "exclamationmark.triangle"
                 case .finalSummary: "text.badge.checkmark"
                 case .runCompleted: "flag.checkered"
+                case .runCancelled: "stop.circle"
                 case .runFailed: "flag.slash"
                 }
             }
@@ -119,6 +120,8 @@ extension MainScreen {
                     .blue
                 case .providerStreamDelta:
                     .purple
+                case .runCancelled:
+                    .orange
                 default:
                     .secondary
                 }

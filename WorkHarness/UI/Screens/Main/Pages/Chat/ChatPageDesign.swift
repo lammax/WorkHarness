@@ -78,6 +78,7 @@ extension MainScreen {
                 case .error: "exclamationmark.triangle"
                 case .finalSummary: "text.badge.checkmark"
                 case .runCompleted: "flag.checkered"
+                case .runCancelled: "stop.circle"
                 case .runFailed: "flag.slash"
                 }
             }
@@ -92,6 +93,8 @@ extension MainScreen {
                     .blue
                 case .providerStreamDelta:
                     .purple
+                case .runCancelled:
+                    .orange
                 default:
                     .secondary
                 }
@@ -101,6 +104,16 @@ extension MainScreen {
         enum StatusBadge {
             static let horizontalPadding: CGFloat = 8
             static let verticalPadding: CGFloat = 4
+        }
+
+        enum MultiAgentPlan {
+            static let spacing: CGFloat = 8
+            static let horizontalPadding: CGFloat = 16
+            static let verticalPadding: CGFloat = 8
+            static let title = "Execution plan"
+            static let icon = "point.3.connected.trianglepath.dotted"
+            static let arrowIcon = "chevron.right"
+            static let modelPickerWidth: CGFloat = 150
         }
     }
 }

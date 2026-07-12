@@ -16,6 +16,9 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
     var localLLMModel: String
     var defaultMaxInputTokens: Int
     var defaultMaxOutputTokens: Int
+    var remoteControlEnabled: Bool
+    var remoteControlPort: Int
+    var remoteControlToken: String
     var ragAnswerMode: RAGAnswerMode
     var ragRetrievalSettings: RAGRetrievalSettings
 
@@ -29,6 +32,9 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
         localLLMModel: String = AppSettingsDefaults.localLLMModel,
         defaultMaxInputTokens: Int = AppSettingsDefaults.defaultMaxInputTokens,
         defaultMaxOutputTokens: Int = AppSettingsDefaults.defaultMaxOutputTokens,
+        remoteControlEnabled: Bool = AppSettingsDefaults.remoteControlEnabled,
+        remoteControlPort: Int = AppSettingsDefaults.remoteControlPort,
+        remoteControlToken: String = AppSettingsDefaults.remoteControlToken,
         ragAnswerMode: RAGAnswerMode = AppSettingsDefaults.ragAnswerMode,
         ragRetrievalSettings: RAGRetrievalSettings = AppSettingsDefaults.ragRetrievalSettings
     ) {
@@ -41,6 +47,9 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
         self.localLLMModel = localLLMModel
         self.defaultMaxInputTokens = defaultMaxInputTokens
         self.defaultMaxOutputTokens = defaultMaxOutputTokens
+        self.remoteControlEnabled = remoteControlEnabled
+        self.remoteControlPort = remoteControlPort
+        self.remoteControlToken = remoteControlToken
         self.ragAnswerMode = ragAnswerMode
         self.ragRetrievalSettings = ragRetrievalSettings
     }

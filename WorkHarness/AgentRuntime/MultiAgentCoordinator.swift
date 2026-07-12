@@ -53,17 +53,95 @@ final class MultiAgentCoordinator {
         runtimes: [UUID: AgentRuntime],
         runId: UUID,
         context: ContextSnapshot? = nil,
-        workingDirectory: String? = nil
+        workingDirectory: String? = nil,
+        configuration: MultiAgentRunConfiguration
     ) async throws -> MultiAgentExecutionResult {
         var results: [MultiAgentStepResult] = []
+        var completedStepIds: Set<UUID> = []
 
-        for step in plan.steps {
+        while completedStepIds.count < plan.steps.count {
+            let readySteps = plan.steps.filter { step in
+                !completedStepIds.contains(step.id) && step.dependsOn.allSatisfy(completedStepIds.contains)
+            }
+            guard !readySteps.isEmpty else {
+                throw MultiAgentCoordinatorError.invalidPlan
+            }
+
+            var selectedSteps: [AgentPlanStep] = []
+            var selectedAgentIds: Set<UUID> = []
+            for step in readySteps {
+                guard !selectedAgentIds.contains(step.agentId) else { continue }
+                selectedSteps.append(step)
+                selectedAgentIds.insert(step.agentId)
+            }
+
+            if selectedSteps.count == 1 {
+                let result = try await executeStep(
+                    selectedSteps[0],
+                    plan: plan,
+                    candidates: candidates,
+                    runtimes: runtimes,
+                    runId: runId,
+                    context: context,
+                    workingDirectory: workingDirectory,
+                    previousResults: results,
+                    configuration: configuration
+                )
+                results.append(result)
+            } else {
+                let previousResults = results
+                let batchResults = try await withThrowingTaskGroup(of: MultiAgentStepResult.self) { group in
+                    for step in selectedSteps {
+                        group.addTask {
+                            try await self.executeStep(
+                                step,
+                                plan: plan,
+                                candidates: candidates,
+                                runtimes: runtimes,
+                                runId: runId,
+                                context: context,
+                                workingDirectory: workingDirectory,
+                                previousResults: previousResults,
+                                configuration: configuration
+                            )
+                        }
+                    }
+
+                    var collected: [MultiAgentStepResult] = []
+                    for try await result in group {
+                        collected.append(result)
+                    }
+                    return collected
+                }
+                results.append(contentsOf: batchResults.sorted { lhs, rhs in
+                    (plan.steps.firstIndex { $0.id == lhs.stepId } ?? 0) < (plan.steps.firstIndex { $0.id == rhs.stepId } ?? 0)
+                })
+            }
+
+            completedStepIds.formUnion(selectedSteps.map(\.id))
+        }
+
+        return MultiAgentExecutionResult(planId: plan.id, steps: results)
+    }
+
+    private func executeStep(
+        _ step: AgentPlanStep,
+        plan: AgentExecutionPlan,
+        candidates: [AgentCandidate],
+        runtimes: [UUID: AgentRuntime],
+        runId: UUID,
+        context: ContextSnapshot?,
+        workingDirectory: String?,
+        previousResults: [MultiAgentStepResult],
+        configuration: MultiAgentRunConfiguration
+    ) async throws -> MultiAgentStepResult {
             guard let candidate = candidates.first(where: { $0.agent.id == step.agentId }),
                   let runtime = runtimes[step.agentId] else {
                 throw MultiAgentCoordinatorError.missingRuntime(step.agentId)
             }
 
-            runtime.configure(modelId: candidate.agent.model, runId: runId)
+            let roleConfiguration = configuration.configuration(for: step.role)
+            runtime.configure(modelId: roleConfiguration?.modelOverride ?? candidate.agent.model, runId: runId)
             let session = try await runtime.connect()
             let metadata = [
                 "planId": plan.id.uuidString,
@@ -84,7 +162,7 @@ final class MultiAgentCoordinator {
                 let execution = try await runtime.run(
                     task: AgentTask(
                         runId: runId,
-                        prompt: prompt(for: step, goal: plan.goal, previousResults: results),
+                        prompt: prompt(for: step, goal: plan.goal, previousResults: previousResults, instructions: roleConfiguration?.instructions ?? ""),
                         context: context,
                         workingDirectory: workingDirectory
                     ),
@@ -123,37 +201,38 @@ final class MultiAgentCoordinator {
                 }
 
                 recorder.record(runId: runId, type: .agentFinished, message: "\(step.role.label) finished.", metadata: metadata)
-                results.append(MultiAgentStepResult(
+                let result = MultiAgentStepResult(
                     stepId: step.id,
                     role: step.role,
                     agentId: candidate.agent.id,
                     output: output,
                     sessionId: session.id
-                ))
+                )
                 await runtime.disconnect(sessionId: session.id)
+                return result
             } catch {
                 await runtime.disconnect(sessionId: session.id)
                 throw error
             }
-        }
-
-        return MultiAgentExecutionResult(planId: plan.id, steps: results)
     }
 
-    private func prompt(for step: AgentPlanStep, goal: String, previousResults: [MultiAgentStepResult]) -> String {
+    private func prompt(for step: AgentPlanStep, goal: String, previousResults: [MultiAgentStepResult], instructions: String) -> String {
         let priorOutput = previousResults.last?.output ?? "No previous agent output."
-        return "Role: \(step.role.label)\nGoal: \(goal)\nPrevious step output:\n\(priorOutput)"
+        let customInstructions = instructions.isEmpty ? "Use the role's standard responsibilities." : instructions
+        return "Role: \(step.role.label)\nGoal: \(goal)\nInstructions: \(customInstructions)\nPrevious step output:\n\(priorOutput)"
     }
 }
 
 enum MultiAgentCoordinatorError: LocalizedError, Equatable {
     case missingRuntime(UUID)
     case stepFailed(UUID, String)
+    case invalidPlan
 
     var errorDescription: String? {
         switch self {
         case .missingRuntime(let agentId): "No runtime registered for agent \(agentId.uuidString)."
         case .stepFailed(_, let message): "Multi-agent step failed: \(message)"
+        case .invalidPlan: "Multi-agent execution plan contains unresolved dependencies."
         }
     }
 }

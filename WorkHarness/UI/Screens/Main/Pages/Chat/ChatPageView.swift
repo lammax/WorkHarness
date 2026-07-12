@@ -19,6 +19,10 @@ extension MainScreen {
 
                 Divider()
 
+                if viewModel.draftRunMode == .multiAgent {
+                    MultiAgentPlanPreviewView(configuration: $viewModel.multiAgentConfiguration)
+                }
+
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Design.Timeline.spacing) {
                         if viewModel.displayEvents.isEmpty {
@@ -43,6 +47,53 @@ extension MainScreen {
                 )
                 .padding(Design.Composer.padding)
             }
+        }
+    }
+
+    private struct MultiAgentPlanPreviewView: View {
+        typealias Design = ChatPageDesign.MultiAgentPlan
+
+        @Binding var configuration: MultiAgentRunConfiguration
+
+        var body: some View {
+            HStack(spacing: Design.spacing) {
+                Image(systemName: Design.icon)
+                    .foregroundStyle(.tint)
+
+                Text(Design.title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+
+                ForEach(Array(configuration.roles.enumerated()), id: \.element.id) { index, roleConfiguration in
+                    if index > 0 {
+                        Image(systemName: Design.arrowIcon)
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Toggle(roleConfiguration.role.label, isOn: Binding(
+                            get: { roleConfiguration.enabled },
+                            set: { value in configuration.roles[index].enabled = value }
+                        ))
+                        .toggleStyle(.checkbox)
+                        .font(.caption)
+                        Picker(roleConfiguration.role.label, selection: Binding(
+                            get: { roleConfiguration.modelOverride ?? CursorACPModelOption.defaultModel.id },
+                            set: { value in configuration.roles[index].modelOverride = value }
+                        )) {
+                            ForEach(CursorACPModelOption.allCases) { model in
+                                Text(model.title).tag(model.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: Design.modelPickerWidth)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Design.horizontalPadding)
+            .padding(.vertical, Design.verticalPadding)
+            .background(.thinMaterial)
         }
     }
 

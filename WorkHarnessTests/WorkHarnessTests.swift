@@ -1080,9 +1080,9 @@ struct WorkHarnessTests {
         let plan = try planner.plan(goal: "Implement feature", candidates: candidates)
 
         #expect(plan.steps.map(\.role) == [.architect, .coder, .reviewer, .testRunner])
-        #expect(plan.steps.dropFirst().enumerated().allSatisfy { index, step in
-            step.dependsOn == [plan.steps[index].id]
-        })
+        #expect(plan.steps[1].dependsOn == [plan.steps[0].id])
+        #expect(plan.steps[2].dependsOn == [plan.steps[1].id])
+        #expect(plan.steps[3].dependsOn == [plan.steps[1].id])
     }
 
     @Test func capabilityBasedAgentPlannerFailsWhenCapabilityIsMissing() {
@@ -1094,6 +1094,20 @@ struct WorkHarnessTests {
 
         #expect(throws: AgentPlannerError.noCandidate(role: .coder, requiredCapabilities: [.canEditFiles, .canUseTools])) {
             try planner.plan(goal: "Implement feature", candidates: [candidate])
+        }
+    }
+
+    @Test func capabilityBasedAgentPlannerRejectsDisabledDependencies() throws {
+        let planner = CapabilityBasedAgentPlanner()
+        let candidate = AgentCandidate(
+            agent: Agent(role: .research, providerId: "all", model: "all"),
+            capabilities: AgentCapabilities([.canPlan, .canEditFiles, .canUseTools, .canOpenDiff, .canRunTests])
+        )
+        var configuration = MultiAgentRunConfiguration.default
+        configuration.roles[1].enabled = false
+
+        #expect(throws: AgentPlannerError.disabledDependency(role: .reviewer, dependency: .coder)) {
+            try planner.plan(goal: "Implement feature", candidates: [candidate], configuration: configuration)
         }
     }
 
@@ -1114,7 +1128,8 @@ struct WorkHarnessTests {
             plan: plan,
             candidates: [candidate],
             runtimes: [agent.id: runtime],
-            runId: run.id
+            runId: run.id,
+            configuration: .default
         )
 
         #expect(result.steps.map(\.stepId) == [first.id, second.id])
@@ -1485,6 +1500,9 @@ struct WorkHarnessTests {
         viewModel.localLLMModel = "qwen-local"
         viewModel.defaultMaxInputTokens = 4_096
         viewModel.defaultMaxOutputTokens = 512
+        viewModel.remoteControlEnabled = false
+        viewModel.remoteControlPort = 9797
+        viewModel.remoteControlToken = "test-token"
         viewModel.ragAnswerMode = .enabled
         viewModel.ragChunkingStrategy = .structure
         viewModel.ragRetrievalMode = .basic
@@ -1504,6 +1522,9 @@ struct WorkHarnessTests {
         #expect(appSettings.localLLMModel == "qwen-local")
         #expect(appSettings.defaultMaxInputTokens == 4_096)
         #expect(appSettings.defaultMaxOutputTokens == 512)
+        #expect(!appSettings.remoteControlEnabled)
+        #expect(appSettings.remoteControlPort == 9797)
+        #expect(appSettings.remoteControlToken == "test-token")
         #expect(appSettings.ragAnswerMode == .enabled)
         #expect(appSettings.ragRetrievalSettings.chunkingStrategy == .structure)
         #expect(appSettings.ragRetrievalSettings.retrievalMode == .basic)
@@ -1518,6 +1539,9 @@ struct WorkHarnessTests {
     @Test func userDefaultsAppSettingsPersistsRAGSettings() throws {
         let defaults = try #require(UserDefaults(suiteName: "WorkHarnessTests.RAGSettings.\(UUID().uuidString)"))
         let first = UserDefaultsAppSettingsService(defaults: defaults)
+        first.remoteControlEnabled = false
+        first.remoteControlPort = 9797
+        first.remoteControlToken = "persisted-token"
         first.ragAnswerMode = .enabled
         first.ragRetrievalSettings = RAGRetrievalSettings(
             chunkingStrategy: .structure,
@@ -1531,6 +1555,9 @@ struct WorkHarnessTests {
         let second = UserDefaultsAppSettingsService(defaults: defaults)
 
         #expect(second.ragAnswerMode == .enabled)
+        #expect(!second.remoteControlEnabled)
+        #expect(second.remoteControlPort == 9797)
+        #expect(second.remoteControlToken == "persisted-token")
         #expect(second.ragRetrievalSettings.chunkingStrategy == .structure)
         #expect(second.ragRetrievalSettings.retrievalMode == .basic)
         #expect(second.ragRetrievalSettings.topKBeforeFiltering == 20)
@@ -1983,7 +2010,7 @@ private final class FakeACPConnection: ACPConnection {
 }
 
 @MainActor
-private final class FakeRAGService: RAGServiceProtocol {
+private final class FakeRAGService: @MainActor RAGServiceProtocol {
     let result: RAGSearchResult
     private(set) var lastSettings: RAGRetrievalSettings?
 
@@ -2018,8 +2045,8 @@ private final class FakeMCPToolClient: MCPToolClientProtocol {
     private let result: ToolResult
     private(set) var invocations: [MCPToolInvocation] = []
 
-    init(result: ToolResult = ToolResult(toolId: "fake.tool", status: .succeeded, output: "ok")) {
-        self.result = result
+    init(result: ToolResult? = nil) {
+        self.result = result ?? ToolResult(toolId: "fake.tool", status: .succeeded, output: "ok")
     }
 
     func invoke(_ invocation: MCPToolInvocation) async throws -> ToolResult {

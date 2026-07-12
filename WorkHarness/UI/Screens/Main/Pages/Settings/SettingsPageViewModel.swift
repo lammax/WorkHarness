@@ -15,6 +15,7 @@ extension MainScreen {
         private let providerService: ProviderServiceProtocol
         private let appSettingsService: AppSettingsServiceProtocol
         private let agentRuntimeRegistry: AgentRuntimeRegistry
+        private let remoteControlService: RemoteControlServiceProtocol?
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
@@ -28,6 +29,9 @@ extension MainScreen {
         var localLLMModel: String
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
+        var remoteControlEnabled: Bool
+        var remoteControlPort: Int
+        var remoteControlToken: String
         var ragAnswerMode: RAGAnswerMode
         var ragChunkingStrategy: RAGChunkingStrategy
         var ragRetrievalMode: RAGRetrievalMode
@@ -39,11 +43,13 @@ extension MainScreen {
         init(
             providerService: ProviderServiceProtocol,
             appSettingsService: AppSettingsServiceProtocol,
-            agentRuntimeRegistry: AgentRuntimeRegistry? = nil
+            agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
+            remoteControlService: RemoteControlServiceProtocol? = nil
         ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
             self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
+            self.remoteControlService = remoteControlService
             self.selectedAgentModelId = appSettingsService.defaultAgentModelId
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
@@ -51,6 +57,9 @@ extension MainScreen {
             self.localLLMModel = appSettingsService.localLLMModel
             self.defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             self.defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            self.remoteControlEnabled = appSettingsService.remoteControlEnabled
+            self.remoteControlPort = appSettingsService.remoteControlPort
+            self.remoteControlToken = appSettingsService.remoteControlToken
             self.ragAnswerMode = appSettingsService.ragAnswerMode
             self.ragChunkingStrategy = appSettingsService.ragRetrievalSettings.chunkingStrategy
             self.ragRetrievalMode = appSettingsService.ragRetrievalSettings.retrievalMode
@@ -133,6 +142,9 @@ extension MainScreen {
             appSettingsService.localLLMModel = localLLMModel
             appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
             appSettingsService.defaultMaxOutputTokens = defaultMaxOutputTokens
+            appSettingsService.remoteControlEnabled = remoteControlEnabled
+            appSettingsService.remoteControlPort = remoteControlPort
+            appSettingsService.remoteControlToken = remoteControlToken
             appSettingsService.defaultAgentModelId = selectedAgentModelId
             appSettingsService.ragAnswerMode = ragAnswerMode
             appSettingsService.ragRetrievalSettings = currentRAGRetrievalSettings
@@ -142,9 +154,17 @@ extension MainScreen {
             localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            remoteControlEnabled = appSettingsService.remoteControlEnabled
+            remoteControlPort = appSettingsService.remoteControlPort
+            remoteControlToken = appSettingsService.remoteControlToken
             selectedAgentModelId = appSettingsService.defaultAgentModelId
             loadRAGSettingsFromService()
             errorMessage = nil
+            do {
+                try remoteControlService?.reload()
+            } catch {
+                errorMessage = "Remote Control: \(error.localizedDescription)"
+            }
         }
 
         func revertSettings() {
@@ -159,6 +179,9 @@ extension MainScreen {
             localLLMModel = AppSettingsDefaults.localLLMModel
             defaultMaxInputTokens = AppSettingsDefaults.defaultMaxInputTokens
             defaultMaxOutputTokens = AppSettingsDefaults.defaultMaxOutputTokens
+            remoteControlEnabled = AppSettingsDefaults.remoteControlEnabled
+            remoteControlPort = AppSettingsDefaults.remoteControlPort
+            remoteControlToken = AppSettingsDefaults.remoteControlToken
             selectedAgentModelId = AppSettingsDefaults.defaultAgentModelId
             ragAnswerMode = AppSettingsDefaults.ragAnswerMode
             ragChunkingStrategy = AppSettingsDefaults.ragRetrievalSettings.chunkingStrategy
@@ -212,6 +235,9 @@ extension MainScreen {
             localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
+            remoteControlEnabled = appSettingsService.remoteControlEnabled
+            remoteControlPort = appSettingsService.remoteControlPort
+            remoteControlToken = appSettingsService.remoteControlToken
             selectedAgentModelId = appSettingsService.defaultAgentModelId
             loadRAGSettingsFromService()
         }
@@ -246,6 +272,9 @@ extension MainScreen {
                 localLLMModel: localLLMModel,
                 defaultMaxInputTokens: defaultMaxInputTokens,
                 defaultMaxOutputTokens: defaultMaxOutputTokens,
+                remoteControlEnabled: remoteControlEnabled,
+                remoteControlPort: remoteControlPort,
+                remoteControlToken: remoteControlToken,
                 agentModelId: selectedAgentModelId,
                 ragAnswerMode: ragAnswerMode,
                 ragRetrievalSettings: currentRAGRetrievalSettings
@@ -260,6 +289,9 @@ extension MainScreen {
                 localLLMModel: appSettingsService.localLLMModel,
                 defaultMaxInputTokens: appSettingsService.defaultMaxInputTokens,
                 defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens,
+                remoteControlEnabled: appSettingsService.remoteControlEnabled,
+                remoteControlPort: appSettingsService.remoteControlPort,
+                remoteControlToken: appSettingsService.remoteControlToken,
                 agentModelId: appSettingsService.defaultAgentModelId,
                 ragAnswerMode: appSettingsService.ragAnswerMode,
                 ragRetrievalSettings: appSettingsService.ragRetrievalSettings
@@ -274,6 +306,9 @@ extension MainScreen {
         var localLLMModel: String
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
+        var remoteControlEnabled: Bool
+        var remoteControlPort: Int
+        var remoteControlToken: String
         var agentModelId: String
         var ragAnswerMode: RAGAnswerMode
         var ragRetrievalSettings: RAGRetrievalSettings

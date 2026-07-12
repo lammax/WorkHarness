@@ -19,6 +19,9 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         static let localLLMModel = "appSettings.localLLMModel"
         static let defaultMaxInputTokens = "appSettings.defaultMaxInputTokens"
         static let defaultMaxOutputTokens = "appSettings.defaultMaxOutputTokens"
+        static let remoteControlEnabled = "appSettings.remoteControlEnabled"
+        static let remoteControlPort = "appSettings.remoteControlPort"
+        static let remoteControlToken = "appSettings.remoteControlToken"
         static let ragAnswerMode = "appSettings.ragAnswerMode"
         static let ragRetrievalSettings = "appSettings.ragRetrievalSettings"
     }
@@ -114,6 +117,21 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         set {
             setPositiveInt(newValue, key: Key.defaultMaxOutputTokens, defaultValue: AppSettingsDefaults.defaultMaxOutputTokens)
         }
+    }
+
+    var remoteControlEnabled: Bool {
+        get { defaults.object(forKey: Key.remoteControlEnabled) as? Bool ?? AppSettingsDefaults.remoteControlEnabled }
+        set { defaults.set(newValue, forKey: Key.remoteControlEnabled) }
+    }
+
+    var remoteControlPort: Int {
+        get { positiveIntValue(forKey: Key.remoteControlPort, defaultValue: AppSettingsDefaults.remoteControlPort) }
+        set { setPositiveInt(newValue, key: Key.remoteControlPort, defaultValue: AppSettingsDefaults.remoteControlPort) }
+    }
+
+    var remoteControlToken: String {
+        get { defaults.string(forKey: Key.remoteControlToken) ?? AppSettingsDefaults.remoteControlToken }
+        set { defaults.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Key.remoteControlToken) }
     }
 
     var ragAnswerMode: RAGAnswerMode {

@@ -17,6 +17,7 @@ extension MainScreen {
         var selectedRunId: UUID?
         var draftMessage = ""
         var draftRunMode: RunMode = .simpleChat
+        var multiAgentConfiguration = MultiAgentRunConfiguration.default
         var isSending = false
         var errorMessage: String?
 
@@ -90,7 +91,7 @@ extension MainScreen {
 
             if let selectedRunId {
                 await runService.sendMessage(runId: selectedRunId, message: trimmedMessage)
-            } else if let runId = await runService.startRun(goal: trimmedMessage, mode: draftRunMode) {
+            } else if let runId = await runService.startRun(goal: trimmedMessage, mode: draftRunMode, configuration: multiAgentConfiguration) {
                 selectedRunId = runId
             }
         }

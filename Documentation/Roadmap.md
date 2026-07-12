@@ -870,7 +870,7 @@ WorkHarness can run at least one fake ACP agent through `AgentRuntime`, persist/
 
 ## Step 19 - Multi-Agent v1
 
-Status: In progress. Capability-based planning, dependency-aware execution and a user-visible Multi-Agent run mode are implemented; richer per-agent configuration and parallel execution remain.
+Status: Done. Capability-based planning, dependency-aware execution, parallel independent steps and a user-visible configurable Multi-Agent run mode are implemented.
 
 Goal:
 Support real agentic development workflows.
@@ -898,13 +898,19 @@ Implemented first slice:
 - `MultiAgentCoordinator` executes dependency-ordered child sessions and aggregates their output, usage, artifacts and RunEvents.
 - Child session start/finish metadata includes plan, step, role, agent and session identifiers.
 - Chat composer exposes an explicit `Chat / Multi-Agent` run mode selector.
+- Chat shows the planned role sequence before a Multi-Agent run starts.
+- Each planned role exposes an enabled toggle, model override and runtime instructions.
+- Planner validates disabled-role dependencies before creating the execution graph.
 - `RunService` and `HarnessEngine` execute Multi-Agent runs through the same Run-centric path.
-- The current MVP can execute Architect, Coder, Reviewer and Test Runner roles sequentially on one selected ACP runtime.
+- The current MVP can execute Architect, Coder, Reviewer and Test Runner roles on one selected ACP runtime, or parallelize independent roles across different runtimes.
+- Independent ready steps can execute in parallel when they are assigned to different runtimes; steps sharing one runtime remain serialized.
 
 Done when:
 Multiple agent roles can participate in a Run while preserving Run/Event observability.
 
 ## Step 20 - Remote Control v1
+
+Status: In progress. Localhost API foundation with bearer-token authentication, fixed-port binding, health, project, approval, run and run-event endpoints is implemented. Remote run start/cancel is routed through RunService, `/runs/{id}/stream` exposes an authenticated SSE event stream, and port/token/enabled state is configurable in Settings with first-run token persistence; mobile approval UX remains.
 
 Goal:
 Prepare for mobile control.
@@ -917,6 +923,7 @@ Scope:
 - Approval requests over API.
 - Current project status.
 - Active run status.
+- Individual Run and append-only RunEvent inspection by Run ID.
 - Mobile-safe API.
 - Mobile clients talk to Harness Remote API, not directly to ACP agents.
 - WorkHarness on Mac remains the owner of the embedded ACP Host.

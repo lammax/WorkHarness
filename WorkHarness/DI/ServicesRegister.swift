@@ -21,6 +21,16 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(RemoteControlServiceProtocol.self) { resolver in
+            RemoteControlService(
+                runRepository: resolver.resolve(RunRepository.self)!,
+                runService: resolver.resolve(RunServiceProtocol.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!,
+                approvalService: resolver.resolve(ApprovalServiceProtocol.self)!,
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(ProviderServiceProtocol.self) { resolver in
             ProviderService(
                 registry: resolver.resolve(ProviderRegistry.self)!,
