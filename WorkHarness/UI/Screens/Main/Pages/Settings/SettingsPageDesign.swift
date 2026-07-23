@@ -68,6 +68,8 @@ extension MainScreen {
         enum AppSettings {
             static let title = "Application Settings"
             static let safetyModeTitle = "Safety mode"
+            static let autoApproveWorkspaceActionsTitle = "Auto-approve actions inside the current project"
+            static let autoApproveWorkspaceActionsDescription = "File writes, shell commands, and mutating Git operations will run without individual approval prompts after Save."
             static let mcpBasePathTitle = "MCP server base path"
             static let localLLMEndpointTitle = "Local LLM endpoint"
             static let localLLMModelTitle = "Local LLM model"

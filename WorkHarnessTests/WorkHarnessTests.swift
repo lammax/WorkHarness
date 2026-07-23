@@ -62,6 +62,158 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func chatPageViewModelStopsActiveAgentRuntimeRun() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.cancellable")
+        let registry = AgentRuntimeRegistry()
+        let client = FakeACPClient(
+            id: "fake.cancellable",
+            displayName: "Cancellable Agent",
+            waitsForCancellation: true
+        )
+        registry.register(ACPClientRuntime(client: client))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: RunService(repository: repository, harnessEngine: engine)
+        )
+
+        viewModel.draftMessage = "Keep working until stopped"
+        viewModel.submitDraft()
+        for _ in 0..<100 where client.tasks.isEmpty {
+            await Task.yield()
+        }
+
+        #expect(viewModel.isSending)
+        await viewModel.stopRunAndWait()
+        for _ in 0..<100 where viewModel.isSending {
+            await Task.yield()
+        }
+
+        let run = try #require(repository.runs.first)
+        #expect(!viewModel.isSending)
+        #expect(client.cancelCount == 1)
+        #expect(run.status == .cancelled)
+        #expect(run.events.filter { $0.type == .runCancelled }.count == 1)
+        #expect(!run.events.contains { $0.type == .runCompleted || $0.type == .runFailed })
+    }
+
+    @MainActor
+    @Test func chatPageViewModelMergesMultiAgentChunksWithinEachPlanStep() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider())
+        )
+        let runService = RunService(repository: repository, harnessEngine: engine)
+        let viewModel = MainScreen.ChatPageViewModel(runService: runService)
+        let runId = UUID()
+        let architectStepId = UUID().uuidString
+        let coderStepId = UUID().uuidString
+        let run = Run(
+            id: runId,
+            goal: "Build with multiple agents",
+            mode: .multiAgent,
+            events: [
+                RunEvent(
+                    runId: runId,
+                    type: .providerStreamDelta,
+                    message: "Архитектурный ",
+                    metadata: ["planStepId": architectStepId, "role": AgentRole.architect.rawValue]
+                ),
+                RunEvent(
+                    runId: runId,
+                    type: .providerStreamDelta,
+                    message: "ответ.",
+                    metadata: ["planStepId": architectStepId, "role": AgentRole.architect.rawValue]
+                ),
+                RunEvent(
+                    runId: runId,
+                    type: .providerStreamDelta,
+                    message: "Реализация ",
+                    metadata: ["planStepId": coderStepId, "role": AgentRole.coder.rawValue]
+                ),
+                RunEvent(
+                    runId: runId,
+                    type: .providerStreamDelta,
+                    message: "готова.",
+                    metadata: ["planStepId": coderStepId, "role": AgentRole.coder.rawValue]
+                )
+            ]
+        )
+        repository.insert(run)
+        viewModel.selectRun(run)
+
+        let displayedDeltas = viewModel.displayEvents.filter { $0.type == .providerStreamDelta }
+
+        #expect(displayedDeltas.count == 2)
+        #expect(displayedDeltas[0].message == "Архитектурный ответ.")
+        #expect(displayedDeltas[0].metadata["role"] == AgentRole.architect.rawValue)
+        #expect(displayedDeltas[1].message == "Реализация готова.")
+        #expect(displayedDeltas[1].metadata["role"] == AgentRole.coder.rawValue)
+    }
+
+    @MainActor
+    @Test func contextAttachmentServiceLoadsUTF8TextAndRejectsBinaryData() async throws {
+        let directory = try makeTemporaryDirectory()
+        let textURL = directory.appendingPathComponent("Claude.md")
+        let binaryURL = directory.appendingPathComponent("image.bin")
+        try Data("# Swift rules".utf8).write(to: textURL)
+        try Data([0x00, 0xFF, 0x10]).write(to: binaryURL)
+        let service = RunContextAttachmentService()
+
+        let attachment = try service.loadAttachment(from: textURL)
+
+        #expect(attachment.name == "Claude.md")
+        #expect(attachment.content == "# Swift rules")
+        #expect(attachment.byteCount == 13)
+        #expect(throws: RunContextAttachmentError.unsupportedEncoding) {
+            try service.loadAttachment(from: binaryURL)
+        }
+    }
+
+    @MainActor
+    @Test func chatPageAttachesReadOnlyFileToRunAndProviderContext() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let provider = RecordingAIProvider()
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(provider)
+        )
+        let runService = RunService(repository: repository, harnessEngine: engine)
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: runService,
+            contextAttachmentService: RunContextAttachmentService()
+        )
+        let attachmentURL = try makeTemporaryDirectory().appendingPathComponent("Claude.md")
+        try Data("Use SwiftUI boundaries.".utf8).write(to: attachmentURL)
+
+        await viewModel.attachFileAndWait(attachmentURL)
+        viewModel.draftMessage = "Review the attached rules"
+        await viewModel.submitDraftAndWait()
+
+        let run = try #require(repository.runs.first)
+        let request = try #require(provider.requests.first)
+        #expect(viewModel.draftContextAttachments.isEmpty)
+        #expect(run.contextAttachments.map(\.name) == ["Claude.md"])
+        #expect(run.contextAttachments.first?.content == "Use SwiftUI boundaries.")
+        #expect(request.context.contains { $0.contains("BEGIN ATTACHMENT Claude.md") })
+        #expect(request.context.contains { $0.contains("Use SwiftUI boundaries.") })
+        #expect(request.context.allSatisfy { !$0.contains(attachmentURL.deletingLastPathComponent().path) })
+        #expect(run.events.first { $0.type == .userMessage }?.metadata["attachmentNames"] == "Claude.md")
+    }
+
+    @MainActor
     @Test func runServiceStartsRunThroughEngineAndExposesRepositoryState() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -322,7 +474,8 @@ struct WorkHarnessTests {
         let approvalService = ApprovalService(
             repository: approvalRepository,
             runRepository: repository,
-            recorder: RunRecorder(repository: repository)
+            recorder: RunRecorder(repository: repository),
+            appSettingsService: InMemoryAppSettingsService()
         )
         let mcpClient = FakeMCPToolClient(result: ToolResult(
             toolId: "file.write",
@@ -355,6 +508,48 @@ struct WorkHarnessTests {
 
         #expect(result.status == .succeeded)
         #expect(mcpClient.invocations.count == 1)
+        #expect(repository.run(withId: run.id)?.events.map(\.type) == [
+            .toolCallRequested,
+            .approvalRequested,
+            .approvalGranted,
+            .toolCallStarted,
+            .toolCallFinished,
+            .toolResult
+        ])
+    }
+
+    @MainActor
+    @Test func toolServiceAutoApprovesWorkspaceActionAndInvokesMCP() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Write without repeated prompts")
+        repository.insert(run)
+        let approvalRepository = InMemoryApprovalRepository()
+        let mcpClient = FakeMCPToolClient(result: ToolResult(
+            toolId: "file.write",
+            status: .succeeded,
+            output: "written"
+        ))
+        let service = makeToolService(
+            repository: repository,
+            mcpClient: mcpClient,
+            approvalRepository: approvalRepository,
+            appSettingsService: InMemoryAppSettingsService(
+                defaultSafetyMode: .autoInsideSandbox
+            ),
+            tools: [FileWriteTool()]
+        )
+
+        let result = try await service.executeAwaitingApproval(.init(
+            runId: run.id,
+            toolId: "file.write",
+            arguments: ["path": "README.md", "content": "hello"],
+            projectRootPath: "/tmp/project"
+        ))
+
+        #expect(result.status == .succeeded)
+        #expect(mcpClient.invocations.count == 1)
+        #expect(approvalRepository.requests.count == 1)
+        #expect(approvalRepository.requests.first?.status == .granted)
         #expect(repository.run(withId: run.id)?.events.map(\.type) == [
             .toolCallRequested,
             .approvalRequested,
@@ -1174,6 +1369,40 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func harnessEnginePassesAttachmentContentToSelectedAgentRuntime() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.acp")
+        let registry = AgentRuntimeRegistry()
+        let client = FakeACPClient()
+        registry.register(ACPClientRuntime(client: client))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            contextBuilder: ContextBuilder(),
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+        let attachment = RunContextAttachment(
+            name: "Claude.md",
+            content: "Prefer feature-scoped SwiftUI types."
+        )
+
+        _ = await engine.startRun(
+            goal: "Review the attached rules",
+            contextAttachments: [attachment]
+        )
+
+        let task = try #require(client.tasks.first)
+        #expect(task.context?.includedFiles.contains("Claude.md") == true)
+        #expect(task.context?.contextItems.contains {
+            $0.contains("Prefer feature-scoped SwiftUI types.")
+        } == true)
+        #expect(task.context?.contextItems.allSatisfy { !$0.contains("/Users/") } == true)
+    }
+
+    @MainActor
     @Test func acpCodecEncodesJSONRPCLineAndDecodesAgentEvents() throws {
         let request = ACPMessage(id: 7, method: "session/start", params: ["project": "/tmp/project"])
         let encoded = try ACPCodec.encode(request)
@@ -1213,6 +1442,29 @@ struct WorkHarnessTests {
             .messageCompleted("Hello"),
             .finished(AgentResponse(message: "Hello", tokenUsage: usage, artifacts: []))
         ])
+    }
+
+    @MainActor
+    @Test func utf8StreamDecoderPreservesClaudeJSONSplitInsideCyrillicScalar() throws {
+        let jsonLine = """
+        {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Файл прочитан"}}}
+
+        """
+        let data = Data(jsonLine.utf8)
+        let scalarBytes = Array("Ф".utf8)
+        let scalarStart = try #require(data.firstRange(of: Data(scalarBytes))?.lowerBound)
+        let splitIndex = scalarStart + 1
+        var decoder = UTF8StreamDecoder()
+        let parser = ClaudeStreamJSONParser()
+
+        let firstOutput = decoder.decode(data.prefix(splitIndex))
+        let secondOutput = decoder.decode(data.suffix(from: splitIndex))
+        let events = try parser.parse(firstOutput) + parser.parse(secondOutput) + parser.finish()
+
+        #expect(firstOutput.hasSuffix("\"text\":\""))
+        #expect(secondOutput.hasPrefix("Файл"))
+        #expect(events == [.textDelta("Файл прочитан")])
+        #expect(decoder.finish().isEmpty)
     }
 
     @MainActor
@@ -1333,7 +1585,8 @@ struct WorkHarnessTests {
         let approvalService = ApprovalService(
             repository: InMemoryApprovalRepository(),
             runRepository: runRepository,
-            recorder: recorder
+            recorder: recorder,
+            appSettingsService: settings
         )
         let serverSupervisor = MCPServerProcessSupervisor {
             settings.mcpServerBasePath
@@ -1558,6 +1811,49 @@ struct WorkHarnessTests {
         #expect(result.steps.map(\.stepId) == [first.id, second.id])
         #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentStarted }.count == 2)
         #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentFinished }.count == 2)
+    }
+
+    @MainActor
+    @Test func harnessEngineStopsActiveMultiAgentSessionWithoutStartingNextRole() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.multi.cancellable")
+        let registry = AgentRuntimeRegistry()
+        let client = FakeACPClient(
+            id: "fake.multi.cancellable",
+            displayName: "Cancellable Multi-Agent",
+            waitsForCancellation: true
+        )
+        registry.register(ACPClientRuntime(client: client))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        let executionTask = Task {
+            await engine.startRun(
+                goal: "Run all roles",
+                mode: .multiAgent,
+                configuration: .default
+            )
+        }
+        for _ in 0..<100 where client.tasks.isEmpty {
+            await Task.yield()
+        }
+        let runId = try #require(repository.runs.first?.id)
+
+        await engine.cancelRun(runId: runId)
+        _ = await executionTask.value
+
+        let run = try #require(repository.run(withId: runId))
+        #expect(client.cancelCount == 1)
+        #expect(client.tasks.count == 1)
+        #expect(run.status == .cancelled)
+        #expect(run.events.filter { $0.type == .runCancelled }.count == 1)
+        #expect(!run.events.contains { $0.type == .runCompleted || $0.type == .runFailed })
     }
 
     @MainActor
@@ -2079,6 +2375,39 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func settingsPageViewModelSavesAndRevertsAutoApprovalDraft() async throws {
+        let appSettings = InMemoryAppSettingsService(
+            defaultSafetyMode: .askBeforeWrite
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings
+        )
+
+        #expect(!viewModel.autoApproveWorkspaceActions)
+        #expect(!viewModel.hasUnsavedAppSettingsChanges)
+
+        viewModel.autoApproveWorkspaceActions = true
+
+        #expect(viewModel.selectedSafetyMode == .autoInsideSandbox)
+        #expect(viewModel.hasUnsavedAppSettingsChanges)
+        #expect(appSettings.defaultSafetyMode == .askBeforeWrite)
+
+        viewModel.saveSettings()
+
+        #expect(viewModel.autoApproveWorkspaceActions)
+        #expect(appSettings.defaultSafetyMode == .autoInsideSandbox)
+        #expect(!viewModel.hasUnsavedAppSettingsChanges)
+
+        viewModel.autoApproveWorkspaceActions = false
+        viewModel.revertSettings()
+
+        #expect(viewModel.autoApproveWorkspaceActions)
+        #expect(viewModel.selectedSafetyMode == .autoInsideSandbox)
+        #expect(!viewModel.hasUnsavedAppSettingsChanges)
+    }
+
+    @MainActor
     @Test func userDefaultsAppSettingsPersistsRAGSettings() throws {
         let defaults = try #require(UserDefaults(suiteName: "WorkHarnessTests.RAGSettings.\(UUID().uuidString)"))
         let first = UserDefaultsAppSettingsService(defaults: defaults)
@@ -2274,11 +2603,15 @@ private func makeApprovalService() -> ApprovalService {
 }
 
 @MainActor
-private func makeApprovalService(repository: InMemoryRunRepository) -> ApprovalService {
+private func makeApprovalService(
+    repository: InMemoryRunRepository,
+    appSettingsService: AppSettingsServiceProtocol? = nil
+) -> ApprovalService {
     ApprovalService(
         repository: InMemoryApprovalRepository(),
         runRepository: repository,
-        recorder: RunRecorder(repository: repository)
+        recorder: RunRecorder(repository: repository),
+        appSettingsService: appSettingsService ?? InMemoryAppSettingsService()
     )
 }
 
@@ -2287,6 +2620,7 @@ private func makeToolService(
     repository: InMemoryRunRepository,
     mcpClient: MCPToolClientProtocol? = nil,
     approvalRepository: InMemoryApprovalRepository? = nil,
+    appSettingsService: AppSettingsServiceProtocol? = nil,
     tools: [any ToolProtocol]
 ) -> ToolService {
     let approvalRepository = approvalRepository ?? InMemoryApprovalRepository()
@@ -2297,7 +2631,8 @@ private func makeToolService(
         approvalService: ApprovalService(
             repository: approvalRepository,
             runRepository: repository,
-            recorder: RunRecorder(repository: repository)
+            recorder: RunRecorder(repository: repository),
+            appSettingsService: appSettingsService ?? InMemoryAppSettingsService()
         ),
         recorder: RunRecorder(repository: repository)
     )
@@ -2473,11 +2808,20 @@ private final class FakeACPClient: ACPClient {
     let id: String
     let displayName: String
     private let sessionId = UUID()
+    private let waitsForCancellation: Bool
+    private var continuations: [AsyncThrowingStream<ACPEvent, Error>.Continuation] = []
     private(set) var configuredModelId: String?
+    private(set) var tasks: [AgentTask] = []
+    private(set) var cancelCount = 0
 
-    init(id: String = "fake.acp", displayName: String = "Fake ACP Agent") {
+    init(
+        id: String = "fake.acp",
+        displayName: String = "Fake ACP Agent",
+        waitsForCancellation: Bool = false
+    ) {
         self.id = id
         self.displayName = displayName
+        self.waitsForCancellation = waitsForCancellation
     }
 
     func configure(modelId: String?) {
@@ -2496,8 +2840,13 @@ private final class FakeACPClient: ACPClient {
     func disconnect(sessionId: UUID) async {}
 
     func run(task: AgentTask, sessionId: UUID) async throws -> AsyncThrowingStream<ACPEvent, Error> {
-        AsyncThrowingStream { continuation in
+        tasks.append(task)
+        return AsyncThrowingStream { continuation in
             continuation.yield(.started)
+            guard !waitsForCancellation else {
+                continuations.append(continuation)
+                return
+            }
             continuation.yield(.textDelta("Patch ready."))
             continuation.yield(.fileChanged(path: "Sources/App.swift"))
             continuation.yield(.messageCompleted("Done."))
@@ -2506,7 +2855,11 @@ private final class FakeACPClient: ACPClient {
         }
     }
 
-    func cancel(sessionId: UUID) async {}
+    func cancel(sessionId: UUID) async {
+        cancelCount += 1
+        continuations.forEach { $0.finish() }
+        continuations.removeAll()
+    }
     func pause(sessionId: UUID) async throws {}
     func resume(sessionId: UUID) async throws {}
 }

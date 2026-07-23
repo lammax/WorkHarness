@@ -17,7 +17,8 @@ extension Container {
             ApprovalService(
                 repository: resolver.resolve(ApprovalRepositoryProtocol.self)!,
                 runRepository: resolver.resolve(RunRepository.self)!,
-                recorder: resolver.resolve(RunRecorder.self)!
+                recorder: resolver.resolve(RunRecorder.self)!,
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 
@@ -48,6 +49,10 @@ extension Container {
                 repository: resolver.resolve(RunRepository.self)!,
                 harnessEngine: resolver.resolve(HarnessEngine.self)!
             )
+        }.inObjectScope(.container)
+
+        register(RunContextAttachmentServiceProtocol.self) { _ in
+            RunContextAttachmentService()
         }.inObjectScope(.container)
 
         register(UsageStatisticsServiceProtocol.self) { resolver in

@@ -125,6 +125,15 @@ extension MainScreen {
             hasUnsavedAppSettingsChanges ? SettingsPageDesign.AppSettings.unsavedStatus : SettingsPageDesign.AppSettings.savedStatus
         }
 
+        var autoApproveWorkspaceActions: Bool {
+            get {
+                selectedSafetyMode == .autoInsideSandbox
+            }
+            set {
+                selectedSafetyMode = newValue ? .autoInsideSandbox : AppSettingsDefaults.defaultSafetyMode
+            }
+        }
+
         var selectedProvider: ProviderSettingsItem? {
             guard let activeProviderId else { return providers.first }
             return providers.first { $0.id == activeProviderId }

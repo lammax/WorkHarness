@@ -10,7 +10,10 @@ import Swinject
 extension Container {
     func registerScreens() {
         register(MainScreen.ChatPageViewModel.self) { resolver in
-            MainScreen.ChatPageViewModel(runService: resolver.resolve(RunServiceProtocol.self)!)
+            MainScreen.ChatPageViewModel(
+                runService: resolver.resolve(RunServiceProtocol.self)!,
+                contextAttachmentService: resolver.resolve(RunContextAttachmentServiceProtocol.self)!
+            )
         }.inObjectScope(.container)
 
         register(MainScreen.RunsPageViewModel.self) { resolver in

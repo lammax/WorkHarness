@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension MainScreen {
     struct ChatPageView: View {
@@ -45,10 +46,37 @@ extension MainScreen {
                 ComposerView(
                     text: $viewModel.draftMessage,
                     mode: $viewModel.draftRunMode,
+                    contextAttachments: viewModel.draftContextAttachments,
                     isSending: viewModel.isSending,
-                    onSend: viewModel.submitDraft
+                    onAttach: viewModel.presentAttachmentImporter,
+                    onRemoveAttachment: viewModel.removeAttachment,
+                    onSend: viewModel.submitDraft,
+                    onStop: viewModel.stopRun
                 )
                 .padding(Design.Composer.padding)
+
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, Design.Composer.errorHorizontalPadding)
+                        .padding(.bottom, Design.Composer.errorBottomPadding)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .fileImporter(
+                isPresented: $viewModel.isAttachmentImporterPresented,
+                allowedContentTypes: [.item],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        viewModel.attachFile(url)
+                    }
+                case .failure(let error):
+                    viewModel.setAttachmentError(error.localizedDescription)
+                }
             }
         }
     }

@@ -72,19 +72,30 @@ final class HarnessEngine {
         return summary
     }
 
-    func startRun(goal: String) async -> UUID? {
+    func startRun(
+        goal: String,
+        contextAttachments: [RunContextAttachment] = []
+    ) async -> UUID? {
         let trimmedGoal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedGoal.isEmpty else { return nil }
 
         if let runtime = selectedAgentRuntime() {
-            return await startAgentRuntimeRun(goal: trimmedGoal, runtime: runtime)
+            return await startAgentRuntimeRun(
+                goal: trimmedGoal,
+                runtime: runtime,
+                contextAttachments: contextAttachments
+            )
         }
 
         let provider: any AIProvider
         do {
             provider = try providerService.activeProvider()
         } catch {
-            return createFailedRun(goal: trimmedGoal, message: error.localizedDescription)
+            return createFailedRun(
+                goal: trimmedGoal,
+                message: error.localizedDescription,
+                contextAttachments: contextAttachments
+            )
         }
 
         let agent = Agent(
@@ -96,13 +107,18 @@ final class HarnessEngine {
         let run = Run(
             projectId: projectService?.currentProject?.id,
             goal: trimmedGoal,
-            agents: [agent]
+            agents: [agent],
+            contextAttachments: contextAttachments
         )
 
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: trimmedGoal)
         recorder.record(runId: run.id, type: .agentStarted, message: "\(agent.role.label) started with \(provider.displayName).")
-        recorder.record(runId: run.id, type: .userMessage, message: trimmedGoal)
+        recordUserMessage(
+            runId: run.id,
+            message: trimmedGoal,
+            contextAttachments: contextAttachments
+        )
 
         await runSimpleChatLoop(runId: run.id, prompt: trimmedGoal, agent: agent, provider: provider)
         return run.id
@@ -113,13 +129,41 @@ final class HarnessEngine {
     }
 
     func startRun(goal: String, mode: RunMode, configuration: MultiAgentRunConfiguration) async -> UUID? {
-        guard mode == .multiAgent else { return await startRun(goal: goal) }
-        return await startMultiAgentRun(goal: goal, configuration: configuration)
+        await startRun(
+            goal: goal,
+            mode: mode,
+            configuration: configuration,
+            contextAttachments: []
+        )
     }
 
-    private func startMultiAgentRun(goal: String, configuration: MultiAgentRunConfiguration) async -> UUID? {
+    func startRun(
+        goal: String,
+        mode: RunMode,
+        configuration: MultiAgentRunConfiguration,
+        contextAttachments: [RunContextAttachment]
+    ) async -> UUID? {
+        guard mode == .multiAgent else {
+            return await startRun(goal: goal, contextAttachments: contextAttachments)
+        }
+        return await startMultiAgentRun(
+            goal: goal,
+            configuration: configuration,
+            contextAttachments: contextAttachments
+        )
+    }
+
+    private func startMultiAgentRun(
+        goal: String,
+        configuration: MultiAgentRunConfiguration,
+        contextAttachments: [RunContextAttachment]
+    ) async -> UUID? {
         guard let runtime = selectedAgentRuntime() else {
-            return createFailedRun(goal: goal, message: "Select an ACP agent runtime before starting a multi-agent run.")
+            return createFailedRun(
+                goal: goal,
+                message: "Select an ACP agent runtime before starting a multi-agent run.",
+                contextAttachments: contextAttachments
+            )
         }
 
         let agent = Agent(
@@ -132,11 +176,12 @@ final class HarnessEngine {
             projectId: projectService?.currentProject?.id,
             goal: goal,
             mode: .multiAgent,
-            agents: [agent]
+            agents: [agent],
+            contextAttachments: contextAttachments
         )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal, metadata: ["mode": RunMode.multiAgent.rawValue])
-        recorder.record(runId: run.id, type: .userMessage, message: goal)
+        recordUserMessage(runId: run.id, message: goal, contextAttachments: contextAttachments)
 
         let candidate = AgentCandidate(
             agent: agent,
@@ -160,21 +205,44 @@ final class HarnessEngine {
                 workingDirectory: projectService?.currentProject?.rootPath,
                 configuration: configuration
             )
+            guard repository.run(withId: run.id)?.status != .cancelled else {
+                return run.id
+            }
             repository.updateRun(run.id) { $0.status = .completed }
             recorder.record(runId: run.id, type: .runCompleted, message: "Multi-agent run completed.", metadata: ["planId": plan.id.uuidString])
             return run.id
         } catch {
+            if repository.run(withId: run.id)?.status == .cancelled ||
+                (error as? MultiAgentCoordinatorError) == .cancelled {
+                return run.id
+            }
             failRun(run.id, message: error.localizedDescription)
             return run.id
         }
     }
 
-    func sendMessage(runId: UUID, message: String) async {
+    func sendMessage(
+        runId: UUID,
+        message: String,
+        contextAttachments: [RunContextAttachment] = []
+    ) async {
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty, let run = repository.run(withId: runId), let agent = run.agents.first else { return }
 
+        if !contextAttachments.isEmpty {
+            repository.updateRun(runId) { run in
+                let attachedNames = Set(contextAttachments.map(\.name))
+                run.contextAttachments.removeAll { attachedNames.contains($0.name) }
+                run.contextAttachments.append(contentsOf: contextAttachments)
+            }
+        }
+
         if let runtime = runtime(for: agent) {
-            recorder.record(runId: runId, type: .userMessage, message: trimmedMessage)
+            recordUserMessage(
+                runId: runId,
+                message: trimmedMessage,
+                contextAttachments: contextAttachments
+            )
             repository.updateRun(runId) { run in
                 run.status = .running
             }
@@ -191,7 +259,11 @@ final class HarnessEngine {
             return
         }
 
-        recorder.record(runId: runId, type: .userMessage, message: trimmedMessage)
+        recordUserMessage(
+            runId: runId,
+            message: trimmedMessage,
+            contextAttachments: contextAttachments
+        )
         repository.updateRun(runId) { run in
             run.status = .running
         }
@@ -206,8 +278,9 @@ final class HarnessEngine {
             await activeSession.runtime.cancel(sessionId: activeSession.sessionId)
             activeRuntimeSessions.removeValue(forKey: runId)
         }
+        await multiAgentCoordinator.cancel(runId: runId)
         repository.updateRun(runId) { $0.status = .cancelled }
-        recorder.record(runId: runId, type: .runCancelled, message: "Run cancelled.", metadata: ["reason": "remote-control"])
+        recorder.record(runId: runId, type: .runCancelled, message: "Run cancelled.", metadata: ["reason": "user-requested"])
     }
 
     private func runSimpleChatLoop(runId: UUID, prompt: String, agent: Agent, provider: any AIProvider) async {
@@ -227,6 +300,7 @@ final class HarnessEngine {
             var completedMessage = ""
 
             for try await event in stream {
+                guard repository.run(withId: runId)?.status != .cancelled else { return }
                 switch event {
                 case .started:
                     recorder.record(runId: runId, type: .providerRequestStarted, message: "Provider stream opened.", metadata: ["providerId": provider.id])
@@ -251,6 +325,7 @@ final class HarnessEngine {
                 }
             }
 
+            guard repository.run(withId: runId)?.status != .cancelled else { return }
             repository.updateRun(runId) { run in
                 run.status = .completed
             }
@@ -271,6 +346,7 @@ final class HarnessEngine {
             currentProject: currentProject,
             rootPath: currentProject?.rootPath,
             contextFoldSummary: latestContextFoldSummary(for: runId),
+            contextAttachments: repository.run(withId: runId)?.contextAttachments ?? [],
             memoryItems: currentProjectMemory(for: currentProject),
             ragResults: ragResults,
             tokenBudget: defaultTokenBudget(for: agent)
@@ -292,7 +368,11 @@ final class HarnessEngine {
         return snapshot
     }
 
-    private func startAgentRuntimeRun(goal: String, runtime: AgentRuntime) async -> UUID {
+    private func startAgentRuntimeRun(
+        goal: String,
+        runtime: AgentRuntime,
+        contextAttachments: [RunContextAttachment]
+    ) async -> UUID {
         let agent = Agent(
             role: .coder,
             providerId: "agent-runtime:\(runtime.id)",
@@ -303,11 +383,12 @@ final class HarnessEngine {
             projectId: projectService?.currentProject?.id,
             goal: goal,
             mode: .codingLoop,
-            agents: [agent]
+            agents: [agent],
+            contextAttachments: contextAttachments
         )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal)
-        recorder.record(runId: run.id, type: .userMessage, message: goal)
+        recordUserMessage(runId: run.id, message: goal, contextAttachments: contextAttachments)
         await runAgentRuntimeTask(runId: run.id, prompt: goal, agent: agent, runtime: runtime)
         return run.id
     }
@@ -345,6 +426,7 @@ final class HarnessEngine {
             var hasStreamedText = false
 
             for try await event in execution.events {
+                guard repository.run(withId: runId)?.status != .cancelled else { break }
                 switch event {
                 case .textDelta(let delta):
                     assistantMessage += delta
@@ -359,6 +441,7 @@ final class HarnessEngine {
                         run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
                     }
                 case .finished(let response):
+                    guard repository.run(withId: runId)?.status != .cancelled else { break }
                     if !assistantMessage.isEmpty && !hasStreamedText {
                         recorder.record(runId: runId, type: .assistantMessage, message: assistantMessage, metadata: ["source": "acp"])
                     }
@@ -451,11 +534,29 @@ final class HarnessEngine {
         recorder.record(runId: runId, type: .runFailed, message: message)
     }
 
-    private func createFailedRun(goal: String, message: String) -> UUID {
+    private func recordUserMessage(
+        runId: UUID,
+        message: String,
+        contextAttachments: [RunContextAttachment]
+    ) {
+        var metadata: [String: String] = [:]
+        if !contextAttachments.isEmpty {
+            metadata["attachmentCount"] = "\(contextAttachments.count)"
+            metadata["attachmentNames"] = contextAttachments.map(\.name).joined(separator: ", ")
+        }
+        recorder.record(runId: runId, type: .userMessage, message: message, metadata: metadata)
+    }
+
+    private func createFailedRun(
+        goal: String,
+        message: String,
+        contextAttachments: [RunContextAttachment] = []
+    ) -> UUID {
         let run = Run(
             projectId: projectService?.currentProject?.id,
             goal: goal,
-            status: .failed
+            status: .failed,
+            contextAttachments: contextAttachments
         )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal)

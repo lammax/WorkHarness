@@ -21,6 +21,8 @@ extension MainScreen {
 
         enum Composer {
             static let padding: CGFloat = 12
+            static let errorHorizontalPadding: CGFloat = 12
+            static let errorBottomPadding: CGFloat = 8
         }
 
         enum Header {

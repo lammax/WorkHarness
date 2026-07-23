@@ -16,6 +16,7 @@ struct Run: Identifiable, Codable, Equatable {
     var agents: [Agent]
     var events: [RunEvent]
     var artifacts: [RunArtifact]
+    var contextAttachments: [RunContextAttachment]
     var tokenUsage: TokenUsage
     var costUsage: CostUsage
     let createdAt: Date
@@ -30,6 +31,7 @@ struct Run: Identifiable, Codable, Equatable {
         agents: [Agent] = [],
         events: [RunEvent] = [],
         artifacts: [RunArtifact] = [],
+        contextAttachments: [RunContextAttachment] = [],
         tokenUsage: TokenUsage = TokenUsage(),
         costUsage: CostUsage = CostUsage(),
         createdAt: Date = Date(),
@@ -43,10 +45,31 @@ struct Run: Identifiable, Codable, Equatable {
         self.agents = agents
         self.events = events
         self.artifacts = artifacts
+        self.contextAttachments = contextAttachments
         self.tokenUsage = tokenUsage
         self.costUsage = costUsage
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
+        goal = try container.decode(String.self, forKey: .goal)
+        mode = try container.decode(RunMode.self, forKey: .mode)
+        status = try container.decode(RunStatus.self, forKey: .status)
+        agents = try container.decode([Agent].self, forKey: .agents)
+        events = try container.decode([RunEvent].self, forKey: .events)
+        artifacts = try container.decode([RunArtifact].self, forKey: .artifacts)
+        contextAttachments = try container.decodeIfPresent(
+            [RunContextAttachment].self,
+            forKey: .contextAttachments
+        ) ?? []
+        tokenUsage = try container.decode(TokenUsage.self, forKey: .tokenUsage)
+        costUsage = try container.decode(CostUsage.self, forKey: .costUsage)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }
 

@@ -5,7 +5,7 @@
 // Created by Auto (Codex) on 07.07.2026.
 //
 
-import CoreGraphics
+import SwiftUI
 
 extension MainScreen {
     enum ComposerViewDesign {
@@ -19,8 +19,23 @@ extension MainScreen {
         static let modeLabel = "Run mode"
         static let simpleModeLabel = "Chat"
         static let multiAgentModeLabel = "Multi-Agent"
-        static let sendingIcon = "hourglass"
         static let sendIcon = "paperplane.fill"
+        static let stopIcon = "stop.fill"
+        static let attachIcon = "paperclip"
         static let sendHelp = "Send"
+        static let stopHelp = "Stop current run"
+        static let stopColor = Color.red
+        static let attachHelp = "Attach read-only context file"
+
+        enum Attachment {
+            static let spacing: CGFloat = 8
+            static let contentSpacing: CGFloat = 6
+            static let horizontalPadding: CGFloat = 10
+            static let verticalPadding: CGFloat = 6
+            static let nameLineLimit = 1
+            static let fileIcon = "doc.text"
+            static let removeIcon = "xmark"
+            static let removeHelp = "Remove attachment"
+        }
     }
 }

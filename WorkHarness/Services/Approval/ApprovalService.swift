@@ -12,12 +12,19 @@ final class ApprovalService: ApprovalServiceProtocol {
     private let repository: ApprovalRepositoryProtocol
     private let runRepository: RunRepository
     private let recorder: RunRecorder
+    private let appSettingsService: AppSettingsServiceProtocol
     private var decisionWaiters: [UUID: CheckedContinuation<ApprovalStatus, Never>] = [:]
 
-    init(repository: ApprovalRepositoryProtocol, runRepository: RunRepository, recorder: RunRecorder) {
+    init(
+        repository: ApprovalRepositoryProtocol,
+        runRepository: RunRepository,
+        recorder: RunRecorder,
+        appSettingsService: AppSettingsServiceProtocol
+    ) {
         self.repository = repository
         self.runRepository = runRepository
         self.recorder = recorder
+        self.appSettingsService = appSettingsService
     }
 
     var requests: [ApprovalRequest] {
@@ -41,7 +48,16 @@ final class ApprovalService: ApprovalServiceProtocol {
             message: title,
             metadata: approvalMetadata(for: request)
         )
-        return request
+        guard appSettingsService.defaultSafetyMode == .autoInsideSandbox else {
+            return request
+        }
+
+        try decide(
+            requestId: request.id,
+            status: .granted,
+            eventType: .approvalGranted
+        )
+        return repository.request(withId: request.id) ?? request
     }
 
     func waitForDecision(requestId: UUID) async -> ApprovalStatus {

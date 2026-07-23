@@ -49,6 +49,9 @@ final class ToolService: ToolServiceProtocol {
                 summary: approvalRequirement.summary,
                 mode: approvalRequirement.mode
             )
+            if approval.status == .granted {
+                return try await invokeMCP(request, tool: tool, metadata: metadata)
+            }
 
             return ToolResult(
                 toolId: tool.id,

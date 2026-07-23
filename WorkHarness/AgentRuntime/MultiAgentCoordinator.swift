@@ -39,8 +39,15 @@ struct MultiAgentExecutionResult: Equatable {
 
 @MainActor
 final class MultiAgentCoordinator {
+    private struct ActiveSession {
+        let runtime: AgentRuntime
+        let sessionId: UUID
+    }
+
     private let repository: RunRepository
     private let recorder: RunRecorder
+    private var activeSessionsByRunId: [UUID: [UUID: ActiveSession]] = [:]
+    private var cancelledRunIds: Set<UUID> = []
 
     init(repository: RunRepository, recorder: RunRecorder) {
         self.repository = repository
@@ -56,10 +63,17 @@ final class MultiAgentCoordinator {
         workingDirectory: String? = nil,
         configuration: MultiAgentRunConfiguration
     ) async throws -> MultiAgentExecutionResult {
+        cancelledRunIds.remove(runId)
+        defer {
+            activeSessionsByRunId.removeValue(forKey: runId)
+            cancelledRunIds.remove(runId)
+        }
+
         var results: [MultiAgentStepResult] = []
         var completedStepIds: Set<UUID> = []
 
         while completedStepIds.count < plan.steps.count {
+            try ensureRunIsActive(runId)
             let readySteps = plan.steps.filter { step in
                 !completedStepIds.contains(step.id) && step.dependsOn.allSatisfy(completedStepIds.contains)
             }
@@ -124,6 +138,15 @@ final class MultiAgentCoordinator {
         return MultiAgentExecutionResult(planId: plan.id, steps: results)
     }
 
+    func cancel(runId: UUID) async {
+        cancelledRunIds.insert(runId)
+        let sessions = activeSessionsByRunId[runId]?.values.map { $0 } ?? []
+
+        for session in sessions {
+            await session.runtime.cancel(sessionId: session.sessionId)
+        }
+    }
+
     private func executeStep(
         _ step: AgentPlanStep,
         plan: AgentExecutionPlan,
@@ -135,6 +158,7 @@ final class MultiAgentCoordinator {
         previousResults: [MultiAgentStepResult],
         configuration: MultiAgentRunConfiguration
     ) async throws -> MultiAgentStepResult {
+            try ensureRunIsActive(runId)
             guard let candidate = candidates.first(where: { $0.agent.id == step.agentId }),
                   let runtime = runtimes[step.agentId] else {
                 throw MultiAgentCoordinatorError.missingRuntime(step.agentId)
@@ -143,6 +167,16 @@ final class MultiAgentCoordinator {
             let roleConfiguration = configuration.configuration(for: step.role)
             runtime.configure(modelId: roleConfiguration?.modelOverride ?? candidate.agent.model, runId: runId)
             let session = try await runtime.connect()
+            do {
+                try ensureRunIsActive(runId)
+            } catch {
+                await runtime.disconnect(sessionId: session.id)
+                throw error
+            }
+            activeSessionsByRunId[runId, default: [:]][step.id] = ActiveSession(
+                runtime: runtime,
+                sessionId: session.id
+            )
             let metadata = [
                 "planId": plan.id.uuidString,
                 "planStepId": step.id.uuidString,
@@ -170,6 +204,7 @@ final class MultiAgentCoordinator {
                 )
 
                 for try await event in execution.events {
+                    try ensureRunIsActive(runId)
                     switch event {
                     case .textDelta(let delta):
                         output += delta
@@ -200,6 +235,7 @@ final class MultiAgentCoordinator {
                     }
                 }
 
+                try ensureRunIsActive(runId)
                 recorder.record(runId: runId, type: .agentFinished, message: "\(step.role.label) finished.", metadata: metadata)
                 let result = MultiAgentStepResult(
                     stepId: step.id,
@@ -208,12 +244,20 @@ final class MultiAgentCoordinator {
                     output: output,
                     sessionId: session.id
                 )
+                activeSessionsByRunId[runId]?.removeValue(forKey: step.id)
                 await runtime.disconnect(sessionId: session.id)
                 return result
             } catch {
+                activeSessionsByRunId[runId]?.removeValue(forKey: step.id)
                 await runtime.disconnect(sessionId: session.id)
                 throw error
             }
+    }
+
+    private func ensureRunIsActive(_ runId: UUID) throws {
+        guard !cancelledRunIds.contains(runId), !Task.isCancelled else {
+            throw MultiAgentCoordinatorError.cancelled
+        }
     }
 
     private func prompt(for step: AgentPlanStep, goal: String, previousResults: [MultiAgentStepResult], instructions: String) -> String {
@@ -227,12 +271,14 @@ enum MultiAgentCoordinatorError: LocalizedError, Equatable {
     case missingRuntime(UUID)
     case stepFailed(UUID, String)
     case invalidPlan
+    case cancelled
 
     var errorDescription: String? {
         switch self {
         case .missingRuntime(let agentId): "No runtime registered for agent \(agentId.uuidString)."
         case .stepFailed(_, let message): "Multi-agent step failed: \(message)"
         case .invalidPlan: "Multi-agent execution plan contains unresolved dependencies."
+        case .cancelled: "Multi-agent run was cancelled."
         }
     }
 }

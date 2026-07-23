@@ -20,6 +20,8 @@ final class CLIAgentSubprocessTransport: CLIAgentProcessTransport {
         var isInputClosed = false
         var timeoutTask: Task<Void, Never>?
         var continuationReference: AsyncThrowingStream<CLIAgentProcessEvent, Error>.Continuation?
+        var standardOutputDecoder = UTF8StreamDecoder()
+        var standardErrorDecoder = UTF8StreamDecoder()
 
         process.executableURL = configuration.executableURL
         process.arguments = configuration.arguments
@@ -36,6 +38,14 @@ final class CLIAgentSubprocessTransport: CLIAgentProcessTransport {
             outputPipe.fileHandleForReading.readabilityHandler = nil
             errorPipe.fileHandleForReading.readabilityHandler = nil
             try? inputPipe.fileHandleForWriting.close()
+            let remainingStandardOutput = standardOutputDecoder.finish()
+            if !remainingStandardOutput.isEmpty {
+                continuationReference?.yield(.stdout(remainingStandardOutput))
+            }
+            let remainingStandardError = standardErrorDecoder.finish()
+            if !remainingStandardError.isEmpty {
+                continuationReference?.yield(.stderr(remainingStandardError))
+            }
             continuationReference?.yield(.finished(ProcessExit(status: status, exitCode: exitCode)))
             continuationReference?.finish()
         }
@@ -45,13 +55,17 @@ final class CLIAgentSubprocessTransport: CLIAgentProcessTransport {
 
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
-                guard !data.isEmpty, let output = String(data: data, encoding: .utf8), !output.isEmpty else { return }
+                guard !data.isEmpty else { return }
+                let output = standardOutputDecoder.decode(data)
+                guard !output.isEmpty else { return }
                 continuation.yield(.stdout(output))
             }
 
             errorPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
-                guard !data.isEmpty, let output = String(data: data, encoding: .utf8), !output.isEmpty else { return }
+                guard !data.isEmpty else { return }
+                let output = standardErrorDecoder.decode(data)
+                guard !output.isEmpty else { return }
                 continuation.yield(.stderr(output))
             }
 

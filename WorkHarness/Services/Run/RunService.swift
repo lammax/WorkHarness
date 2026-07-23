@@ -45,12 +45,34 @@ final class RunService: RunServiceProtocol {
         await harnessEngine.startRun(goal: goal, mode: mode, configuration: configuration)
     }
 
+    func startRun(
+        goal: String,
+        mode: RunMode,
+        configuration: MultiAgentRunConfiguration,
+        contextAttachments: [RunContextAttachment]
+    ) async -> UUID? {
+        await harnessEngine.startRun(
+            goal: goal,
+            mode: mode,
+            configuration: configuration,
+            contextAttachments: contextAttachments
+        )
+    }
+
     func cancelRun(runId: UUID) async {
         await harnessEngine.cancelRun(runId: runId)
     }
 
     func sendMessage(runId: UUID, message: String) async {
         await harnessEngine.sendMessage(runId: runId, message: message)
+    }
+
+    func sendMessage(runId: UUID, message: String, contextAttachments: [RunContextAttachment]) async {
+        await harnessEngine.sendMessage(
+            runId: runId,
+            message: message,
+            contextAttachments: contextAttachments
+        )
     }
 
     func compactContext(runId: UUID) -> ContextFoldSummary? {

@@ -38,6 +38,15 @@ final class ContextBuilder: ContextBuilderProtocol {
             contextItems.append("Selected files: \(input.selectedFiles.joined(separator: ", "))")
         }
 
+        for attachment in input.contextAttachments {
+            contextItems.append("""
+            Attached read-only file "\(attachment.name)" (the original external path is intentionally unavailable):
+            --- BEGIN ATTACHMENT \(attachment.name) ---
+            \(attachment.content)
+            --- END ATTACHMENT \(attachment.name) ---
+            """)
+        }
+
         if !input.memoryItems.isEmpty {
             contextItems.append("Project memory:\n\(input.memoryItems.joined(separator: "\n"))")
         }
@@ -64,7 +73,7 @@ final class ContextBuilder: ContextBuilderProtocol {
             rootPath: rootPath,
             summary: summary,
             contextItems: contextItems,
-            includedFiles: input.selectedFiles,
+            includedFiles: input.selectedFiles + input.contextAttachments.map(\.name),
             includedMemories: input.memoryItems,
             includedRAGResults: input.ragResults,
             includedSummaries: includedSummaries,

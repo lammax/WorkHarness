@@ -264,6 +264,16 @@ extension MainScreen {
                     }
                     .pickerStyle(.segmented)
 
+                    Toggle(
+                        Design.AppSettings.autoApproveWorkspaceActionsTitle,
+                        isOn: $viewModel.autoApproveWorkspaceActions
+                    )
+                    .toggleStyle(.checkbox)
+
+                    Text(Design.AppSettings.autoApproveWorkspaceActionsDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     SettingsTextField(
                         title: Design.AppSettings.mcpBasePathTitle,
                         placeholder: Design.AppSettings.mcpBasePathPlaceholder,
