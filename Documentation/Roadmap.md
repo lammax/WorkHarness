@@ -934,7 +934,38 @@ Scope:
 Done when:
 The desktop app exposes controlled, authenticated Run state and approval operations for a future mobile client.
 
-## Step 21 - Mobile Remote Client v1
+## Step 21 - Claude Code CLI Agent Runtime v1
+
+Status: In progress. The provider-agnostic CLI subprocess foundation now supports executable discovery, bidirectional stdin/stdout, stderr, timeout and cancellation. Claude stream-json parsing, runtime registration, MCP routing, approvals and Settings integration remain.
+
+Goal:
+Integrate locally installed Claude Code as a full coding `AgentRuntime`.
+
+Architecture:
+
+```text
+WorkHarness
+  -> AgentRuntime
+  -> ClaudeCLIRuntime
+  -> Claude Code stream-json
+  -> approved MCP_server tools
+```
+
+Implementation order:
+
+1. Add a reusable CLI AgentRuntime subprocess transport and executable discovery.
+2. Add runtime-owned metadata, capability and model configuration.
+3. Parse Claude `stream-json` into provider-agnostic `AgentEvent` values.
+4. Implement Claude session lifecycle, continuation, cancellation and usage mapping.
+5. Generate strict per-Run MCP configuration and disable direct mutating built-in tools.
+6. Route mutating MCP operations through the shared WorkHarness approval flow.
+7. Add Claude availability, authentication, runtime and model selection to Settings.
+8. Add fixture, process, Run integration and approval tests.
+
+Done when:
+Claude Code can be selected as an AgentRuntime, execute a coding Run with streamed events, use only approved MCP tools, participate in the shared approval flow and remain invisible as a concrete implementation above the AgentRuntime boundary.
+
+## Step 22 - Mobile Remote Client v1
 
 Status: Planned. The WorkHarness API is ready for a separate mobile client; no mobile target is introduced into the macOS application until the API contract is stable.
 

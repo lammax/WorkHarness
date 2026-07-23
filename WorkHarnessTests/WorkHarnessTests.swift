@@ -841,6 +841,63 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func agentExecutableLocatorFindsExecutableOnConfiguredPath() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executableURL = directory.appendingPathComponent("fake-agent")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executableURL)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: executableURL.path
+        )
+
+        let locatedURL = AgentExecutableLocator.find(
+            named: "fake-agent",
+            searchPath: directory.path,
+            homeDirectoryURL: directory
+        )
+
+        #expect(locatedURL == executableURL)
+    }
+
+    @MainActor
+    @Test func cliAgentTransportSupportsInputOutputAndCleanExit() async throws {
+        let transport = CLIAgentSubprocessTransport()
+        let session = try transport.start(CLIAgentProcessConfiguration(
+            executableURL: URL(fileURLWithPath: "/bin/cat"),
+            timeout: 2
+        ))
+
+        try session.sendLine("cli-agent-round-trip")
+        session.closeInput()
+
+        var events: [CLIAgentProcessEvent] = []
+        for try await event in session.events {
+            events.append(event)
+        }
+
+        #expect(events.contains { if case .started = $0 { true } else { false } })
+        #expect(events.contains(.stdout("cli-agent-round-trip\n")))
+        #expect(events.last == .finished(ProcessExit(status: .succeeded, exitCode: 0)))
+    }
+
+    @MainActor
+    @Test func cliAgentTransportCancelsRunningProcess() async throws {
+        let transport = CLIAgentSubprocessTransport()
+        let session = try transport.start(CLIAgentProcessConfiguration(
+            executableURL: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "sleep 2"]
+        ))
+        var iterator = session.events.makeAsyncIterator()
+        _ = try await iterator.next()
+
+        session.cancel()
+        let finishedEvent = try await iterator.next()
+
+        #expect(finishedEvent == .finished(ProcessExit(status: .cancelled, exitCode: nil)))
+    }
+
+    @MainActor
     @Test func providerServiceSelectsActiveProvider() async throws {
         let settingsService = InMemoryAppSettingsService()
         let providerService = ProviderService(
