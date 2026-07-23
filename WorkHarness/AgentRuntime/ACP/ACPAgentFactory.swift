@@ -11,11 +11,36 @@ struct ACPAgentDefinition: Equatable {
     var id: String
     var displayName: String
     var subprocess: ACPSubprocessConfiguration
+    var modelOptions: [AgentRuntimeModelOption]
+    var defaultModelId: String?
+    var capabilities: AgentCapabilities
 
-    init(id: String, displayName: String, subprocess: ACPSubprocessConfiguration) {
+    init(
+        id: String,
+        displayName: String,
+        subprocess: ACPSubprocessConfiguration,
+        modelOptions: [AgentRuntimeModelOption] = [],
+        defaultModelId: String? = nil,
+        capabilities: AgentCapabilities = AgentCapabilities()
+    ) {
         self.id = id
         self.displayName = displayName
         self.subprocess = subprocess
+        self.modelOptions = modelOptions
+        self.defaultModelId = defaultModelId
+        self.capabilities = capabilities
+    }
+
+    var descriptor: AgentRuntimeDescriptor {
+        AgentRuntimeDescriptor(
+            id: id,
+            displayName: displayName,
+            transport: .acp,
+            authentication: .runtimeManaged,
+            modelOptions: modelOptions,
+            defaultModelId: defaultModelId,
+            capabilities: capabilities
+        )
     }
 }
 
@@ -38,7 +63,7 @@ final class ACPAgentFactory: AgentFactory {
             workingDirectory: definition.subprocess.workingDirectoryURL,
             approvalService: approvalService
         )
-        return ACPClientRuntime(client: client)
+        return ACPClientRuntime(client: client, descriptor: definition.descriptor)
     }
 }
 
@@ -51,7 +76,22 @@ enum ACPAgentDefinitions {
             subprocess: ACPSubprocessConfiguration(
                 executableURL: executableURL,
                 arguments: ["acp"]
-            )
+            ),
+            modelOptions: CursorACPModelOption.allCases.map {
+                AgentRuntimeModelOption(id: $0.id, title: $0.title)
+            },
+            defaultModelId: CursorACPModelOption.defaultModel.id,
+            capabilities: AgentCapabilities([
+                .canEditFiles,
+                .canSearch,
+                .canPlan,
+                .canUseTools,
+                .canStreamTokens,
+                .canExecuteTerminal,
+                .canReadGit,
+                .canRunTests,
+                .canOpenDiff
+            ])
         )
     }
 }

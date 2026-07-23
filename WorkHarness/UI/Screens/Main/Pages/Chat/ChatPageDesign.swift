@@ -113,6 +113,7 @@ extension MainScreen {
             static let title = "Execution plan"
             static let icon = "point.3.connected.trianglepath.dotted"
             static let arrowIcon = "chevron.right"
+            static let runtimeDefaultModelTitle = "Runtime default"
             static let modelPickerWidth: CGFloat = 150
         }
     }

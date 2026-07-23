@@ -15,13 +15,21 @@ extension Container {
                 FileWriteTool(),
                 ShellTool(),
                 GitTool(),
-                RAGSearchTool(),
-                MCPToolAdapter()
+                RAGSearchTool()
             ])
         }.inObjectScope(.container)
 
-        register(MCPToolClientProtocol.self) { _ in
-            MCPToolClient()
+        register(MCPServerProcessSupervisorProtocol.self) { resolver in
+            let settings = resolver.resolve(AppSettingsServiceProtocol.self)!
+            return MCPServerProcessSupervisor {
+                settings.mcpServerBasePath
+            }
+        }.inObjectScope(.container)
+
+        register(MCPToolClientProtocol.self) { resolver in
+            MCPToolClient(transport: MCPHTTPToolTransport(
+                serverSupervisor: resolver.resolve(MCPServerProcessSupervisorProtocol.self)!
+            ))
         }.inObjectScope(.container)
 
         register(ToolServiceProtocol.self) { resolver in
@@ -31,6 +39,10 @@ extension Container {
                 approvalService: resolver.resolve(ApprovalServiceProtocol.self)!,
                 recorder: resolver.resolve(RunRecorder.self)!
             )
+        }.inObjectScope(.container)
+
+        register(MCPApprovalGatewayProtocol.self) { resolver in
+            MCPApprovalGateway(toolService: resolver.resolve(ToolServiceProtocol.self)!)
         }.inObjectScope(.container)
     }
 }

@@ -40,23 +40,16 @@ final class ProcessRunner: ProcessRunnerProtocol {
         let events = AsyncThrowingStream<ProcessRunEvent, Error> { continuation in
             continuationRef = continuation
 
-            @Sendable func yieldOutput(_ event: ProcessRunEvent) {
-                Task { @MainActor in
-                    guard !didFinish else { return }
-                    continuation.yield(event)
-                }
-            }
-
             stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty, let output = String(data: data, encoding: .utf8), !output.isEmpty else { return }
-                yieldOutput(.stdout(output))
+                continuation.yield(.stdout(output))
             }
 
             stderrPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty, let output = String(data: data, encoding: .utf8), !output.isEmpty else { return }
-                yieldOutput(.stderr(output))
+                continuation.yield(.stderr(output))
             }
 
             process.terminationHandler = { process in

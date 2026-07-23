@@ -35,6 +35,67 @@ struct AgentCapabilities: Codable, Equatable {
     }
 }
 
+enum AgentRuntimeTransportKind: String, Codable, Equatable {
+    case acp
+    case cli
+
+    var label: String {
+        switch self {
+        case .acp:
+            "ACP"
+        case .cli:
+            "CLI"
+        }
+    }
+}
+
+enum AgentRuntimeAuthenticationKind: String, Codable, Equatable {
+    case notRequired
+    case runtimeManaged
+
+    var label: String {
+        switch self {
+        case .notRequired:
+            "No sign-in required"
+        case .runtimeManaged:
+            "Sign-in managed by runtime"
+        }
+    }
+}
+
+struct AgentRuntimeModelOption: Identifiable, Codable, Equatable {
+    let id: String
+    let title: String
+}
+
+struct AgentRuntimeDescriptor: Equatable {
+    let id: String
+    let displayName: String
+    let transport: AgentRuntimeTransportKind
+    let authentication: AgentRuntimeAuthenticationKind
+    let modelOptions: [AgentRuntimeModelOption]
+    let defaultModelId: String?
+    let capabilities: AgentCapabilities
+
+    init(
+        id: String,
+        displayName: String,
+        transport: AgentRuntimeTransportKind,
+        authentication: AgentRuntimeAuthenticationKind = .notRequired,
+        modelOptions: [AgentRuntimeModelOption] = [],
+        defaultModelId: String? = nil,
+        capabilities: AgentCapabilities = AgentCapabilities()
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.transport = transport
+        self.authentication = authentication
+        self.modelOptions = modelOptions
+        self.defaultModelId = defaultModelId
+        self.capabilities = capabilities
+    }
+}
+
 struct AgentTask: Identifiable, Codable, Equatable {
     let id: UUID
     var runId: UUID
@@ -127,6 +188,7 @@ struct AgentExecution {
 protocol AgentRuntime: AnyObject {
     var id: String { get }
     var displayName: String { get }
+    var descriptor: AgentRuntimeDescriptor { get }
     func configure(modelId: String?)
     func connect() async throws -> AgentSession
     func disconnect(sessionId: UUID) async
@@ -138,6 +200,14 @@ protocol AgentRuntime: AnyObject {
 }
 
 extension AgentRuntime {
+    var descriptor: AgentRuntimeDescriptor {
+        AgentRuntimeDescriptor(
+            id: id,
+            displayName: displayName,
+            transport: .cli
+        )
+    }
+
     func configure(modelId: String?, runId: UUID?) {
         configure(modelId: modelId)
     }

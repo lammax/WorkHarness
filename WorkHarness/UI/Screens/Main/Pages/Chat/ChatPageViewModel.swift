@@ -60,6 +60,10 @@ extension MainScreen {
             runService.providerName
         }
 
+        var agentModelOptions: [AgentRuntimeModelOption] {
+            runService.selectedAgentRuntimeDescriptor?.modelOptions ?? []
+        }
+
         func selectRun(_ run: Run) {
             selectedRunId = run.id
         }

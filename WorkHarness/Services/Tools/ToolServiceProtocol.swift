@@ -12,6 +12,7 @@ protocol ToolServiceProtocol: BaseServiceProtocol {
     var availableTools: [ToolDefinition] { get }
 
     func execute(_ request: ToolExecutionRequest) async throws -> ToolResult
+    func executeAwaitingApproval(_ request: ToolExecutionRequest) async throws -> ToolResult
 }
 
 extension ToolServiceProtocol {

@@ -11,9 +11,15 @@ import Foundation
 final class ACPClientRuntime: AgentRuntime {
     private let client: ACPClient
     private var sessions: [UUID: AgentSession] = [:]
+    let descriptor: AgentRuntimeDescriptor
 
-    init(client: ACPClient) {
+    init(client: ACPClient, descriptor: AgentRuntimeDescriptor? = nil) {
         self.client = client
+        self.descriptor = descriptor ?? AgentRuntimeDescriptor(
+            id: client.id,
+            displayName: client.displayName,
+            transport: .acp
+        )
     }
 
     var id: String { client.id }

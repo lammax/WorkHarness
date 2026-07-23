@@ -11,6 +11,7 @@ import Foundation
 protocol RunServiceProtocol: BaseServiceProtocol {
     var runs: [Run] { get }
     var providerName: String { get }
+    var selectedAgentRuntimeDescriptor: AgentRuntimeDescriptor? { get }
 
     func run(withId runId: UUID) -> Run?
     func startRun(goal: String) async -> UUID?

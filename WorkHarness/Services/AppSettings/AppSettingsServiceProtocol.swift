@@ -22,6 +22,9 @@ protocol AppSettingsServiceProtocol: BaseServiceProtocol {
     var remoteControlToken: String { get set }
     var ragAnswerMode: RAGAnswerMode { get set }
     var ragRetrievalSettings: RAGRetrievalSettings { get set }
+
+    func agentModelId(for runtimeId: String) -> String?
+    func setAgentModelId(_ modelId: String?, for runtimeId: String)
 }
 
 extension AppSettingsServiceProtocol {

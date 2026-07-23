@@ -25,6 +25,10 @@ final class RunService: RunServiceProtocol {
         harnessEngine.providerName
     }
 
+    var selectedAgentRuntimeDescriptor: AgentRuntimeDescriptor? {
+        harnessEngine.selectedAgentRuntimeDescriptor
+    }
+
     func run(withId runId: UUID) -> Run? {
         repository.run(withId: runId)
     }

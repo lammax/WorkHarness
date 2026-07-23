@@ -52,6 +52,10 @@ final class HarnessEngine {
         providerService.activeProviderName
     }
 
+    var selectedAgentRuntimeDescriptor: AgentRuntimeDescriptor? {
+        selectedAgentRuntime()?.descriptor
+    }
+
     func compactContext(runId: UUID) -> ContextFoldSummary? {
         guard let run = repository.run(withId: runId) else { return nil }
         let summary = contextFoldingService.fold(run: run)
@@ -89,7 +93,11 @@ final class HarnessEngine {
             model: provider.capabilities.supportedModels.first ?? "mock",
             contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
         )
-        let run = Run(goal: trimmedGoal, agents: [agent])
+        let run = Run(
+            projectId: projectService?.currentProject?.id,
+            goal: trimmedGoal,
+            agents: [agent]
+        )
 
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: trimmedGoal)
@@ -117,10 +125,15 @@ final class HarnessEngine {
         let agent = Agent(
             role: .coder,
             providerId: "agent-runtime:\(runtime.id)",
-            model: runtime.displayName,
+            model: selectedModelId(for: runtime) ?? runtime.displayName,
             contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
         )
-        let run = Run(goal: goal, mode: .multiAgent, agents: [agent])
+        let run = Run(
+            projectId: projectService?.currentProject?.id,
+            goal: goal,
+            mode: .multiAgent,
+            agents: [agent]
+        )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal, metadata: ["mode": RunMode.multiAgent.rawValue])
         recorder.record(runId: run.id, type: .userMessage, message: goal)
@@ -283,10 +296,15 @@ final class HarnessEngine {
         let agent = Agent(
             role: .coder,
             providerId: "agent-runtime:\(runtime.id)",
-            model: runtime.displayName,
+            model: selectedModelId(for: runtime) ?? runtime.displayName,
             contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
         )
-        let run = Run(goal: goal, mode: .codingLoop, agents: [agent])
+        let run = Run(
+            projectId: projectService?.currentProject?.id,
+            goal: goal,
+            mode: .codingLoop,
+            agents: [agent]
+        )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal)
         recorder.record(runId: run.id, type: .userMessage, message: goal)
@@ -304,7 +322,7 @@ final class HarnessEngine {
                 providerId: runtime.id,
                 ragResults: ragResults
             )
-            runtime.configure(modelId: appSettingsService?.defaultAgentModelId, runId: runId)
+            runtime.configure(modelId: selectedModelId(for: runtime), runId: runId)
             let session = try await runtime.connect()
             activeRuntimeSessions[runId] = (runtime, session.id)
             recorder.record(
@@ -374,6 +392,10 @@ final class HarnessEngine {
         }
     }
 
+    private func selectedModelId(for runtime: AgentRuntime) -> String? {
+        appSettingsService?.agentModelId(for: runtime.id) ?? runtime.descriptor.defaultModelId
+    }
+
     private func selectedAgentRuntime() -> AgentRuntime? {
         guard let runtimeId = appSettingsService?.defaultAgentRuntimeId else { return nil }
         return agentRuntimeRegistry.runtime(id: runtimeId)
@@ -430,7 +452,11 @@ final class HarnessEngine {
     }
 
     private func createFailedRun(goal: String, message: String) -> UUID {
-        let run = Run(goal: goal, status: .failed)
+        let run = Run(
+            projectId: projectService?.currentProject?.id,
+            goal: goal,
+            status: .failed
+        )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal)
         recorder.record(runId: run.id, type: .error, message: message)

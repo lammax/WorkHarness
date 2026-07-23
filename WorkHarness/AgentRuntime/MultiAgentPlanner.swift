@@ -74,7 +74,7 @@ struct MultiAgentRunConfiguration: Codable, Equatable {
 
     static var `default`: MultiAgentRunConfiguration {
         MultiAgentRunConfiguration(roles: CapabilityBasedAgentPlanner.defaultRoles.map {
-            MultiAgentRoleConfiguration(role: $0, modelOverride: CursorACPModelOption.defaultModel.id)
+            MultiAgentRoleConfiguration(role: $0)
         })
     }
 

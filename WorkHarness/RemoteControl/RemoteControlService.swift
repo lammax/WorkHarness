@@ -24,6 +24,7 @@ final class RemoteControlService: RemoteControlServiceProtocol {
     private let projectService: ProjectServiceProtocol
     private let approvalService: ApprovalServiceProtocol
     private let appSettingsService: AppSettingsServiceProtocol
+    private let mcpApprovalGateway: MCPApprovalGatewayProtocol
     private var listener: NWListener
     private var token: String
 
@@ -36,6 +37,7 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         projectService: ProjectServiceProtocol,
         approvalService: ApprovalServiceProtocol,
         appSettingsService: AppSettingsServiceProtocol,
+        mcpApprovalGateway: MCPApprovalGatewayProtocol,
         port: UInt16? = nil,
         token: String? = nil
     ) {
@@ -44,6 +46,7 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         self.projectService = projectService
         self.approvalService = approvalService
         self.appSettingsService = appSettingsService
+        self.mcpApprovalGateway = mcpApprovalGateway
         self.port = port ?? UInt16(clamping: appSettingsService.remoteControlPort)
         self.token = token ?? RemoteControlService.token(from: appSettingsService.remoteControlToken)
         if appSettingsService.remoteControlToken.isEmpty {
@@ -93,6 +96,10 @@ final class RemoteControlService: RemoteControlServiceProtocol {
             guard let data, let connection else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                if let request = self.mcpRequest(from: data) {
+                    await self.handleMCP(request, on: connection)
+                    return
+                }
                 if let runId = self.streamRunID(from: data) {
                     self.startEventStream(runId: runId, on: connection)
                     return
@@ -110,6 +117,56 @@ final class RemoteControlService: RemoteControlServiceProtocol {
             listener.parameters.requiredInterfaceType = .loopback
         }
         listener.parameters.allowLocalEndpointReuse = true
+    }
+
+    private func mcpRequest(from data: Data) -> (runId: UUID, body: Data)? {
+        guard let request = String(data: data, encoding: .utf8),
+              let requestLine = request.split(separator: "\r\n", omittingEmptySubsequences: false).first,
+              requestLine.hasPrefix("POST "),
+              request.contains("\r\nAuthorization: Bearer \(token)\r\n")
+                || request.contains("\r\nauthorization: Bearer \(token)\r\n"),
+              let path = requestLine.split(separator: " ").dropFirst().first.map(String.init) else {
+            return nil
+        }
+        let pathWithoutQuery = path.split(separator: "?").first.map(String.init) ?? path
+        let components = pathWithoutQuery.split(separator: "/").map(String.init)
+        guard components.count == 3,
+              components[0] == "mcp",
+              components[1] == "runs",
+              let runId = UUID(uuidString: components[2]),
+              let bodyRange = data.range(of: Data("\r\n\r\n".utf8)) else {
+            return nil
+        }
+        return (runId, data.subdata(in: bodyRange.upperBound..<data.endIndex))
+    }
+
+    private func handleMCP(
+        _ request: (runId: UUID, body: Data),
+        on connection: NWConnection
+    ) async {
+        guard let run = runRepository.run(withId: request.runId) else {
+            connection.send(
+                content: HTTPResponse.json(status: 404, body: ["error": "Run not found"]),
+                completion: .contentProcessed { _ in connection.cancel() }
+            )
+            return
+        }
+        let projectRootPath = run.projectId.flatMap { runProjectId in
+            projectService.projects.first { $0.id == runProjectId }?.rootPath
+        }
+        let gatewayResponse = await mcpApprovalGateway.handle(
+            requestBody: request.body,
+            runId: request.runId,
+            projectRootPath: projectRootPath
+        )
+        connection.send(
+            content: HTTPResponse.data(
+                status: gatewayResponse.statusCode,
+                contentType: gatewayResponse.contentType,
+                body: gatewayResponse.body
+            ),
+            completion: .contentProcessed { _ in connection.cancel() }
+        )
     }
 
     private func streamRunID(from data: Data) -> UUID? {
@@ -314,6 +371,12 @@ private enum HTTPResponse {
 
     static func json<T: Encodable>(status: Int, value: T) -> Data {
         (try? jsonData(status: status, data: value)) ?? Data()
+    }
+
+    static func data(status: Int, contentType: String, body: Data) -> Data {
+        let statusText = status == 200 ? "OK" : status == 202 ? "Accepted" : "Bad Request"
+        let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
+        return Data(header.utf8) + body
     }
 
     private static func jsonData<T: Encodable>(status: Int, data: T) throws -> Data {

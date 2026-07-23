@@ -51,7 +51,7 @@ extension MainScreen {
             self.appSettingsService = appSettingsService
             self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
             self.remoteControlService = remoteControlService
-            self.selectedAgentModelId = appSettingsService.defaultAgentModelId
+            self.selectedAgentModelId = ""
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
             self.localLLMEndpoint = appSettingsService.localLLMEndpoint
@@ -106,13 +106,20 @@ extension MainScreen {
 
         func reloadAgentRuntimes() {
             activeAgentRuntimeId = appSettingsService.defaultAgentRuntimeId
-            agentRuntimes = agentRuntimeRegistry.runtimes.map {
+            agentRuntimes = agentRuntimeRegistry.runtimes.map { runtime in
                 AgentRuntimeItem(
-                    id: $0.id,
-                    name: $0.displayName,
-                    isActive: $0.id == activeAgentRuntimeId
+                    id: runtime.id,
+                    name: runtime.displayName,
+                    isActive: runtime.id == activeAgentRuntimeId,
+                    transport: runtime.descriptor.transport.label,
+                    availability: SettingsPageDesign.AgentRuntime.availableStatus,
+                    authentication: runtime.descriptor.authentication.label,
+                    modelOptions: runtime.descriptor.modelOptions,
+                    defaultModelId: runtime.descriptor.defaultModelId,
+                    capabilities: runtime.descriptor.capabilities
                 )
             }
+            loadSelectedAgentModel()
         }
 
         func selectAgentRuntime(id runtimeId: String?) {
@@ -148,7 +155,12 @@ extension MainScreen {
             appSettingsService.remoteControlAllowLAN = remoteControlAllowLAN
             appSettingsService.remoteControlPort = remoteControlPort
             appSettingsService.remoteControlToken = remoteControlToken
-            appSettingsService.defaultAgentModelId = selectedAgentModelId
+            if let activeAgentRuntimeId {
+                appSettingsService.setAgentModelId(
+                    selectedAgentModelId.isEmpty ? nil : selectedAgentModelId,
+                    for: activeAgentRuntimeId
+                )
+            }
             appSettingsService.ragAnswerMode = ragAnswerMode
             appSettingsService.ragRetrievalSettings = currentRAGRetrievalSettings
 
@@ -161,7 +173,7 @@ extension MainScreen {
             remoteControlAllowLAN = appSettingsService.remoteControlAllowLAN
             remoteControlPort = appSettingsService.remoteControlPort
             remoteControlToken = appSettingsService.remoteControlToken
-            selectedAgentModelId = appSettingsService.defaultAgentModelId
+            loadSelectedAgentModel()
             loadRAGSettingsFromService()
             errorMessage = nil
             do {
@@ -187,7 +199,7 @@ extension MainScreen {
             remoteControlAllowLAN = AppSettingsDefaults.remoteControlAllowLAN
             remoteControlPort = AppSettingsDefaults.remoteControlPort
             remoteControlToken = AppSettingsDefaults.remoteControlToken
-            selectedAgentModelId = AppSettingsDefaults.defaultAgentModelId
+            selectedAgentModelId = selectedRuntime?.defaultModelId ?? ""
             ragAnswerMode = AppSettingsDefaults.ragAnswerMode
             ragChunkingStrategy = AppSettingsDefaults.ragRetrievalSettings.chunkingStrategy
             ragRetrievalMode = AppSettingsDefaults.ragRetrievalSettings.retrievalMode
@@ -244,7 +256,7 @@ extension MainScreen {
             remoteControlAllowLAN = appSettingsService.remoteControlAllowLAN
             remoteControlPort = appSettingsService.remoteControlPort
             remoteControlToken = appSettingsService.remoteControlToken
-            selectedAgentModelId = appSettingsService.defaultAgentModelId
+            loadSelectedAgentModel()
             loadRAGSettingsFromService()
         }
 
@@ -300,10 +312,26 @@ extension MainScreen {
                 remoteControlAllowLAN: appSettingsService.remoteControlAllowLAN,
                 remoteControlPort: appSettingsService.remoteControlPort,
                 remoteControlToken: appSettingsService.remoteControlToken,
-                agentModelId: appSettingsService.defaultAgentModelId,
+                agentModelId: persistedAgentModelId,
                 ragAnswerMode: appSettingsService.ragAnswerMode,
                 ragRetrievalSettings: appSettingsService.ragRetrievalSettings
             )
+        }
+
+        private var selectedRuntime: AgentRuntimeItem? {
+            guard let activeAgentRuntimeId else { return nil }
+            return agentRuntimes.first { $0.id == activeAgentRuntimeId }
+        }
+
+        private var persistedAgentModelId: String {
+            guard let activeAgentRuntimeId else { return "" }
+            return appSettingsService.agentModelId(for: activeAgentRuntimeId)
+                ?? selectedRuntime?.defaultModelId
+                ?? ""
+        }
+
+        private func loadSelectedAgentModel() {
+            selectedAgentModelId = persistedAgentModelId
         }
     }
 
@@ -336,6 +364,12 @@ extension MainScreen {
         var id: String
         var name: String
         var isActive: Bool
+        var transport: String
+        var availability: String
+        var authentication: String
+        var modelOptions: [AgentRuntimeModelOption]
+        var defaultModelId: String?
+        var capabilities: AgentCapabilities
     }
 
     struct ProviderCapabilityRow: Identifiable, Equatable {

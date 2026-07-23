@@ -20,7 +20,10 @@ extension MainScreen {
                 Divider()
 
                 if viewModel.draftRunMode == .multiAgent {
-                    MultiAgentPlanPreviewView(configuration: $viewModel.multiAgentConfiguration)
+                    MultiAgentPlanPreviewView(
+                        configuration: $viewModel.multiAgentConfiguration,
+                        modelOptions: viewModel.agentModelOptions
+                    )
                 }
 
                 ScrollView {
@@ -54,6 +57,7 @@ extension MainScreen {
         typealias Design = ChatPageDesign.MultiAgentPlan
 
         @Binding var configuration: MultiAgentRunConfiguration
+        let modelOptions: [AgentRuntimeModelOption]
 
         var body: some View {
             HStack(spacing: Design.spacing) {
@@ -77,10 +81,11 @@ extension MainScreen {
                         .toggleStyle(.checkbox)
                         .font(.caption)
                         Picker(roleConfiguration.role.label, selection: Binding(
-                            get: { roleConfiguration.modelOverride ?? CursorACPModelOption.defaultModel.id },
-                            set: { value in configuration.roles[index].modelOverride = value }
+                            get: { roleConfiguration.modelOverride ?? "" },
+                            set: { value in configuration.roles[index].modelOverride = value.isEmpty ? nil : value }
                         )) {
-                            ForEach(CursorACPModelOption.allCases) { model in
+                            Text(Design.runtimeDefaultModelTitle).tag("")
+                            ForEach(modelOptions) { model in
                                 Text(model.title).tag(model.id)
                             }
                         }

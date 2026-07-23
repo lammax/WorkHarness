@@ -166,6 +166,7 @@ struct WorkHarnessTests {
         let toolRegistry = try #require(container.resolve(ToolRegistry.self))
         let mcpToolClient = try #require(container.resolve(MCPToolClientProtocol.self))
         let toolService = try #require(container.resolve(ToolServiceProtocol.self))
+        let mcpApprovalGateway = try #require(container.resolve(MCPApprovalGatewayProtocol.self))
         let statisticsService = try #require(container.resolve(UsageStatisticsServiceProtocol.self))
         let statsViewModel = try #require(container.resolve(MainScreen.StatsPageViewModel.self))
         let settingsViewModel = try #require(container.resolve(MainScreen.SettingsPageViewModel.self))
@@ -182,11 +183,12 @@ struct WorkHarnessTests {
         #expect(runService.runs.isEmpty)
         #expect(approvalService.pendingRequests.isEmpty)
         #expect(processRunner is ProcessRunner)
-        #expect(agentRuntimeRegistry.runtimes.count <= 1)
+        #expect(Set(agentRuntimeRegistry.runtimes.map(\.id)).isSubset(of: ["cursor.acp", "claude.cli"]))
         #expect(contextBuilder is ContextBuilder)
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
         #expect(mcpToolClient is MCPToolClient)
-        #expect(toolService.availableTools.contains { $0.id == "mcp.invoke" })
+        #expect(toolService.availableTools.contains { $0.id == "shell.run" })
+        #expect(mcpApprovalGateway is MCPApprovalGateway)
         #expect(statisticsService.snapshot.total.runCount == 0)
         #expect(statsViewModel.isEmpty)
         #expect(settingsViewModel.activeProviderName == "Mock Local Provider")
@@ -201,13 +203,12 @@ struct WorkHarnessTests {
             FileWriteTool(),
             ShellTool(),
             GitTool(),
-            MCPToolAdapter(),
             RAGSearchTool()
         ])
 
         let ids = registry.availableTools.map(\.id).sorted()
 
-        #expect(ids == ["file.read", "file.write", "git.run", "mcp.invoke", "rag.search", "shell.run"])
+        #expect(ids == ["file.read", "file.write", "git.run", "rag.search", "shell.run"])
         #expect(try registry.tool(id: "file.read").permission == .readOnly)
         #expect(try registry.tool(id: "file.write").permission == .workspaceWrite)
     }
@@ -232,6 +233,29 @@ struct WorkHarnessTests {
         #expect(result.output == "let value = 42\n")
         #expect(mcpClient.invocations.first?.toolId == "file.read")
         #expect(eventTypes == [.toolCallRequested, .toolCallStarted, .toolCallFinished, .toolResult])
+    }
+
+    @MainActor
+    @Test func mcpToolClientRoutesHarnessToolsToExistingServers() async throws {
+        let transport = RecordingMCPToolTransport(response: MCPToolTransportResponse(
+            output: "written",
+            isError: false
+        ))
+        let client = MCPToolClient(transport: transport)
+
+        let result = try await client.invoke(MCPToolInvocation(
+            toolId: "file.write",
+            arguments: ["path": "README.md", "content": "updated"],
+            projectRootPath: "/tmp/project"
+        ))
+        let call = try #require(transport.calls.first)
+
+        #expect(result.status == .succeeded)
+        #expect(call.endpoint == URL(string: "http://127.0.0.1:3005/mcp"))
+        #expect(call.name == "project_write_file")
+        #expect(call.arguments["path"] as? String == "README.md")
+        #expect(call.arguments["project_root"] as? String == "/tmp/project")
+        #expect(call.arguments["overwrite"] as? Bool == true)
     }
 
     @MainActor
@@ -287,6 +311,99 @@ struct WorkHarnessTests {
         #expect(shellResult.status == .approvalRequired)
         #expect(gitResult.status == .approvalRequired)
         #expect(approvalRepository.requests.map(\.mode).sorted { $0.rawValue < $1.rawValue } == [.askBeforeShell, .askBeforeWrite])
+    }
+
+    @MainActor
+    @Test func toolServiceWaitsForApprovalThenInvokesMCPOnce() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Write an approved file")
+        repository.insert(run)
+        let approvalRepository = InMemoryApprovalRepository()
+        let approvalService = ApprovalService(
+            repository: approvalRepository,
+            runRepository: repository,
+            recorder: RunRecorder(repository: repository)
+        )
+        let mcpClient = FakeMCPToolClient(result: ToolResult(
+            toolId: "file.write",
+            status: .succeeded,
+            output: "written"
+        ))
+        let service = ToolService(
+            registry: ToolRegistry(tools: [FileWriteTool()]),
+            mcpClient: mcpClient,
+            approvalService: approvalService,
+            recorder: RunRecorder(repository: repository)
+        )
+
+        let execution = Task { @MainActor in
+            try await service.executeAwaitingApproval(.init(
+                runId: run.id,
+                toolId: "file.write",
+                arguments: ["path": "README.md", "content": "hello"],
+                projectRootPath: "/tmp/project"
+            ))
+        }
+        while approvalService.pendingRequests.isEmpty {
+            await Task.yield()
+        }
+        let request = try #require(approvalService.pendingRequests.first)
+        #expect(mcpClient.invocations.isEmpty)
+
+        try approvalService.approve(requestId: request.id)
+        let result = try await execution.value
+
+        #expect(result.status == .succeeded)
+        #expect(mcpClient.invocations.count == 1)
+        #expect(repository.run(withId: run.id)?.events.map(\.type) == [
+            .toolCallRequested,
+            .approvalRequested,
+            .approvalGranted,
+            .toolCallStarted,
+            .toolCallFinished,
+            .toolResult
+        ])
+    }
+
+    @MainActor
+    @Test func mcpApprovalGatewayListsAndExecutesHarnessTools() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Read a file")
+        repository.insert(run)
+        let mcpClient = FakeMCPToolClient(result: ToolResult(
+            toolId: "file.read",
+            status: .succeeded,
+            output: "contents"
+        ))
+        let gateway = MCPApprovalGateway(toolService: makeToolService(
+            repository: repository,
+            mcpClient: mcpClient,
+            tools: [FileReadTool()]
+        ))
+
+        let listResponse = await gateway.handle(
+            requestBody: Data(#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#.utf8),
+            runId: run.id,
+            projectRootPath: "/tmp/project"
+        )
+        let listObject = try #require(JSONSerialization.jsonObject(with: listResponse.body) as? [String: Any])
+        let listResult = try #require(listObject["result"] as? [String: Any])
+        let tools = try #require(listResult["tools"] as? [[String: Any]])
+
+        #expect(tools.map { $0["name"] as? String } == ["file.read"])
+
+        let callResponse = await gateway.handle(
+            requestBody: Data(#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"file.read","arguments":{"path":"README.md"}}}"#.utf8),
+            runId: run.id,
+            projectRootPath: "/tmp/project"
+        )
+        let callObject = try #require(JSONSerialization.jsonObject(with: callResponse.body) as? [String: Any])
+        let callResult = try #require(callObject["result"] as? [String: Any])
+        let content = try #require(callResult["content"] as? [[String: Any]])
+
+        #expect(callResult["isError"] as? Bool == false)
+        #expect(content.first?["text"] as? String == "contents")
+        #expect(mcpClient.invocations.first?.projectRootPath == "/tmp/project")
     }
 
     @MainActor
@@ -1032,8 +1149,10 @@ struct WorkHarnessTests {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
         let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.acp")
+        appSettings.setAgentModelId("fake-selected-model", for: "fake.acp")
         let registry = AgentRuntimeRegistry()
-        registry.register(ACPClientRuntime(client: FakeACPClient()))
+        let client = FakeACPClient()
+        registry.register(ACPClientRuntime(client: client))
         let engine = HarnessEngine(
             repository: repository,
             recorder: recorder,
@@ -1049,6 +1168,7 @@ struct WorkHarnessTests {
         #expect(run.mode == .codingLoop)
         #expect(run.agents.first?.providerId == "agent-runtime:fake.acp")
         #expect(run.status == .completed)
+        #expect(client.configuredModelId == "fake-selected-model")
         #expect(run.events.contains { $0.type == .fileChanged && $0.message == "Sources/App.swift" })
         #expect(run.events.contains { $0.type == .runCompleted })
     }
@@ -1066,6 +1186,244 @@ struct WorkHarnessTests {
         """.utf8))
 
         #expect(event == .fileChanged(path: "Sources/App.swift"))
+    }
+
+    @MainActor
+    @Test func claudeStreamJSONParserMapsChunkedOutputWithoutDuplicatingText() throws {
+        let parser = ClaudeStreamJSONParser()
+        let firstChunk = """
+        {"type":"system","subtype":"init","session_id":"session-1","model":"claude-sonnet-5"}
+        {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel
+        """
+        let secondChunk = """
+        lo"}}}
+        {"type":"assistant","message":{"content":[{"type":"text","text":"Hello"},{"type":"tool_use","id":"tool-1","name":"Read","input":{"path":"README.md"}}]}}
+        {"type":"result","subtype":"success","is_error":false,"result":"Hello","total_cost_usd":0.004,"usage":{"input_tokens":12,"output_tokens":3}}
+
+        """
+
+        let events = try parser.parse(firstChunk) + parser.parse(secondChunk) + parser.finish()
+        let usage = TokenUsage(inputTokens: 12, outputTokens: 3, totalCostUSD: Decimal(string: "0.004") ?? 0)
+
+        #expect(events == [
+            .started,
+            .textDelta("Hello"),
+            .toolCallRequested(name: "Read", input: "{\"path\":\"README.md\"}"),
+            .tokenUsage(usage),
+            .messageCompleted("Hello"),
+            .finished(AgentResponse(message: "Hello", tokenUsage: usage, artifacts: []))
+        ])
+    }
+
+    @MainActor
+    @Test func claudeStreamJSONParserMapsThinkingAndFailure() throws {
+        let parser = ClaudeStreamJSONParser()
+        let events = try parser.parse("""
+        {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"Checking project"}}}
+        {"type":"result","subtype":"error_max_turns","is_error":true,"result":"Maximum turns reached"}
+
+        """)
+
+        #expect(events == [
+            .thinking("Checking project"),
+            .failed("Maximum turns reached")
+        ])
+    }
+
+    @MainActor
+    @Test func claudeCLIRuntimeStreamsEventsAndResumesRunSession() async throws {
+        let firstOutput = """
+        {"type":"system","subtype":"init","session_id":"claude-session-1"}
+        {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"First"}}}
+        {"type":"result","subtype":"success","is_error":false,"session_id":"claude-session-1","result":"First","usage":{"input_tokens":4,"output_tokens":1}}
+
+        """
+        let secondOutput = """
+        {"type":"system","subtype":"init","session_id":"claude-session-1"}
+        {"type":"result","subtype":"success","is_error":false,"session_id":"claude-session-1","result":"Second","usage":{"input_tokens":5,"output_tokens":1}}
+
+        """
+        let transport = FakeCLIAgentProcessTransport(eventBatches: [
+            [.stdout(firstOutput), .finished(ProcessExit(status: .succeeded, exitCode: 0))],
+            [.stdout(secondOutput), .finished(ProcessExit(status: .succeeded, exitCode: 0))]
+        ])
+        let runtime = ClaudeCLIRuntime(
+            executableURL: URL(fileURLWithPath: "/tmp/claude"),
+            transport: transport
+        )
+        let runId = UUID()
+        runtime.configure(modelId: "opus", runId: runId)
+
+        let firstSession = try await runtime.connect()
+        let firstExecution = try await runtime.run(
+            task: AgentTask(runId: runId, prompt: "First", workingDirectory: "/tmp/project"),
+            sessionId: firstSession.id
+        )
+        let firstEvents = try await collectAgentEvents(firstExecution.events)
+        await runtime.disconnect(sessionId: firstSession.id)
+
+        runtime.configure(modelId: "opus", runId: runId)
+        let secondSession = try await runtime.connect()
+        let secondExecution = try await runtime.run(
+            task: AgentTask(runId: runId, prompt: "Second", workingDirectory: "/tmp/project"),
+            sessionId: secondSession.id
+        )
+        let secondEvents = try await collectAgentEvents(secondExecution.events)
+
+        #expect(firstEvents.contains(.textDelta("First")))
+        #expect(firstEvents.contains(.messageCompleted("First")))
+        #expect(secondEvents.contains(.messageCompleted("Second")))
+        #expect(transport.configurations[0].arguments.contains("opus"))
+        #expect(transport.configurations[0].workingDirectoryURL?.path == "/tmp/project")
+        #expect(transport.configurations[0].arguments.contains("--strict-mcp-config"))
+        #expect(transport.configurations[0].arguments.contains("--mcp-config"))
+        #expect(transport.configurations[0].arguments.contains("--tools"))
+        #expect(transport.configurations[0].arguments.contains("mcp__workharness__*"))
+        #expect(transport.configurations[0].arguments.contains("dontAsk"))
+        let resumeIndex = try #require(transport.configurations[1].arguments.firstIndex(of: "--resume"))
+        #expect(transport.configurations[1].arguments[resumeIndex + 1] == "claude-session-1")
+    }
+
+    @MainActor
+    @Test func claudeCLIRuntimeCancellationStopsActiveProcess() async throws {
+        let transport = FakeCLIAgentProcessTransport(eventBatches: [[]], finishesStreams: false)
+        let runtime = ClaudeCLIRuntime(
+            executableURL: URL(fileURLWithPath: "/tmp/claude"),
+            transport: transport
+        )
+        let session = try await runtime.connect()
+        _ = try await runtime.run(
+            task: AgentTask(runId: UUID(), prompt: "Long task"),
+            sessionId: session.id
+        )
+
+        await runtime.cancel(sessionId: session.id)
+
+        #expect(transport.cancellationCount == 1)
+    }
+
+    @MainActor
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["WORKHARNESS_LIVE_CLAUDE_TEST"] == "1"))
+    func liveClaudeRunReadsProjectFileThroughApprovedMCPGateway() async throws {
+        let claudeURL = try #require(AgentExecutableLocator.find(named: "claude"))
+        let projectRoot = try makeTemporaryDirectory()
+        let marker = "workharness-live-claude-\(UUID().uuidString)"
+        try marker.write(
+            to: projectRoot.appendingPathComponent("marker.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let port = Int.random(in: 20_000...50_000)
+        let token = "live-claude-test-token"
+        let settings = InMemoryAppSettingsService(
+            defaultProviderId: TestAIProvider().id,
+            defaultAgentRuntimeId: ClaudeCLIRuntime.runtimeId,
+            mcpServerBasePath: AppSettingsDefaults.mcpServerBasePath,
+            remoteControlEnabled: true,
+            remoteControlPort: port,
+            remoteControlToken: token
+        )
+        settings.setAgentModelId("sonnet", for: ClaudeCLIRuntime.runtimeId)
+
+        let runRepository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: runRepository)
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        _ = projectService.addProject(name: "Live Claude Test", rootPath: projectRoot.path)
+        let approvalService = ApprovalService(
+            repository: InMemoryApprovalRepository(),
+            runRepository: runRepository,
+            recorder: recorder
+        )
+        let serverSupervisor = MCPServerProcessSupervisor {
+            settings.mcpServerBasePath
+        }
+        let mcpClient = MCPToolClient(transport: MCPHTTPToolTransport(
+            serverSupervisor: serverSupervisor
+        ))
+        let toolService = ToolService(
+            registry: ToolRegistry(tools: [FileReadTool()]),
+            mcpClient: mcpClient,
+            approvalService: approvalService,
+            recorder: recorder
+        )
+        let gateway = MCPApprovalGateway(toolService: toolService)
+        let runtimeRegistry = AgentRuntimeRegistry()
+        let configurationFactory = ClaudeMCPConfigurationFactory {
+            ClaudeMCPConfigurationFactory.GatewaySettings(
+                baseURL: URL(string: "http://127.0.0.1:\(port)")!,
+                authorizationToken: token
+            )
+        }
+        runtimeRegistry.register(ClaudeCLIRuntime(
+            executableURL: claudeURL,
+            transport: CLIAgentSubprocessTransport(),
+            mcpConfigurationFactory: configurationFactory
+        ))
+        let engine = HarnessEngine(
+            repository: runRepository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            projectService: projectService,
+            appSettingsService: settings,
+            agentRuntimeRegistry: runtimeRegistry
+        )
+        let runService = RunService(repository: runRepository, harnessEngine: engine)
+        let remoteControl = RemoteControlService(
+            runRepository: runRepository,
+            runService: runService,
+            projectService: projectService,
+            approvalService: approvalService,
+            appSettingsService: settings,
+            mcpApprovalGateway: gateway,
+            port: UInt16(port),
+            token: token
+        )
+        try remoteControl.start()
+        defer { remoteControl.stop() }
+        for _ in 0..<50 where !remoteControl.isRunning {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(remoteControl.isRunning)
+
+        let runId = try #require(await runService.startRun(
+            goal: "Use the file.read tool to read marker.txt. Reply with the exact file content and nothing else."
+        ))
+        let run = try #require(runRepository.run(withId: runId))
+        let assistantOutput = run.events
+            .filter { $0.type == .providerStreamDelta || $0.type == .assistantMessage }
+            .map(\.message)
+            .joined()
+
+        #expect(run.status == .completed)
+        #expect(assistantOutput.contains(marker))
+        #expect(run.events.contains { $0.type == .toolCallFinished })
+    }
+
+    @MainActor
+    @Test func claudeMCPConfigurationUsesOnlyPerRunHarnessGateway() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkHarnessTests.ClaudeMCP.\(UUID().uuidString)")
+        let factory = ClaudeMCPConfigurationFactory(
+            baseDirectoryURL: rootURL,
+            gatewayBaseURL: URL(string: "http://127.0.0.1:9876")!,
+            authorizationToken: "test-token"
+        )
+        let runId = UUID()
+
+        let configuration = try factory.makeConfiguration(runId: runId)
+        let data = try Data(contentsOf: configuration.fileURL)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let servers = try #require(object["mcpServers"] as? [String: Any])
+        let server = try #require(servers["workharness"] as? [String: Any])
+
+        #expect(servers.count == 1)
+        #expect(server["type"] as? String == "http")
+        #expect(server["url"] as? String == "http://127.0.0.1:9876/mcp/runs/\(runId.uuidString)")
+        #expect((server["headers"] as? [String: String])?["Authorization"] == "Bearer test-token")
+
+        factory.removeConfiguration(at: configuration.fileURL)
+        #expect(!FileManager.default.fileExists(atPath: configuration.fileURL.path))
     }
 
     @MainActor
@@ -1097,15 +1455,23 @@ struct WorkHarnessTests {
 
     @MainActor
     @Test func acpAgentFactoryCreatesProviderAgnosticRuntime() throws {
+        let model = AgentRuntimeModelOption(id: "configured-model", title: "Configured Model")
         let definition = ACPAgentDefinition(
             id: "configured.acp",
             displayName: "Configured ACP Agent",
-            subprocess: ACPSubprocessConfiguration(executableURL: URL(fileURLWithPath: "/usr/bin/true"))
+            subprocess: ACPSubprocessConfiguration(executableURL: URL(fileURLWithPath: "/usr/bin/true")),
+            modelOptions: [model],
+            defaultModelId: model.id,
+            capabilities: AgentCapabilities([.canEditFiles])
         )
         let runtime = ACPAgentFactory(definition: definition).makeRuntime()
 
         #expect(runtime.id == "configured.acp")
         #expect(runtime.displayName == "Configured ACP Agent")
+        #expect(runtime.descriptor.transport == .acp)
+        #expect(runtime.descriptor.modelOptions == [model])
+        #expect(runtime.descriptor.defaultModelId == model.id)
+        #expect(runtime.descriptor.capabilities.supports(.canEditFiles))
     }
 
     @MainActor
@@ -1475,7 +1841,19 @@ struct WorkHarnessTests {
     @Test func settingsPageViewModelSelectsACPAgentRuntime() async throws {
         let appSettings = InMemoryAppSettingsService()
         let registry = AgentRuntimeRegistry()
-        let runtime = ACPClientRuntime(client: FakeACPClient())
+        let model = AgentRuntimeModelOption(id: "fake-model", title: "Fake Model")
+        let runtime = ACPClientRuntime(
+            client: FakeACPClient(),
+            descriptor: AgentRuntimeDescriptor(
+                id: "fake.acp",
+                displayName: "Fake ACP Agent",
+                transport: .acp,
+                authentication: .runtimeManaged,
+                modelOptions: [model],
+                defaultModelId: model.id,
+                capabilities: AgentCapabilities([.canEditFiles])
+            )
+        )
         registry.register(runtime)
         let providerService = ProviderService(
             registry: ProviderRegistry(providers: [TestAIProvider()]),
@@ -1492,6 +1870,60 @@ struct WorkHarnessTests {
         #expect(viewModel.activeAgentRuntimeId == runtime.id)
         #expect(appSettings.defaultAgentRuntimeId == runtime.id)
         #expect(viewModel.agentRuntimes.first?.isActive == true)
+        #expect(viewModel.agentRuntimes.first?.transport == "ACP")
+        #expect(viewModel.agentRuntimes.first?.availability == "Installed")
+        #expect(viewModel.agentRuntimes.first?.authentication == "Sign-in managed by runtime")
+        #expect(viewModel.agentRuntimes.first?.modelOptions == [model])
+        #expect(viewModel.selectedAgentModelId == model.id)
+    }
+
+    @MainActor
+    @Test func settingsPageViewModelPersistsModelsPerAgentRuntime() throws {
+        let appSettings = InMemoryAppSettingsService()
+        let registry = AgentRuntimeRegistry()
+        let firstRuntime = ACPClientRuntime(
+            client: FakeACPClient(id: "first.acp", displayName: "First Agent"),
+            descriptor: AgentRuntimeDescriptor(
+                id: "first.acp",
+                displayName: "First Agent",
+                transport: .acp,
+                modelOptions: [.init(id: "first-default", title: "First Default")],
+                defaultModelId: "first-default"
+            )
+        )
+        let secondRuntime = ACPClientRuntime(
+            client: FakeACPClient(id: "second.acp", displayName: "Second Agent"),
+            descriptor: AgentRuntimeDescriptor(
+                id: "second.acp",
+                displayName: "Second Agent",
+                transport: .acp,
+                modelOptions: [.init(id: "second-default", title: "Second Default")],
+                defaultModelId: "second-default"
+            )
+        )
+        registry.register(firstRuntime)
+        registry.register(secondRuntime)
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: appSettings
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        viewModel.selectAgentRuntime(id: firstRuntime.id)
+        viewModel.selectedAgentModelId = "first-custom"
+        viewModel.saveSettings()
+        viewModel.selectAgentRuntime(id: secondRuntime.id)
+        viewModel.selectedAgentModelId = "second-custom"
+        viewModel.saveSettings()
+        viewModel.selectAgentRuntime(id: firstRuntime.id)
+
+        #expect(appSettings.agentModelId(for: firstRuntime.id) == "first-custom")
+        #expect(appSettings.agentModelId(for: secondRuntime.id) == "second-custom")
+        #expect(viewModel.selectedAgentModelId == "first-custom")
     }
 
     @MainActor
@@ -1625,6 +2057,19 @@ struct WorkHarnessTests {
         #expect(second.ragRetrievalSettings.topKAfterFiltering == 6)
         #expect(second.ragRetrievalSettings.similarityThreshold == 0.5)
         #expect(second.ragRetrievalSettings.relevanceFilterMode == .heuristic)
+    }
+
+    @MainActor
+    @Test func userDefaultsAppSettingsPersistsModelsPerAgentRuntime() throws {
+        let defaults = try #require(UserDefaults(suiteName: "WorkHarnessTests.AgentModels.\(UUID().uuidString)"))
+        let first = UserDefaultsAppSettingsService(defaults: defaults)
+        first.setAgentModelId("cursor-model", for: "cursor.acp")
+        first.setAgentModelId("claude-model", for: "claude.cli")
+
+        let second = UserDefaultsAppSettingsService(defaults: defaults)
+
+        #expect(second.agentModelId(for: "cursor.acp") == "cursor-model")
+        #expect(second.agentModelId(for: "claude.cli") == "claude-model")
     }
 
     @MainActor
@@ -1973,13 +2418,18 @@ private final class FakeMCPProviderClient: MCPProviderClientProtocol {
 
 @MainActor
 private final class FakeACPClient: ACPClient {
-    let id = "fake.acp"
-    let displayName = "Fake ACP Agent"
+    let id: String
+    let displayName: String
     private let sessionId = UUID()
-    private var modelId: String?
+    private(set) var configuredModelId: String?
+
+    init(id: String = "fake.acp", displayName: String = "Fake ACP Agent") {
+        self.id = id
+        self.displayName = displayName
+    }
 
     func configure(modelId: String?) {
-        self.modelId = modelId
+        configuredModelId = modelId
     }
 
     func connect() async throws -> AgentSession {
@@ -2117,6 +2567,31 @@ private final class FakeMCPToolClient: MCPToolClientProtocol {
 }
 
 @MainActor
+private final class RecordingMCPToolTransport: MCPToolTransportProtocol {
+    struct Call {
+        let endpoint: URL
+        let name: String
+        let arguments: [String: Any]
+    }
+
+    private(set) var calls: [Call] = []
+    private let response: MCPToolTransportResponse
+
+    init(response: MCPToolTransportResponse) {
+        self.response = response
+    }
+
+    func callTool(
+        endpoint: URL,
+        name: String,
+        arguments: [String: Any]
+    ) async throws -> MCPToolTransportResponse {
+        calls.append(Call(endpoint: endpoint, name: name, arguments: arguments))
+        return response
+    }
+}
+
+@MainActor
 private final class FakeProcessRunner: ProcessRunnerProtocol {
     private let events: [ProcessRunEvent]
     private(set) var requests: [ProcessRunRequest] = []
@@ -2136,6 +2611,65 @@ private final class FakeProcessRunner: ProcessRunnerProtocol {
             continuation.finish()
         }, cancelHandler: {})
     }
+}
+
+@MainActor
+private final class FakeCLIAgentProcessTransport: CLIAgentProcessTransport {
+    private var eventBatches: [[CLIAgentProcessEvent]]
+    private let finishesStreams: Bool
+    private(set) var configurations: [CLIAgentProcessConfiguration] = []
+    private(set) var cancellationCount = 0
+
+    init(eventBatches: [[CLIAgentProcessEvent]], finishesStreams: Bool = true) {
+        self.eventBatches = eventBatches
+        self.finishesStreams = finishesStreams
+    }
+
+    func start(_ configuration: CLIAgentProcessConfiguration) throws -> CLIAgentProcessSession {
+        configurations.append(configuration)
+        let events = eventBatches.isEmpty ? [] : eventBatches.removeFirst()
+        let finishesStreams = finishesStreams
+        let control = FakeCLIProcessControl()
+
+        return CLIAgentProcessSession(
+            events: AsyncThrowingStream { continuation in
+                control.continuation = continuation
+                for event in events {
+                    continuation.yield(event)
+                }
+                if finishesStreams {
+                    continuation.finish()
+                }
+            },
+            writeHandler: { _ in },
+            closeInputHandler: {},
+            cancelHandler: { [weak self] in
+                self?.cancellationCount += 1
+                control.cancel()
+            }
+        )
+    }
+}
+
+@MainActor
+private final class FakeCLIProcessControl {
+    var continuation: AsyncThrowingStream<CLIAgentProcessEvent, Error>.Continuation?
+
+    func cancel() {
+        continuation?.yield(.finished(ProcessExit(status: .cancelled, exitCode: nil)))
+        continuation?.finish()
+    }
+}
+
+@MainActor
+private func collectAgentEvents(
+    _ stream: AsyncThrowingStream<AgentEvent, Error>
+) async throws -> [AgentEvent] {
+    var events: [AgentEvent] = []
+    for try await event in stream {
+        events.append(event)
+    }
+    return events
 }
 
 private struct AlternateAIProvider: AIProvider {

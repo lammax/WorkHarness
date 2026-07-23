@@ -189,6 +189,7 @@ Tool layer должен быть отделен от UI и Providers.
 
 В `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` уже есть готовые MCP servers, которые нужно учитывать перед добавлением новых capabilities:
 
+- `DeveloperToolsMCPServer`
 - `FileOperationsMCPServer`
 - `GitHubMCPServer`
 - `LocalLLMMCPServer`

@@ -51,9 +51,10 @@ extension MainScreen {
 
         enum AgentRuntime {
             static let pickerTitle = "Agent runtime for the next Run"
-            static let modelPickerTitle = "Cursor model"
-            static let noneTitle = "No ACP agent"
+            static let modelPickerTitle = "Agent model"
+            static let noneTitle = "No agent runtime"
             static let icon = "person.crop.circle.badge.checkmark"
+            static let availableStatus = "Installed"
         }
 
         enum AppSettings {

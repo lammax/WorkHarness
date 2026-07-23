@@ -151,16 +151,25 @@ extension MainScreen {
                 .pickerStyle(.menu)
 
                 if let activeRuntime = viewModel.agentRuntimes.first(where: { $0.id == viewModel.activeAgentRuntimeId }) {
-                    Label(activeRuntime.name, systemImage: Design.AgentRuntime.icon)
+                    Label(
+                        "\(activeRuntime.name) · \(activeRuntime.transport) · \(activeRuntime.availability)",
+                        systemImage: Design.AgentRuntime.icon
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Picker(Design.AgentRuntime.modelPickerTitle, selection: $viewModel.selectedAgentModelId) {
-                        ForEach(CursorACPModelOption.allCases) { model in
-                            Text(model.title).tag(model.id)
+                    Text(activeRuntime.authentication)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !activeRuntime.modelOptions.isEmpty {
+                        Picker(Design.AgentRuntime.modelPickerTitle, selection: $viewModel.selectedAgentModelId) {
+                            ForEach(activeRuntime.modelOptions) { model in
+                                Text(model.title).tag(model.id)
+                            }
                         }
+                        .pickerStyle(.menu)
                     }
-                    .pickerStyle(.menu)
                 }
 
                 if let selectedProvider = viewModel.selectedProvider {

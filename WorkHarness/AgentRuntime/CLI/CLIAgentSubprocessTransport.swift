@@ -43,23 +43,16 @@ final class CLIAgentSubprocessTransport: CLIAgentProcessTransport {
         let events = AsyncThrowingStream<CLIAgentProcessEvent, Error> { continuation in
             continuationReference = continuation
 
-            @Sendable func yield(_ event: CLIAgentProcessEvent) {
-                Task { @MainActor in
-                    guard !didFinish else { return }
-                    continuation.yield(event)
-                }
-            }
-
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty, let output = String(data: data, encoding: .utf8), !output.isEmpty else { return }
-                yield(.stdout(output))
+                continuation.yield(.stdout(output))
             }
 
             errorPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty, let output = String(data: data, encoding: .utf8), !output.isEmpty else { return }
-                yield(.stderr(output))
+                continuation.yield(.stderr(output))
             }
 
             process.terminationHandler = { process in

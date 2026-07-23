@@ -60,6 +60,57 @@ final class ToolService: ToolServiceProtocol {
             )
         }
 
+        return try await invokeMCP(request, tool: tool, metadata: metadata)
+    }
+
+    func executeAwaitingApproval(_ request: ToolExecutionRequest) async throws -> ToolResult {
+        let tool = try registry.tool(id: request.toolId)
+        let context = ToolExecutionContext(runId: request.runId, projectRootPath: request.projectRootPath)
+        let metadata = toolMetadata(for: request, tool: tool)
+
+        recorder.record(
+            runId: request.runId,
+            type: .toolCallRequested,
+            message: tool.displayName,
+            metadata: metadata
+        )
+
+        if let approvalRequirement = tool.approvalRequirement(for: request.arguments, context: context) {
+            let approval = try approvalService.requestApproval(
+                runId: request.runId,
+                title: approvalRequirement.title,
+                summary: approvalRequirement.summary,
+                mode: approvalRequirement.mode
+            )
+            let decision = await approvalService.waitForDecision(requestId: approval.id)
+            guard decision == .granted else {
+                let output = "Tool request rejected by the user."
+                recorder.record(
+                    runId: request.runId,
+                    type: .toolCallFailed,
+                    message: output,
+                    metadata: metadata
+                )
+                return ToolResult(
+                    toolId: tool.id,
+                    status: .failed,
+                    output: output,
+                    metadata: metadata.merging([
+                        "approvalRequestId": approval.id.uuidString,
+                        "approvalStatus": decision.rawValue
+                    ]) { _, new in new }
+                )
+            }
+        }
+
+        return try await invokeMCP(request, tool: tool, metadata: metadata)
+    }
+
+    private func invokeMCP(
+        _ request: ToolExecutionRequest,
+        tool: any ToolProtocol,
+        metadata: [String: String]
+    ) async throws -> ToolResult {
         recorder.record(runId: request.runId, type: .toolCallStarted, message: tool.displayName, metadata: metadata)
 
         do {

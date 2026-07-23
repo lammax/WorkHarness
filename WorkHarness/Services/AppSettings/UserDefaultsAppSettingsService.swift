@@ -13,6 +13,7 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         static let defaultProviderId = "appSettings.defaultProviderId"
         static let defaultAgentRuntimeId = "appSettings.defaultAgentRuntimeId"
         static let defaultAgentModelId = "appSettings.defaultAgentModelId"
+        static let agentModelIds = "appSettings.agentModelIds"
         static let defaultSafetyMode = "appSettings.defaultSafetyMode"
         static let mcpServerBasePath = "appSettings.mcpServerBasePath"
         static let localLLMEndpoint = "appSettings.localLLMEndpoint"
@@ -164,6 +165,36 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         set {
             guard let data = try? JSONEncoder().encode(newValue) else { return }
             defaults.set(data, forKey: Key.ragRetrievalSettings)
+        }
+    }
+
+    func agentModelId(for runtimeId: String) -> String? {
+        if let value = agentModelIds[runtimeId] {
+            return value
+        }
+        return runtimeId == "cursor.acp" ? defaultAgentModelId : nil
+    }
+
+    func setAgentModelId(_ modelId: String?, for runtimeId: String) {
+        var values = agentModelIds
+        values[runtimeId] = modelId
+        agentModelIds = values
+        if runtimeId == "cursor.acp", let modelId {
+            defaultAgentModelId = modelId
+        }
+    }
+
+    private var agentModelIds: [String: String] {
+        get {
+            guard let data = defaults.data(forKey: Key.agentModelIds),
+                  let values = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return [:]
+            }
+            return values
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: Key.agentModelIds)
         }
     }
 

@@ -162,6 +162,7 @@ All tool execution must go through MCP-backed tool adapters.
 
 Existing MCP server base contains these ready server targets:
 
+- `DeveloperToolsMCPServer`
 - `FileOperationsMCPServer`
 - `GitHubMCPServer`
 - `LocalLLMMCPServer`
@@ -189,7 +190,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Direction rule: MCP means `Agent -> Harness tools/resources/provider capabilities`; ACP means `Harness -> Agent`.
 - Build an embedded ACP Host / ACP Client Runtime inside WorkHarness first; do not introduce a standalone ACP server or daemon until Remote Control requires it.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` as the existing local MCP server base for MCP-backed providers/tools unless a task explicitly chooses another server.
-- Before adding a new MCP capability, check the existing server targets: `FileOperationsMCPServer`, `GitHubMCPServer`, `LocalLLMMCPServer`, `RAGMCPServer`, `SupportMCPServer`, `UtilityMCPServer`, `VisionBackendServer` and `Shared`.
+- Before adding a new MCP capability, check the existing server targets: `DeveloperToolsMCPServer`, `FileOperationsMCPServer`, `GitHubMCPServer`, `LocalLLMMCPServer`, `RAGMCPServer`, `SupportMCPServer`, `UtilityMCPServer`, `VisionBackendServer` and `Shared`.
 - Do not duplicate an existing MCP server capability inside WorkHarness as a local tool.
 - Route local LLM model providers, such as Ollama, Qwen and llama.cpp-style backends, through the same MCP-backed provider path.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer` as the existing source implementation for local LLM logic; migrate the reusable parts into the MCP server base instead of duplicating that logic inside WorkHarness.
@@ -936,7 +937,7 @@ The desktop app exposes controlled, authenticated Run state and approval operati
 
 ## Step 21 - Claude Code CLI Agent Runtime v1
 
-Status: In progress. The provider-agnostic CLI subprocess foundation now supports executable discovery, bidirectional stdin/stdout, stderr, timeout and cancellation. Claude stream-json parsing, runtime registration, MCP routing, approvals and Settings integration remain.
+Status: Done. The provider-agnostic CLI subprocess foundation supports executable discovery, bidirectional stdin/stdout, stderr, timeout and cancellation. Runtime-owned transport, capabilities, authentication and model metadata are available to Settings and multi-agent configuration, with model choices persisted independently per runtime. A chunk-aware Claude stream-json parser maps streaming text, thinking, tool calls, final messages, usage, cost and failures into provider-agnostic AgentEvents. `ClaudeCLIRuntime` owns session lifecycle, per-Run continuation through Claude session IDs, cancellation, model configuration, working directory and usage mapping. Every invocation receives an isolated per-Run MCP config containing only the authenticated WorkHarness MCP gateway; other MCP settings and all built-in tools are disabled. The gateway implements MCP initialize/list/call, resolves the Run project root and waits for the shared `ApprovalService` decision before continuing a mutating tool call. Production `MCPToolClient` transport routes file, shell, git and RAG operations to the existing MCP server package, lazily starts required local server executables and keeps execution outside WorkHarness. `DeveloperToolsMCPServer` provides workspace-scoped shell and git execution through the established MCP package pattern. An installed Claude executable is registered in `AgentRuntimeRegistry` and appears in Settings with runtime-managed sign-in and Sonnet, Opus and Fable selection. A live opt-in integration test verifies that real Claude Code can complete a Run and read a current-project file exclusively through the authenticated WorkHarness MCP gateway.
 
 Goal:
 Integrate locally installed Claude Code as a full coding `AgentRuntime`.

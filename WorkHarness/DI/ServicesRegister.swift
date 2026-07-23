@@ -27,7 +27,8 @@ extension Container {
                 runService: resolver.resolve(RunServiceProtocol.self)!,
                 projectService: resolver.resolve(ProjectServiceProtocol.self)!,
                 approvalService: resolver.resolve(ApprovalServiceProtocol.self)!,
-                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                mcpApprovalGateway: resolver.resolve(MCPApprovalGatewayProtocol.self)!
             )
         }.inObjectScope(.container)
 
