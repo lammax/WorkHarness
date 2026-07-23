@@ -77,6 +77,46 @@ extension MainScreen {
             selectedProvider?.name ?? SettingsPageDesign.ProviderFallback.noActiveProvider
         }
 
+        var activeExecutionBackendName: String {
+            activeExecutionBackend?.name ?? SettingsPageDesign.ExecutionBackend.noActiveBackend
+        }
+
+        var activeExecutionBackendId: String {
+            activeExecutionBackend?.id ?? ""
+        }
+
+        var executionBackends: [ExecutionBackendItem] {
+            let runtimes = agentRuntimes
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                .map { runtime in
+                    ExecutionBackendItem(
+                        id: ExecutionBackendItem.runtimeId(runtime.id),
+                        sourceId: runtime.id,
+                        name: runtime.name,
+                        kind: .agentRuntime,
+                        transport: runtime.transport,
+                        availability: runtime.availability,
+                        isActive: runtime.id == activeAgentRuntimeId
+                    )
+                }
+            let providerItems = providers.map { provider in
+                ExecutionBackendItem(
+                    id: ExecutionBackendItem.providerId(provider.id),
+                    sourceId: provider.id,
+                    name: provider.name,
+                    kind: .provider,
+                    transport: provider.transport,
+                    availability: provider.availability,
+                    isActive: activeAgentRuntimeId == nil && provider.id == activeProviderId
+                )
+            }
+            return runtimes + providerItems
+        }
+
+        var activeAgentRuntime: AgentRuntimeItem? {
+            selectedRuntime
+        }
+
         var hasUnsavedAppSettingsChanges: Bool {
             currentAppSettingsSnapshot != persistedAppSettingsSnapshot
         }
@@ -137,11 +177,30 @@ extension MainScreen {
         func selectProvider(id providerId: String) {
             do {
                 try providerService.selectProvider(id: providerId)
+                appSettingsService.defaultAgentRuntimeId = nil
+                activeAgentRuntimeId = nil
                 errorMessage = nil
                 reloadProviders()
+                reloadAgentRuntimes()
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+
+        func selectExecutionBackend(id backendId: String) {
+            guard let backend = executionBackends.first(where: { $0.id == backendId }) else {
+                return
+            }
+            switch backend.kind {
+            case .agentRuntime:
+                selectAgentRuntime(id: backend.sourceId)
+            case .provider:
+                selectProvider(id: backend.sourceId)
+            }
+        }
+
+        func validatedAgentModelId(for runtime: AgentRuntimeItem) -> String {
+            normalizedAgentModelId(selectedAgentModelId, for: runtime)
         }
 
         func saveSettings() {
@@ -323,6 +382,17 @@ extension MainScreen {
             return agentRuntimes.first { $0.id == activeAgentRuntimeId }
         }
 
+        private var activeExecutionBackend: ExecutionBackendItem? {
+            if let activeAgentRuntimeId {
+                return executionBackends.first {
+                    $0.kind == .agentRuntime && $0.sourceId == activeAgentRuntimeId
+                }
+            }
+            return executionBackends.first {
+                $0.kind == .provider && $0.sourceId == activeProviderId
+            }
+        }
+
         private var persistedAgentModelId: String {
             guard let activeAgentRuntimeId else { return "" }
             return appSettingsService.agentModelId(for: activeAgentRuntimeId)
@@ -331,7 +401,25 @@ extension MainScreen {
         }
 
         private func loadSelectedAgentModel() {
-            selectedAgentModelId = persistedAgentModelId
+            guard let selectedRuntime else {
+                selectedAgentModelId = ""
+                return
+            }
+            selectedAgentModelId = normalizedAgentModelId(persistedAgentModelId, for: selectedRuntime)
+        }
+
+        private func normalizedAgentModelId(
+            _ candidate: String,
+            for runtime: AgentRuntimeItem
+        ) -> String {
+            if runtime.modelOptions.contains(where: { $0.id == candidate }) {
+                return candidate
+            }
+            if let defaultModelId = runtime.defaultModelId,
+               runtime.modelOptions.contains(where: { $0.id == defaultModelId }) {
+                return defaultModelId
+            }
+            return runtime.modelOptions.first?.id ?? ""
         }
     }
 
@@ -370,6 +458,29 @@ extension MainScreen {
         var modelOptions: [AgentRuntimeModelOption]
         var defaultModelId: String?
         var capabilities: AgentCapabilities
+    }
+
+    struct ExecutionBackendItem: Identifiable, Equatable {
+        enum Kind: Equatable {
+            case agentRuntime
+            case provider
+        }
+
+        var id: String
+        var sourceId: String
+        var name: String
+        var kind: Kind
+        var transport: String
+        var availability: String
+        var isActive: Bool
+
+        static func runtimeId(_ sourceId: String) -> String {
+            "runtime:\(sourceId)"
+        }
+
+        static func providerId(_ sourceId: String) -> String {
+            "provider:\(sourceId)"
+        }
     }
 
     struct ProviderCapabilityRow: Identifiable, Equatable {

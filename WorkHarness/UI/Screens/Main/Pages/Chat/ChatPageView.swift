@@ -81,7 +81,13 @@ extension MainScreen {
                         .toggleStyle(.checkbox)
                         .font(.caption)
                         Picker(roleConfiguration.role.label, selection: Binding(
-                            get: { roleConfiguration.modelOverride ?? "" },
+                            get: {
+                                guard let modelOverride = roleConfiguration.modelOverride,
+                                      modelOptions.contains(where: { $0.id == modelOverride }) else {
+                                    return ""
+                                }
+                                return modelOverride
+                            },
                             set: { value in configuration.roles[index].modelOverride = value.isEmpty ? nil : value }
                         )) {
                             Text(Design.runtimeDefaultModelTitle).tag("")

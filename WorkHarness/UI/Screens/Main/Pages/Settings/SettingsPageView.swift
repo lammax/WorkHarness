@@ -77,7 +77,7 @@ extension MainScreen {
                     .font(.title2)
                     .fontWeight(.semibold)
 
-                Text("\(Design.Header.activeProviderPrefix)\(viewModel.activeProviderName)")
+                Text("\(Design.Header.activeBackendPrefix)\(viewModel.activeExecutionBackendName)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -92,7 +92,7 @@ extension MainScreen {
 
         private var executionTab: some View {
             Group {
-                if viewModel.providers.isEmpty {
+                if viewModel.executionBackends.isEmpty {
                     ContentUnavailableView(
                         Design.EmptyState.title,
                         systemImage: Design.EmptyState.icon,
@@ -100,19 +100,17 @@ extension MainScreen {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    executionBackend
-
                     HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
-                        providerList
+                        executionBackendList
                         Divider()
-                        providerDetails
+                        executionBackendDetails
                     }
                 }
             }
         }
 
-        private var executionBackend: some View {
-            VStack(alignment: .leading, spacing: Design.ExecutionBackend.spacing) {
+        private var executionBackendList: some View {
+            VStack(alignment: .leading, spacing: Design.BackendList.spacing) {
                 HStack {
                     Label(Design.ExecutionBackend.title, systemImage: Design.ExecutionBackend.icon)
                         .font(.headline)
@@ -124,46 +122,59 @@ extension MainScreen {
                         .foregroundStyle(.secondary)
                 }
 
-                Picker(Design.ExecutionBackend.pickerTitle, selection: Binding(
-                    get: { viewModel.activeProviderId ?? "" },
-                    set: { providerId in
-                        guard !providerId.isEmpty else { return }
-                        viewModel.selectProvider(id: providerId)
-                    }
-                )) {
-                    ForEach(viewModel.providers) { provider in
-                        Text(provider.name).tag(provider.id)
-                    }
-                }
-                .pickerStyle(.menu)
+                Text(Design.BackendList.agentSectionTitle)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
 
-                Picker(Design.AgentRuntime.pickerTitle, selection: Binding(
-                    get: { viewModel.activeAgentRuntimeId ?? "" },
-                    set: { runtimeId in
-                        viewModel.selectAgentRuntime(id: runtimeId.isEmpty ? nil : runtimeId)
-                    }
-                )) {
-                    Text(Design.AgentRuntime.noneTitle).tag("")
-                    ForEach(viewModel.agentRuntimes) { runtime in
-                        Text(runtime.name).tag(runtime.id)
-                    }
+                ForEach(viewModel.executionBackends.filter { $0.kind == .agentRuntime }) { backend in
+                    executionBackendButton(backend)
                 }
-                .pickerStyle(.menu)
 
-                if let activeRuntime = viewModel.agentRuntimes.first(where: { $0.id == viewModel.activeAgentRuntimeId }) {
-                    Label(
-                        "\(activeRuntime.name) · \(activeRuntime.transport) · \(activeRuntime.availability)",
-                        systemImage: Design.AgentRuntime.icon
+                Text(Design.BackendList.providerSectionTitle)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, Design.BackendList.sectionSpacing)
+
+                ForEach(viewModel.executionBackends.filter { $0.kind == .provider }) { backend in
+                    executionBackendButton(backend)
+                }
+            }
+            .frame(width: Design.BackendList.width, alignment: .topLeading)
+        }
+
+        private func executionBackendButton(_ backend: ExecutionBackendItem) -> some View {
+            Button {
+                viewModel.selectExecutionBackend(id: backend.id)
+            } label: {
+                ExecutionBackendRow(backend: backend)
+            }
+            .buttonStyle(.plain)
+        }
+
+        @ViewBuilder
+        private var executionBackendDetails: some View {
+            if let activeRuntime = viewModel.activeAgentRuntime {
+                VStack(alignment: .leading, spacing: Design.BackendDetails.spacing) {
+                    backendTitle(
+                        name: activeRuntime.name,
+                        id: activeRuntime.id,
+                        type: Design.BackendDetails.agentType,
+                        icon: Design.BackendRow.agentIcon
                     )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
 
+                    LabeledContent(Design.BackendDetails.transportTitle, value: activeRuntime.transport)
+                    LabeledContent(Design.BackendDetails.availabilityTitle, value: activeRuntime.availability)
                     Text(activeRuntime.authentication)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     if !activeRuntime.modelOptions.isEmpty {
-                        Picker(Design.AgentRuntime.modelPickerTitle, selection: $viewModel.selectedAgentModelId) {
+                        Picker(Design.AgentRuntime.modelPickerTitle, selection: Binding(
+                            get: { viewModel.validatedAgentModelId(for: activeRuntime) },
+                            set: { viewModel.selectedAgentModelId = $0 }
+                        )) {
                             ForEach(activeRuntime.modelOptions) { model in
                                 Text(model.title).tag(model.id)
                             }
@@ -171,27 +182,50 @@ extension MainScreen {
                         .pickerStyle(.menu)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if let selectedProvider = viewModel.selectedProvider {
+                VStack(alignment: .leading, spacing: Design.BackendDetails.spacing) {
+                    backendTitle(
+                        name: selectedProvider.name,
+                        id: selectedProvider.id,
+                        type: Design.BackendDetails.providerType,
+                        icon: Design.BackendRow.providerIcon
+                    )
 
-                if let selectedProvider = viewModel.selectedProvider {
-                    HStack(spacing: Design.ExecutionBackend.detailSpacing) {
-                        Image(systemName: Design.ExecutionBackend.selectedIcon)
-                            .foregroundStyle(.green)
+                    LabeledContent(Design.BackendDetails.transportTitle, value: selectedProvider.transport)
+                    LabeledContent(Design.BackendDetails.availabilityTitle, value: selectedProvider.availability)
 
-                        VStack(alignment: .leading, spacing: Design.ExecutionBackend.detailTextSpacing) {
-                            Text(selectedProvider.name)
-                                .font(.body)
-                                .fontWeight(.semibold)
-                            Text("\(selectedProvider.transport) · \(selectedProvider.availability)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: Design.CapabilityList.spacing) {
+                        Text(Design.CapabilityList.title)
+                            .font(.headline)
+
+                        ForEach(selectedProvider.capabilities) { capability in
+                            CapabilityRow(capability: capability)
                         }
-
-                        Spacer()
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(Design.ExecutionBackend.padding)
-            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Design.ExecutionBackend.cornerRadius))
+        }
+
+        private func backendTitle(
+            name: String,
+            id: String,
+            type: String,
+            icon: String
+        ) -> some View {
+            VStack(alignment: .leading, spacing: Design.BackendDetails.titleSpacing) {
+                Label(name, systemImage: icon)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                Text(type)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text(id)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
         }
 
         private var appSettings: some View {
@@ -285,23 +319,6 @@ extension MainScreen {
             .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Design.AppSettings.cornerRadius))
         }
 
-        private var providerList: some View {
-            VStack(alignment: .leading, spacing: Design.ProviderList.spacing) {
-                Text(Design.ProviderList.title)
-                    .font(.headline)
-
-                ForEach(viewModel.providers) { provider in
-                    Button {
-                        viewModel.selectProvider(id: provider.id)
-                    } label: {
-                        ProviderRow(provider: provider)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .frame(width: Design.ProviderList.width, alignment: .topLeading)
-        }
-
         private var ragSettings: some View {
             VStack(alignment: .leading, spacing: Design.RAGSettings.spacing) {
                 HStack {
@@ -366,50 +383,24 @@ extension MainScreen {
             .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Design.RAGSettings.cornerRadius))
         }
 
-        @ViewBuilder
-        private var providerDetails: some View {
-            if let selectedProvider = viewModel.selectedProvider {
-                VStack(alignment: .leading, spacing: Design.ProviderDetails.spacing) {
-                    VStack(alignment: .leading, spacing: Design.ProviderDetails.titleSpacing) {
-                        Text(selectedProvider.name)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Text(selectedProvider.id)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-
-                    VStack(alignment: .leading, spacing: Design.CapabilityList.spacing) {
-                        Text(Design.CapabilityList.title)
-                            .font(.headline)
-
-                        ForEach(selectedProvider.capabilities) { capability in
-                            CapabilityRow(capability: capability)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
     }
 
-    private struct ProviderRow: View {
-        typealias Design = SettingsPageDesign.ProviderRow
+    private struct ExecutionBackendRow: View {
+        typealias Design = SettingsPageDesign.BackendRow
 
-        let provider: ProviderSettingsItem
+        let backend: ExecutionBackendItem
 
         var body: some View {
             HStack(spacing: Design.spacing) {
-                Image(systemName: provider.isActive ? Design.activeIcon : Design.inactiveIcon)
-                    .foregroundStyle(provider.isActive ? .green : .secondary)
+                Image(systemName: backend.isActive ? Design.activeIcon : Design.inactiveIcon)
+                    .foregroundStyle(backend.isActive ? .green : .secondary)
                     .frame(width: Design.iconSize, height: Design.iconSize)
 
                 VStack(alignment: .leading, spacing: Design.textSpacing) {
-                    Text(provider.name)
+                    Text(backend.name)
                         .font(.body)
-                        .fontWeight(provider.isActive ? .semibold : .regular)
-                    Text(provider.id)
+                        .fontWeight(backend.isActive ? .semibold : .regular)
+                    Label(typeLabel, systemImage: typeIcon)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -419,13 +410,31 @@ extension MainScreen {
             }
             .padding(Design.padding)
             .background {
-                if provider.isActive {
+                if backend.isActive {
                     RoundedRectangle(cornerRadius: Design.cornerRadius)
                         .fill(.regularMaterial)
                 } else {
                     RoundedRectangle(cornerRadius: Design.cornerRadius)
                         .fill(Color.clear)
                 }
+            }
+        }
+
+        private var typeLabel: String {
+            switch backend.kind {
+            case .agentRuntime:
+                Design.agentType
+            case .provider:
+                Design.providerType
+            }
+        }
+
+        private var typeIcon: String {
+            switch backend.kind {
+            case .agentRuntime:
+                Design.agentIcon
+            case .provider:
+                Design.providerIcon
             }
         }
     }

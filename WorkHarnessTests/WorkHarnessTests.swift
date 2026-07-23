@@ -1865,7 +1865,7 @@ struct WorkHarnessTests {
             agentRuntimeRegistry: registry
         )
 
-        viewModel.selectAgentRuntime(id: runtime.id)
+        viewModel.selectExecutionBackend(id: MainScreen.ExecutionBackendItem.runtimeId(runtime.id))
 
         #expect(viewModel.activeAgentRuntimeId == runtime.id)
         #expect(appSettings.defaultAgentRuntimeId == runtime.id)
@@ -1875,6 +1875,18 @@ struct WorkHarnessTests {
         #expect(viewModel.agentRuntimes.first?.authentication == "Sign-in managed by runtime")
         #expect(viewModel.agentRuntimes.first?.modelOptions == [model])
         #expect(viewModel.selectedAgentModelId == model.id)
+        #expect(viewModel.activeExecutionBackendName == "Fake ACP Agent")
+        #expect(viewModel.executionBackends.contains {
+            $0.kind == .agentRuntime && $0.name == "Fake ACP Agent" && $0.isActive
+        })
+
+        let providerBackendId = MainScreen.ExecutionBackendItem.providerId(TestAIProvider().id)
+        viewModel.selectExecutionBackend(id: providerBackendId)
+
+        #expect(viewModel.activeAgentRuntimeId == nil)
+        #expect(appSettings.defaultAgentRuntimeId == nil)
+        #expect(viewModel.activeExecutionBackendId == providerBackendId)
+        #expect(viewModel.activeExecutionBackendName == TestAIProvider().displayName)
     }
 
     @MainActor
@@ -1887,7 +1899,10 @@ struct WorkHarnessTests {
                 id: "first.acp",
                 displayName: "First Agent",
                 transport: .acp,
-                modelOptions: [.init(id: "first-default", title: "First Default")],
+                modelOptions: [
+                    .init(id: "first-default", title: "First Default"),
+                    .init(id: "first-alternate", title: "First Alternate")
+                ],
                 defaultModelId: "first-default"
             )
         )
@@ -1897,7 +1912,10 @@ struct WorkHarnessTests {
                 id: "second.acp",
                 displayName: "Second Agent",
                 transport: .acp,
-                modelOptions: [.init(id: "second-default", title: "Second Default")],
+                modelOptions: [
+                    .init(id: "second-default", title: "Second Default"),
+                    .init(id: "second-alternate", title: "Second Alternate")
+                ],
                 defaultModelId: "second-default"
             )
         )
@@ -1914,16 +1932,50 @@ struct WorkHarnessTests {
         )
 
         viewModel.selectAgentRuntime(id: firstRuntime.id)
-        viewModel.selectedAgentModelId = "first-custom"
+        viewModel.selectedAgentModelId = "first-alternate"
         viewModel.saveSettings()
         viewModel.selectAgentRuntime(id: secondRuntime.id)
-        viewModel.selectedAgentModelId = "second-custom"
+        viewModel.selectedAgentModelId = "second-alternate"
         viewModel.saveSettings()
         viewModel.selectAgentRuntime(id: firstRuntime.id)
 
-        #expect(appSettings.agentModelId(for: firstRuntime.id) == "first-custom")
-        #expect(appSettings.agentModelId(for: secondRuntime.id) == "second-custom")
-        #expect(viewModel.selectedAgentModelId == "first-custom")
+        #expect(appSettings.agentModelId(for: firstRuntime.id) == "first-alternate")
+        #expect(appSettings.agentModelId(for: secondRuntime.id) == "second-alternate")
+        #expect(viewModel.selectedAgentModelId == "first-alternate")
+    }
+
+    @MainActor
+    @Test func settingsPageViewModelFallsBackFromUnavailableSavedAgentModel() {
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "claude.cli")
+        appSettings.setAgentModelId("removed-model", for: "claude.cli")
+        let runtime = ACPClientRuntime(
+            client: FakeACPClient(id: "claude.cli", displayName: "Claude"),
+            descriptor: AgentRuntimeDescriptor(
+                id: "claude.cli",
+                displayName: "Claude",
+                transport: .cli,
+                modelOptions: [
+                    .init(id: "sonnet", title: "Sonnet"),
+                    .init(id: "opus", title: "Opus")
+                ],
+                defaultModelId: "sonnet"
+            )
+        )
+        let registry = AgentRuntimeRegistry()
+        registry.register(runtime)
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: appSettings
+        )
+
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        #expect(viewModel.selectedAgentModelId == "sonnet")
+        #expect(viewModel.validatedAgentModelId(for: viewModel.agentRuntimes[0]) == "sonnet")
     }
 
     @MainActor

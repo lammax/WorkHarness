@@ -15,7 +15,7 @@ extension MainScreen {
 
         enum Header {
             static let title = "Settings"
-            static let activeProviderPrefix = "Active provider: "
+            static let activeBackendPrefix = "Execution backend: "
             static let spacing: CGFloat = 5
             static let padding: CGFloat = 16
         }
@@ -38,23 +38,31 @@ extension MainScreen {
 
         enum ExecutionBackend {
             static let title = "Execution Backend"
-            static let pickerTitle = "Backend for the next Run"
             static let nextRunLabel = "Used by new Runs"
             static let icon = "play.circle"
-            static let selectedIcon = "checkmark.circle.fill"
-            static let spacing: CGFloat = 12
-            static let detailSpacing: CGFloat = 8
-            static let detailTextSpacing: CGFloat = 3
-            static let padding: CGFloat = 12
-            static let cornerRadius: CGFloat = 8
+            static let noActiveBackend = "No backend"
         }
 
         enum AgentRuntime {
-            static let pickerTitle = "Agent runtime for the next Run"
             static let modelPickerTitle = "Agent model"
-            static let noneTitle = "No agent runtime"
-            static let icon = "person.crop.circle.badge.checkmark"
             static let availableStatus = "Installed"
+        }
+
+        enum BackendList {
+            static let agentSectionTitle = "Agent Runtimes"
+            static let providerSectionTitle = "Providers"
+            static let width: CGFloat = 300
+            static let spacing: CGFloat = 8
+            static let sectionSpacing: CGFloat = 8
+        }
+
+        enum BackendDetails {
+            static let agentType = "Agent Runtime"
+            static let providerType = "Provider"
+            static let transportTitle = "Transport"
+            static let availabilityTitle = "Availability"
+            static let spacing: CGFloat = 16
+            static let titleSpacing: CGFloat = 4
         }
 
         enum AppSettings {
@@ -88,12 +96,6 @@ extension MainScreen {
             static let tokenStep = 256
         }
 
-        enum ProviderList {
-            static let title = "Providers"
-            static let width: CGFloat = 280
-            static let spacing: CGFloat = 10
-        }
-
         enum RAGSettings {
             static let title = "Project Knowledge (RAG)"
             static let icon = "books.vertical"
@@ -116,19 +118,18 @@ extension MainScreen {
             static let thresholdStep = 0.01
         }
 
-        enum ProviderRow {
+        enum BackendRow {
             static let activeIcon = "checkmark.circle.fill"
             static let inactiveIcon = "circle"
+            static let agentIcon = "terminal"
+            static let providerIcon = "cpu"
+            static let agentType = "Agent"
+            static let providerType = "Provider"
             static let iconSize: CGFloat = 18
             static let spacing: CGFloat = 10
             static let textSpacing: CGFloat = 3
             static let padding: CGFloat = 10
             static let cornerRadius: CGFloat = 8
-        }
-
-        enum ProviderDetails {
-            static let spacing: CGFloat = 20
-            static let titleSpacing: CGFloat = 4
         }
 
         enum CapabilityList {
