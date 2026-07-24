@@ -14,6 +14,7 @@ extension MainScreen {
     final class ChatPageViewModel {
         private let runService: RunServiceProtocol
         private let contextAttachmentService: RunContextAttachmentServiceProtocol
+        private let agentProfileService: AgentProfileServiceProtocol?
         private var submissionTask: Task<Void, Never>?
 
         var selectedRunId: UUID?
@@ -27,16 +28,20 @@ extension MainScreen {
 
         init(
             runService: RunServiceProtocol,
-            contextAttachmentService: RunContextAttachmentServiceProtocol
+            contextAttachmentService: RunContextAttachmentServiceProtocol,
+            agentProfileService: AgentProfileServiceProtocol? = nil
         ) {
             self.runService = runService
             self.contextAttachmentService = contextAttachmentService
+            self.agentProfileService = agentProfileService
+            self.multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? .default
         }
 
         convenience init(runService: RunServiceProtocol) {
             self.init(
                 runService: runService,
-                contextAttachmentService: RunContextAttachmentService()
+                contextAttachmentService: RunContextAttachmentService(),
+                agentProfileService: nil
             )
         }
 
@@ -45,8 +50,13 @@ extension MainScreen {
         }
 
         var selectedRun: Run? {
-            guard let selectedRunId else { return runs.first }
-            return runService.run(withId: selectedRunId)
+            if let selectedRunId {
+                return runService.run(withId: selectedRunId)
+            }
+            guard isSending else { return nil }
+            return runs.first {
+                $0.status == .running || $0.status == .waitingForApproval
+            }
         }
 
         var selectedRunEvents: [RunEvent] {
@@ -96,6 +106,15 @@ extension MainScreen {
             selectedRunId = run.id
         }
 
+        func startNewChat() {
+            guard !isSending else { return }
+            selectedRunId = nil
+            draftMessage = ""
+            draftContextAttachments = []
+            draftRunMode = .simpleChat
+            errorMessage = nil
+        }
+
         func submitDraft() {
             submissionTask = Task { [weak self] in
                 await self?.submitDraftAndWait()
@@ -110,6 +129,38 @@ extension MainScreen {
             draftMessage = ""
             draftContextAttachments = []
             await send(trimmedMessage, contextAttachments: attachments)
+        }
+
+        func reloadAgentProfile() {
+            multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? multiAgentConfiguration
+        }
+
+        func setAssistantEnabled(id: UUID, enabled: Bool) {
+            do {
+                try agentProfileService?.setAssistantEnabled(
+                    id: id,
+                    enabled: enabled,
+                    profileId: multiAgentConfiguration.profileId
+                )
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+                reloadAgentProfile()
+            }
+        }
+
+        func setAssistantModelOverride(id: UUID, modelOverride: String?) {
+            do {
+                try agentProfileService?.setAssistantModelOverride(
+                    id: id,
+                    modelOverride: modelOverride,
+                    profileId: multiAgentConfiguration.profileId
+                )
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+                reloadAgentProfile()
+            }
         }
 
         func presentAttachmentImporter() {
@@ -149,12 +200,53 @@ extension MainScreen {
 
         func stopRunAndWait() async {
             guard let run = selectedRun,
-                  run.status == .running || run.status == .waitingForApproval else { return }
+                  run.status == .running ||
+                  run.status == .waitingForApproval ||
+                  run.status == .interrupted else { return }
 
             await runService.cancelRun(runId: run.id)
             submissionTask?.cancel()
             submissionTask = nil
             isSending = false
+        }
+
+        func resumeInterruptedRun() {
+            guard !isSending, selectedRun?.status == .interrupted else { return }
+            submissionTask = Task { [weak self] in
+                await self?.resumeInterruptedRunAndWait()
+            }
+        }
+
+        func restartInterruptedRun() {
+            guard !isSending, selectedRun?.status == .interrupted else { return }
+            submissionTask = Task { [weak self] in
+                await self?.restartInterruptedRunAndWait()
+            }
+        }
+
+        private func resumeInterruptedRunAndWait() async {
+            guard let runId = selectedRun?.id else { return }
+            isSending = true
+            errorMessage = nil
+            defer { isSending = false }
+
+            let didResume = await runService.resumeRun(runId: runId)
+            if !didResume {
+                errorMessage = ChatPageDesign.Header.resumeFailure
+            }
+        }
+
+        private func restartInterruptedRunAndWait() async {
+            guard let runId = selectedRun?.id else { return }
+            isSending = true
+            errorMessage = nil
+            defer { isSending = false }
+
+            guard let restartedRunId = await runService.restartRun(runId: runId) else {
+                errorMessage = ChatPageDesign.Header.restartFailure
+                return
+            }
+            selectedRunId = restartedRunId
         }
 
         private func send(
@@ -173,12 +265,16 @@ extension MainScreen {
                     message: message,
                     contextAttachments: contextAttachments
                 )
-            } else if let runId = await runService.startRun(
-                goal: message,
-                mode: draftRunMode,
-                configuration: multiAgentConfiguration,
-                contextAttachments: contextAttachments
-            ) {
+            } else {
+                if draftRunMode == .multiAgent {
+                    reloadAgentProfile()
+                }
+                guard let runId = await runService.startRun(
+                    goal: message,
+                    mode: draftRunMode,
+                    configuration: multiAgentConfiguration,
+                    contextAttachments: contextAttachments
+                ) else { return }
                 selectedRunId = runId
             }
         }

@@ -29,6 +29,10 @@ final class RunService: RunServiceProtocol {
         harnessEngine.selectedAgentRuntimeDescriptor
     }
 
+    func reconcileInterruptedRuns() {
+        harnessEngine.reconcileInterruptedRuns()
+    }
+
     func run(withId runId: UUID) -> Run? {
         repository.run(withId: runId)
     }
@@ -61,6 +65,14 @@ final class RunService: RunServiceProtocol {
 
     func cancelRun(runId: UUID) async {
         await harnessEngine.cancelRun(runId: runId)
+    }
+
+    func resumeRun(runId: UUID) async -> Bool {
+        await harnessEngine.resumeRun(runId: runId)
+    }
+
+    func restartRun(runId: UUID) async -> UUID? {
+        await harnessEngine.restartRun(runId: runId)
     }
 
     func sendMessage(runId: UUID, message: String) async {

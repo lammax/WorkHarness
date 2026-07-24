@@ -17,16 +17,28 @@ extension MainScreen {
         let isSending: Bool
         let onAttach: () -> Void
         let onRemoveAttachment: (RunContextAttachment) -> Void
+        let onNewChat: () -> Void
         let onSend: () -> Void
         let onStop: () -> Void
 
         var body: some View {
             VStack(alignment: .trailing, spacing: Design.spacing) {
-                Picker(Design.modeLabel, selection: $mode) {
-                    Text(Design.simpleModeLabel).tag(RunMode.simpleChat)
-                    Text(Design.multiAgentModeLabel).tag(RunMode.multiAgent)
+                HStack(spacing: Design.modeControlSpacing) {
+                    Picker(Design.modeLabel, selection: $mode) {
+                        Text(Design.simpleModeLabel).tag(RunMode.simpleChat)
+                        Text(Design.multiAgentModeLabel).tag(RunMode.multiAgent)
+                    }
+                    .pickerStyle(.segmented)
+
+                    Button(action: onNewChat) {
+                        Image(systemName: Design.newChatIcon)
+                            .frame(width: Design.buttonIconSize, height: Design.buttonIconSize)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSending)
+                    .help(Design.newChatHelp)
+                    .accessibilityLabel(Design.newChatHelp)
                 }
-                .pickerStyle(.segmented)
 
                 if !contextAttachments.isEmpty {
                     ScrollView(.horizontal) {

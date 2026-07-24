@@ -164,7 +164,7 @@ final class MultiAgentCoordinator {
                 throw MultiAgentCoordinatorError.missingRuntime(step.agentId)
             }
 
-            let roleConfiguration = configuration.configuration(for: step.role)
+            let roleConfiguration = configuration.configuration(for: step)
             runtime.configure(modelId: roleConfiguration?.modelOverride ?? candidate.agent.model, runId: runId)
             let session = try await runtime.connect()
             do {
@@ -177,17 +177,28 @@ final class MultiAgentCoordinator {
                 runtime: runtime,
                 sessionId: session.id
             )
-            let metadata = [
+            var metadata = [
                 "planId": plan.id.uuidString,
                 "planStepId": step.id.uuidString,
                 "role": step.role.rawValue,
+                "assistantName": roleConfiguration?.assistantName ?? step.role.label,
                 "agentId": candidate.agent.id.uuidString,
                 "sessionId": session.id.uuidString
             ]
+            if let profileId = configuration.profileId {
+                metadata["profileId"] = profileId
+            }
+            if let profileName = configuration.profileName {
+                metadata["profileName"] = profileName
+            }
+            if let promptFilePath = roleConfiguration?.promptFilePath,
+               !promptFilePath.isEmpty {
+                metadata["promptFilePath"] = promptFilePath
+            }
             recorder.record(
                 runId: runId,
                 type: .agentStarted,
-                message: "\(step.role.label) session started.",
+                message: "\(roleConfiguration?.assistantName ?? step.role.label) session started.",
                 metadata: metadata
             )
 
@@ -196,7 +207,13 @@ final class MultiAgentCoordinator {
                 let execution = try await runtime.run(
                     task: AgentTask(
                         runId: runId,
-                        prompt: prompt(for: step, goal: plan.goal, previousResults: previousResults, instructions: roleConfiguration?.instructions ?? ""),
+                        prompt: prompt(
+                            for: step,
+                            goal: plan.goal,
+                            previousResults: previousResults,
+                            assistantName: roleConfiguration?.assistantName ?? step.role.label,
+                            instructions: roleConfiguration?.instructions ?? ""
+                        ),
                         context: context,
                         workingDirectory: workingDirectory
                     ),
@@ -236,7 +253,12 @@ final class MultiAgentCoordinator {
                 }
 
                 try ensureRunIsActive(runId)
-                recorder.record(runId: runId, type: .agentFinished, message: "\(step.role.label) finished.", metadata: metadata)
+                recorder.record(
+                    runId: runId,
+                    type: .agentFinished,
+                    message: "\(roleConfiguration?.assistantName ?? step.role.label) finished.",
+                    metadata: metadata
+                )
                 let result = MultiAgentStepResult(
                     stepId: step.id,
                     role: step.role,
@@ -260,10 +282,26 @@ final class MultiAgentCoordinator {
         }
     }
 
-    private func prompt(for step: AgentPlanStep, goal: String, previousResults: [MultiAgentStepResult], instructions: String) -> String {
+    private func prompt(
+        for step: AgentPlanStep,
+        goal: String,
+        previousResults: [MultiAgentStepResult],
+        assistantName: String,
+        instructions: String
+    ) -> String {
         let priorOutput = previousResults.last?.output ?? "No previous agent output."
         let customInstructions = instructions.isEmpty ? "Use the role's standard responsibilities." : instructions
-        return "Role: \(step.role.label)\nGoal: \(goal)\nInstructions: \(customInstructions)\nPrevious step output:\n\(priorOutput)"
+        return """
+        Assistant: \(assistantName)
+        Role: \(step.role.label)
+        Goal: \(goal)
+
+        System instructions:
+        \(customInstructions)
+
+        Previous step output:
+        \(priorOutput)
+        """
     }
 }
 

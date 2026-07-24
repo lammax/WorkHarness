@@ -177,10 +177,23 @@ final class HarnessEngine {
             goal: goal,
             mode: .multiAgent,
             agents: [agent],
-            contextAttachments: contextAttachments
+            contextAttachments: contextAttachments,
+            multiAgentConfiguration: configuration
         )
         repository.insert(run)
-        recorder.record(runId: run.id, type: .runCreated, message: goal, metadata: ["mode": RunMode.multiAgent.rawValue])
+        var runMetadata = ["mode": RunMode.multiAgent.rawValue]
+        if let profileId = configuration.profileId {
+            runMetadata["profileId"] = profileId
+        }
+        if let profileName = configuration.profileName {
+            runMetadata["profileName"] = profileName
+        }
+        recorder.record(
+            runId: run.id,
+            type: .runCreated,
+            message: goal,
+            metadata: runMetadata
+        )
         recordUserMessage(runId: run.id, message: goal, contextAttachments: contextAttachments)
 
         let candidate = AgentCandidate(
@@ -209,7 +222,12 @@ final class HarnessEngine {
                 return run.id
             }
             repository.updateRun(run.id) { $0.status = .completed }
-            recorder.record(runId: run.id, type: .runCompleted, message: "Multi-agent run completed.", metadata: ["planId": plan.id.uuidString])
+            recorder.record(
+                runId: run.id,
+                type: .runCompleted,
+                message: "Multi-agent run completed.",
+                metadata: runMetadata.merging(["planId": plan.id.uuidString]) { _, new in new }
+            )
             return run.id
         } catch {
             if repository.run(withId: run.id)?.status == .cancelled ||
@@ -270,9 +288,94 @@ final class HarnessEngine {
         await runSimpleChatLoop(runId: runId, prompt: trimmedMessage, agent: agent, provider: provider)
     }
 
+    func reconcileInterruptedRuns() {
+        let recoverableRuns = repository.runs.filter {
+            $0.status == .running || $0.status == .waitingForApproval
+        }
+
+        for run in recoverableRuns {
+            let previousStatus = run.status
+            repository.updateRun(run.id) { $0.status = .interrupted }
+            recorder.record(
+                runId: run.id,
+                type: .runInterrupted,
+                message: "Execution was interrupted because WorkHarness stopped before the Run finished.",
+                metadata: [
+                    "reason": "app-relaunch",
+                    "previousStatus": previousStatus.rawValue
+                ]
+            )
+        }
+    }
+
+    func resumeRun(runId: UUID) async -> Bool {
+        guard let run = repository.run(withId: runId),
+              run.status == .interrupted,
+              let agent = run.agents.first else {
+            return false
+        }
+
+        let prompt = recoveryPrompt(for: run)
+        repository.updateRun(runId) { $0.status = .running }
+        recorder.record(
+            runId: runId,
+            type: .runResumed,
+            message: "Started a new agent session to recover the interrupted Run.",
+            metadata: ["strategy": "workspace-and-event-recovery"]
+        )
+
+        if let runtime = runtime(for: agent) {
+            await runAgentRuntimeTask(runId: runId, prompt: prompt, agent: agent, runtime: runtime)
+            return repository.run(withId: runId)?.status == .completed
+        }
+
+        if agent.providerId.hasPrefix("agent-runtime:") {
+            repository.updateRun(runId) { $0.status = .interrupted }
+            recorder.record(
+                runId: runId,
+                type: .error,
+                message: "The original agent runtime is unavailable. Select it in Settings and try Resume again.",
+                metadata: ["runtimeId": String(agent.providerId.dropFirst("agent-runtime:".count))]
+            )
+            return false
+        }
+
+        do {
+            let provider = try providerService.activeProvider()
+            await runSimpleChatLoop(runId: runId, prompt: prompt, agent: agent, provider: provider)
+            return repository.run(withId: runId)?.status == .completed
+        } catch {
+            repository.updateRun(runId) { $0.status = .interrupted }
+            recorder.record(runId: runId, type: .error, message: error.localizedDescription)
+            return false
+        }
+    }
+
+    func restartRun(runId: UUID) async -> UUID? {
+        guard let run = repository.run(withId: runId) else { return nil }
+
+        let newRunId = await startRun(
+            goal: run.goal,
+            mode: run.mode,
+            configuration: run.multiAgentConfiguration ?? .default,
+            contextAttachments: run.contextAttachments
+        )
+        if let newRunId {
+            recorder.record(
+                runId: runId,
+                type: .runRestarted,
+                message: "Restarted as a new Run.",
+                metadata: ["newRunId": newRunId.uuidString]
+            )
+        }
+        return newRunId
+    }
+
     func cancelRun(runId: UUID) async {
         guard let run = repository.run(withId: runId),
-              run.status == .running || run.status == .waitingForApproval else { return }
+              run.status == .running ||
+              run.status == .waitingForApproval ||
+              run.status == .interrupted else { return }
 
         if let activeSession = activeRuntimeSessions[runId] {
             await activeSession.runtime.cancel(sessionId: activeSession.sessionId)
@@ -281,6 +384,27 @@ final class HarnessEngine {
         await multiAgentCoordinator.cancel(runId: runId)
         repository.updateRun(runId) { $0.status = .cancelled }
         recorder.record(runId: runId, type: .runCancelled, message: "Run cancelled.", metadata: ["reason": "user-requested"])
+    }
+
+    private func recoveryPrompt(for run: Run) -> String {
+        let recentEvents = run.events.suffix(20).map { event in
+            let message = String(event.message.prefix(800))
+            return "[\(event.type.label)] \(message)"
+        }.joined(separator: "\n")
+
+        return """
+        WorkHarness recovery mode.
+
+        The previous execution was interrupted when the desktop app stopped. Continue the same task in the current workspace; do not restart blindly or repeat completed edits.
+
+        Original goal:
+        \(run.goal)
+
+        Saved recent Run events:
+        \(recentEvents.isEmpty ? "No events were recorded." : recentEvents)
+
+        Inspect the current files and git diff first, determine what was already completed, then continue from the safest unfinished point. Validate the final result and summarize what was recovered.
+        """
     }
 
     private func runSimpleChatLoop(runId: UUID, prompt: String, agent: Agent, provider: any AIProvider) async {

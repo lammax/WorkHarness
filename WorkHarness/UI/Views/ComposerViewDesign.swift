@@ -19,6 +19,9 @@ extension MainScreen {
         static let modeLabel = "Run mode"
         static let simpleModeLabel = "Chat"
         static let multiAgentModeLabel = "Multi-Agent"
+        static let newChatIcon = "plus"
+        static let newChatHelp = "New chat"
+        static let modeControlSpacing: CGFloat = 8
         static let sendIcon = "paperplane.fill"
         static let stopIcon = "stop.fill"
         static let attachIcon = "paperclip"

@@ -12,7 +12,8 @@ extension Container {
         register(MainScreen.ChatPageViewModel.self) { resolver in
             MainScreen.ChatPageViewModel(
                 runService: resolver.resolve(RunServiceProtocol.self)!,
-                contextAttachmentService: resolver.resolve(RunContextAttachmentServiceProtocol.self)!
+                contextAttachmentService: resolver.resolve(RunContextAttachmentServiceProtocol.self)!,
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 
@@ -29,7 +30,8 @@ extension Container {
                 providerService: resolver.resolve(ProviderServiceProtocol.self)!,
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
                 agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!,
-                remoteControlService: resolver.resolve(RemoteControlServiceProtocol.self)!
+                remoteControlService: resolver.resolve(RemoteControlServiceProtocol.self)!,
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 

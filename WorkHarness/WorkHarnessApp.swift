@@ -13,6 +13,8 @@ struct WorkHarnessApp: App {
     private let scene = AppContainer.resolver.resolve(AppSceneProtocol.self)!
 
     init() {
+        let runService = AppContainer.resolver.resolve(RunServiceProtocol.self)!
+        runService.reconcileInterruptedRuns()
         let remoteControl = AppContainer.resolver.resolve(RemoteControlServiceProtocol.self)!
         try? remoteControl.start()
     }

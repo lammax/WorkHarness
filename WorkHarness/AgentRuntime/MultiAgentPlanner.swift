@@ -21,6 +21,7 @@ struct AgentCandidate: Identifiable, Codable, Equatable {
 
 struct AgentPlanStep: Identifiable, Codable, Equatable {
     let id: UUID
+    var configurationId: UUID?
     var role: AgentRole
     var agentId: UUID
     var requiredCapabilities: Set<AgentCapability>
@@ -28,12 +29,14 @@ struct AgentPlanStep: Identifiable, Codable, Equatable {
 
     init(
         id: UUID = UUID(),
+        configurationId: UUID? = nil,
         role: AgentRole,
         agentId: UUID,
         requiredCapabilities: Set<AgentCapability>,
         dependsOn: [UUID] = []
     ) {
         self.id = id
+        self.configurationId = configurationId
         self.role = role
         self.agentId = agentId
         self.requiredCapabilities = requiredCapabilities
@@ -56,13 +59,25 @@ struct AgentExecutionPlan: Identifiable, Codable, Equatable {
 struct MultiAgentRoleConfiguration: Identifiable, Codable, Equatable {
     let id: UUID
     var role: AgentRole
+    var assistantName: String
+    var promptFilePath: String
     var enabled: Bool
     var modelOverride: String?
     var instructions: String
 
-    init(id: UUID = UUID(), role: AgentRole, enabled: Bool = true, modelOverride: String? = nil, instructions: String = "") {
+    init(
+        id: UUID = UUID(),
+        role: AgentRole,
+        assistantName: String? = nil,
+        promptFilePath: String = "",
+        enabled: Bool = true,
+        modelOverride: String? = nil,
+        instructions: String = ""
+    ) {
         self.id = id
         self.role = role
+        self.assistantName = assistantName ?? role.label
+        self.promptFilePath = promptFilePath
         self.enabled = enabled
         self.modelOverride = modelOverride
         self.instructions = instructions
@@ -70,16 +85,36 @@ struct MultiAgentRoleConfiguration: Identifiable, Codable, Equatable {
 }
 
 struct MultiAgentRunConfiguration: Codable, Equatable {
+    var profileId: String?
+    var profileName: String?
     var roles: [MultiAgentRoleConfiguration]
 
+    init(
+        profileId: String? = nil,
+        profileName: String? = nil,
+        roles: [MultiAgentRoleConfiguration]
+    ) {
+        self.profileId = profileId
+        self.profileName = profileName
+        self.roles = roles
+    }
+
     static var `default`: MultiAgentRunConfiguration {
-        MultiAgentRunConfiguration(roles: CapabilityBasedAgentPlanner.defaultRoles.map {
+        MultiAgentRunConfiguration(profileId: nil, profileName: nil, roles: CapabilityBasedAgentPlanner.defaultRoles.map {
             MultiAgentRoleConfiguration(role: $0)
         })
     }
 
     func configuration(for role: AgentRole) -> MultiAgentRoleConfiguration? {
         roles.first { $0.role == role }
+    }
+
+    func configuration(for step: AgentPlanStep) -> MultiAgentRoleConfiguration? {
+        if let configurationId = step.configurationId,
+           let configuration = roles.first(where: { $0.id == configurationId }) {
+            return configuration
+        }
+        return configuration(for: step.role)
     }
 }
 
@@ -158,22 +193,48 @@ struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
     }
 
     func plan(goal: String, candidates: [AgentCandidate], configuration: MultiAgentRunConfiguration) throws -> AgentExecutionPlan {
-        let fullPlan = try plan(goal: goal, candidates: candidates)
-        let enabledRoles = Set(configuration.roles.filter(\.enabled).map(\.role))
-        for step in fullPlan.steps where enabledRoles.contains(step.role) {
-            for dependency in step.dependsOn {
-                guard let dependencyStep = fullPlan.steps.first(where: { $0.id == dependency }),
-                      enabledRoles.contains(dependencyStep.role) else {
-                    let dependencyRole = fullPlan.steps.first(where: { $0.id == dependency })?.role ?? .architect
-                    throw AgentPlannerError.disabledDependency(role: step.role, dependency: dependencyRole)
-                }
+        var steps: [AgentPlanStep] = []
+        var previousStepId: UUID?
+
+        for roleConfiguration in configuration.roles where roleConfiguration.enabled {
+            let capabilities = requiredCapabilities(for: roleConfiguration.role)
+            guard let candidate = candidates.first(where: {
+                capabilities.isSubset(of: $0.capabilities.values)
+            }) else {
+                throw AgentPlannerError.noCandidate(
+                    role: roleConfiguration.role,
+                    requiredCapabilities: capabilities
+                )
             }
+
+            let step = AgentPlanStep(
+                configurationId: roleConfiguration.id,
+                role: roleConfiguration.role,
+                agentId: candidate.agent.id,
+                requiredCapabilities: capabilities,
+                dependsOn: previousStepId.map { [$0] } ?? []
+            )
+            steps.append(step)
+            previousStepId = step.id
         }
 
-        return AgentExecutionPlan(
-            id: fullPlan.id,
-            goal: fullPlan.goal,
-            steps: fullPlan.steps.filter { enabledRoles.contains($0.role) }
-        )
+        return AgentExecutionPlan(goal: goal, steps: steps)
+    }
+
+    private func requiredCapabilities(for role: AgentRole) -> Set<AgentCapability> {
+        switch role {
+        case .architect:
+            [.canPlan]
+        case .coder:
+            [.canEditFiles, .canUseTools]
+        case .reviewer:
+            [.canOpenDiff]
+        case .testRunner:
+            [.canRunTests]
+        case .git:
+            [.canUseTools]
+        case .research, .rag:
+            [.canUseTools]
+        }
     }
 }

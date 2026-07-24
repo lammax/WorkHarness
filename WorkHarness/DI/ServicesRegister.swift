@@ -44,6 +44,12 @@ extension Container {
             ProjectService(repository: resolver.resolve(ProjectRepositoryProtocol.self)!)
         }.inObjectScope(.container)
 
+        register(AgentProfileServiceProtocol.self) { resolver in
+            AgentProfileService(
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(RunServiceProtocol.self) { resolver in
             RunService(
                 repository: resolver.resolve(RunRepository.self)!,

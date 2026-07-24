@@ -6,16 +6,19 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension MainScreen {
     private enum SettingsTab: String, CaseIterable {
         case execution
+        case profiles
         case application
         case rag
 
         var title: String {
             switch self {
             case .execution: SettingsPageDesign.Tabs.executionTitle
+            case .profiles: SettingsPageDesign.Tabs.profilesTitle
             case .application: SettingsPageDesign.Tabs.applicationTitle
             case .rag: SettingsPageDesign.Tabs.ragTitle
             }
@@ -24,6 +27,7 @@ extension MainScreen {
         var icon: String {
             switch self {
             case .execution: SettingsPageDesign.Tabs.executionIcon
+            case .profiles: SettingsPageDesign.Tabs.profilesIcon
             case .application: SettingsPageDesign.Tabs.applicationIcon
             case .rag: SettingsPageDesign.Tabs.ragIcon
             }
@@ -57,6 +61,23 @@ extension MainScreen {
                     .padding(Design.Content.padding)
                 }
             }
+            .fileImporter(
+                isPresented: $viewModel.isPromptImporterPresented,
+                allowedContentTypes: [UTType(filenameExtension: "md") ?? .plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        viewModel.importPrompt(from: url)
+                    }
+                case .failure(let error):
+                    viewModel.setPromptImportError(error.localizedDescription)
+                }
+            }
+            .onAppear {
+                viewModel.reloadAgentProfiles()
+            }
         }
 
         @ViewBuilder
@@ -64,11 +85,147 @@ extension MainScreen {
             switch selectedTab {
             case .execution:
                 executionTab
+            case .profiles:
+                agentProfiles
             case .application:
                 appSettings
             case .rag:
                 ragSettings
             }
+        }
+
+        private var agentProfiles: some View {
+            VStack(alignment: .leading, spacing: Design.AgentProfiles.sectionSpacing) {
+                HStack {
+                    Label(Design.AgentProfiles.title, systemImage: Design.AgentProfiles.icon)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button(Design.AgentProfiles.reloadButtonTitle) {
+                        viewModel.reloadAgentProfiles()
+                    }
+                }
+
+                Text(Design.AgentProfiles.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LabeledContent(Design.AgentProfiles.directoryTitle) {
+                    Text(viewModel.agentProfileDirectoryPath)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+
+                if viewModel.agentProfiles.isEmpty {
+                    ContentUnavailableView(
+                        Design.AgentProfiles.emptyTitle,
+                        systemImage: Design.AgentProfiles.icon,
+                        description: Text(Design.AgentProfiles.emptyDescription)
+                    )
+                } else {
+                    Picker(
+                        Design.AgentProfiles.profilePickerTitle,
+                        selection: Binding(
+                            get: { viewModel.selectedAgentProfileId },
+                            set: viewModel.selectAgentProfile(id:)
+                        )
+                    ) {
+                        ForEach(viewModel.agentProfiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if let profile = viewModel.selectedAgentProfile {
+                        Text(profile.summary)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+
+                        VStack(spacing: Design.AgentProfiles.assistantSpacing) {
+                            ForEach(Array(profile.assistants.enumerated()), id: \.element.id) { index, assistant in
+                                assistantProfileRow(
+                                    assistant,
+                                    index: index,
+                                    assistantCount: profile.assistants.count
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(Design.AgentProfiles.padding)
+            .background(
+                .thinMaterial,
+                in: RoundedRectangle(cornerRadius: Design.AgentProfiles.cornerRadius)
+            )
+        }
+
+        private func assistantProfileRow(
+            _ assistant: AgentProfileAssistant,
+            index: Int,
+            assistantCount: Int
+        ) -> some View {
+            HStack(alignment: .top, spacing: Design.AgentProfiles.rowSpacing) {
+                Text("\(index + 1)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: Design.AgentProfiles.orderWidth)
+
+                VStack(alignment: .leading, spacing: Design.AgentProfiles.textSpacing) {
+                    HStack {
+                        Text(assistant.name)
+                            .fontWeight(.semibold)
+                        Text(assistant.role.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(assistant.promptFileName)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+
+                    Text(viewModel.promptPreview(for: assistant.id))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(Design.AgentProfiles.promptLineLimit)
+                }
+
+                Spacer()
+
+                VStack(spacing: Design.AgentProfiles.buttonSpacing) {
+                    HStack {
+                        Button {
+                            viewModel.moveAssistant(id: assistant.id, direction: .up)
+                        } label: {
+                            Image(systemName: Design.AgentProfiles.moveUpIcon)
+                        }
+                        .disabled(index == 0)
+
+                        Button {
+                            viewModel.moveAssistant(id: assistant.id, direction: .down)
+                        } label: {
+                            Image(systemName: Design.AgentProfiles.moveDownIcon)
+                        }
+                        .disabled(index == assistantCount - 1)
+                    }
+
+                    HStack {
+                        Button(Design.AgentProfiles.openPromptButtonTitle) {
+                            viewModel.openPrompt(for: assistant.id)
+                        }
+
+                        Button(Design.AgentProfiles.loadPromptButtonTitle) {
+                            viewModel.presentPromptImporter(for: assistant.id)
+                        }
+                    }
+                }
+            }
+            .padding(Design.AgentProfiles.rowPadding)
+            .background(
+                Color.secondary.opacity(Design.AgentProfiles.rowBackgroundOpacity),
+                in: RoundedRectangle(cornerRadius: Design.AgentProfiles.rowCornerRadius)
+            )
         }
 
         private var header: some View {

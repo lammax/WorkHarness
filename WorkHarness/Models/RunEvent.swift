@@ -59,6 +59,9 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
     case validationFinished
     case error
     case finalSummary
+    case runInterrupted
+    case runResumed
+    case runRestarted
     case runCompleted
     case runCancelled
     case runFailed
@@ -91,6 +94,9 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
         case .validationFinished: "Validation Finished"
         case .error: "Error"
         case .finalSummary: "Summary"
+        case .runInterrupted: "Run Interrupted"
+        case .runResumed: "Run Resumed"
+        case .runRestarted: "Run Restarted"
         case .runCompleted: "Run Completed"
         case .runCancelled: "Run Cancelled"
         case .runFailed: "Run Failed"

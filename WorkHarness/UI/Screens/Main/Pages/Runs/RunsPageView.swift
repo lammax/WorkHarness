@@ -117,7 +117,20 @@ extension MainScreen {
             if let detail = viewModel.selectedRunDetail {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Design.Detail.spacing) {
-                        RunDetailHeader(detail: detail, run: viewModel.selectedRun, onRunSelected: onRunSelected)
+                        RunDetailHeader(
+                            detail: detail,
+                            run: viewModel.selectedRun,
+                            isRecovering: viewModel.isRecovering,
+                            onResume: viewModel.resumeSelectedRun,
+                            onRestart: viewModel.restartSelectedRun,
+                            onCancel: viewModel.cancelSelectedRun,
+                            onRunSelected: onRunSelected
+                        )
+                        if let recoveryError = viewModel.recoveryError {
+                            Text(recoveryError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
                         MetricsView(metrics: detail.metrics)
                         TimelineView(viewModel: viewModel, events: detail.events, hasEvents: detail.hasEvents)
                         ArtifactsView(artifacts: detail.artifacts)
@@ -136,6 +149,10 @@ extension MainScreen {
 
         let detail: RunDetailState
         let run: Run?
+        let isRecovering: Bool
+        let onResume: () -> Void
+        let onRestart: () -> Void
+        let onCancel: () -> Void
         let onRunSelected: (Run) -> Void
 
         var body: some View {
@@ -152,6 +169,23 @@ extension MainScreen {
                 }
 
                 Spacer()
+
+                if run?.status == .interrupted {
+                    Button(action: onResume) {
+                        Label(Design.resumeTitle, systemImage: Design.resumeIcon)
+                    }
+                    .disabled(isRecovering)
+
+                    Button(action: onRestart) {
+                        Label(Design.restartTitle, systemImage: Design.restartIcon)
+                    }
+                    .disabled(isRecovering)
+
+                    Button(role: .destructive, action: onCancel) {
+                        Label(Design.cancelTitle, systemImage: Design.cancelIcon)
+                    }
+                    .disabled(isRecovering)
+                }
 
                 StatusBadge(status: detail.status)
 

@@ -8,9 +8,27 @@
 import Testing
 import Swinject
 import Foundation
+import AppKit
 @testable import WorkHarness
 
 struct WorkHarnessTests {
+
+    @MainActor
+    @Test func timelineDesignUsesAvailableSystemSymbolsForEveryRunEvent() {
+        for eventType in RunEventType.allCases {
+            let chatIcon = MainScreen.ChatPageDesign.EventRow.icon(for: eventType)
+            let runsIcon = MainScreen.RunsPageDesign.EventRow.icon(for: eventType)
+
+            #expect(
+                NSImage(systemSymbolName: chatIcon, accessibilityDescription: nil) != nil,
+                "Missing Chat SF Symbol: \(chatIcon)"
+            )
+            #expect(
+                NSImage(systemSymbolName: runsIcon, accessibilityDescription: nil) != nil,
+                "Missing Runs SF Symbol: \(runsIcon)"
+            )
+        }
+    }
 
     @MainActor
     @Test func startingRunRecordsInitialEvents() async throws {
@@ -46,6 +64,115 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func appLaunchReconcilesPersistedActiveRunsAsInterrupted() throws {
+        let repository = InMemoryRunRepository()
+        let runningRun = Run(goal: "Running when the app closed", status: .running)
+        let approvalRun = Run(goal: "Waiting when the app closed", status: .waitingForApproval)
+        let completedRun = Run(goal: "Already complete", status: .completed)
+        repository.insert(runningRun)
+        repository.insert(approvalRun)
+        repository.insert(completedRun)
+        let recorder = RunRecorder(repository: repository)
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider())
+        )
+        let runService = RunService(repository: repository, harnessEngine: engine)
+
+        runService.reconcileInterruptedRuns()
+        runService.reconcileInterruptedRuns()
+
+        #expect(repository.run(withId: runningRun.id)?.status == .interrupted)
+        #expect(repository.run(withId: approvalRun.id)?.status == .interrupted)
+        #expect(repository.run(withId: completedRun.id)?.status == .completed)
+        #expect(repository.run(withId: runningRun.id)?.events.filter { $0.type == .runInterrupted }.count == 1)
+        #expect(repository.run(withId: approvalRun.id)?.events.last?.metadata["previousStatus"] == "waitingForApproval")
+        #expect(repository.run(withId: completedRun.id)?.events.isEmpty == true)
+    }
+
+    @MainActor
+    @Test func interruptedRunResumesInNewRuntimeSessionWithRecoveryContext() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let client = FakeACPClient(id: "fake.recovery", displayName: "Recovery Agent")
+        let runtime = ACPClientRuntime(client: client)
+        let registry = AgentRuntimeRegistry()
+        registry.register(runtime)
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: runtime.id)
+        let runId = UUID()
+        let run = Run(
+            id: runId,
+            goal: "Finish the interrupted change",
+            mode: .codingLoop,
+            status: .interrupted,
+            agents: [
+                Agent(
+                    role: .coder,
+                    providerId: "agent-runtime:\(runtime.id)",
+                    model: "fake"
+                )
+            ],
+            events: [
+                RunEvent(
+                    runId: runId,
+                    type: .fileChanged,
+                    message: "Sources/App.swift"
+                )
+            ]
+        )
+        repository.insert(run)
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+        let runService = RunService(repository: repository, harnessEngine: engine)
+
+        let didResume = await runService.resumeRun(runId: run.id)
+
+        #expect(didResume)
+        #expect(repository.run(withId: run.id)?.status == .completed)
+        #expect(repository.run(withId: run.id)?.events.contains { $0.type == .runResumed } == true)
+        #expect(client.tasks.count == 1)
+        #expect(client.tasks[0].prompt.contains("Finish the interrupted change"))
+        #expect(client.tasks[0].prompt.contains("Sources/App.swift"))
+        #expect(client.tasks[0].prompt.contains("do not restart blindly"))
+    }
+
+    @MainActor
+    @Test func interruptedRunCanBeCancelledWithoutAnActiveRuntimeSession() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Do not resume", status: .interrupted)
+        repository.insert(run)
+        let runService = makeRunService(repository: repository)
+
+        await runService.cancelRun(runId: run.id)
+
+        #expect(repository.run(withId: run.id)?.status == .cancelled)
+        #expect(repository.run(withId: run.id)?.events.last?.type == .runCancelled)
+    }
+
+    @MainActor
+    @Test func runPersistenceRetainsMultiAgentConfigurationForRestart() throws {
+        var configuration = MultiAgentRunConfiguration.default
+        configuration.profileId = "bug-fix"
+        configuration.roles[1].enabled = false
+        let run = Run(
+            goal: "Restart the same workflow",
+            mode: .multiAgent,
+            multiAgentConfiguration: configuration
+        )
+
+        let data = try JSONEncoder().encode(run)
+        let restored = try JSONDecoder().decode(Run.self, from: data)
+
+        #expect(restored.multiAgentConfiguration == configuration)
+    }
+
+    @MainActor
     @Test func chatPageViewModelSubmitsDraftThroughEngine() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -59,6 +186,38 @@ struct WorkHarnessTests {
         #expect(viewModel.draftMessage.isEmpty)
         #expect(viewModel.selectedRun != nil)
         #expect(viewModel.runs.first?.events.contains { $0.type == .assistantMessage } == true)
+    }
+
+    @MainActor
+    @Test func chatPageViewModelStartsNewChatWithoutMutatingPreviousRun() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider())
+        )
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: RunService(repository: repository, harnessEngine: engine)
+        )
+        viewModel.draftMessage = "First chat"
+        await viewModel.submitDraftAndWait()
+        let firstRunId = try #require(viewModel.selectedRunId)
+        viewModel.draftMessage = "Unsaved follow-up"
+        viewModel.draftRunMode = .multiAgent
+        viewModel.draftContextAttachments = [
+            RunContextAttachment(name: "Context.md", content: "Temporary context")
+        ]
+
+        viewModel.startNewChat()
+
+        #expect(viewModel.selectedRunId == nil)
+        #expect(viewModel.selectedRun == nil)
+        #expect(viewModel.draftMessage.isEmpty)
+        #expect(viewModel.draftContextAttachments.isEmpty)
+        #expect(viewModel.draftRunMode == .simpleChat)
+        #expect(repository.runs.count == 1)
+        #expect(repository.runs.first?.id == firstRunId)
     }
 
     @MainActor
@@ -1805,18 +1964,147 @@ struct WorkHarnessTests {
         }
     }
 
-    @Test func capabilityBasedAgentPlannerRejectsDisabledDependencies() throws {
+    @Test func capabilityBasedAgentPlannerUsesConfiguredOrderAndSkipsDisabledAssistants() throws {
         let planner = CapabilityBasedAgentPlanner()
         let candidate = AgentCandidate(
             agent: Agent(role: .research, providerId: "all", model: "all"),
             capabilities: AgentCapabilities([.canPlan, .canEditFiles, .canUseTools, .canOpenDiff, .canRunTests])
         )
         var configuration = MultiAgentRunConfiguration.default
+        configuration.roles.swapAt(0, 3)
         configuration.roles[1].enabled = false
 
-        #expect(throws: AgentPlannerError.disabledDependency(role: .reviewer, dependency: .coder)) {
-            try planner.plan(goal: "Implement feature", candidates: [candidate], configuration: configuration)
-        }
+        let plan = try planner.plan(
+            goal: "Implement feature",
+            candidates: [candidate],
+            configuration: configuration
+        )
+
+        #expect(plan.steps.map(\.role) == [.testRunner, .reviewer, .architect])
+        #expect(plan.steps[0].dependsOn.isEmpty)
+        #expect(plan.steps[1].dependsOn == [plan.steps[0].id])
+        #expect(plan.steps[2].dependsOn == [plan.steps[1].id])
+        #expect(plan.steps.map(\.configurationId) == [
+            configuration.roles[0].id,
+            configuration.roles[2].id,
+            configuration.roles[3].id
+        ])
+    }
+
+    @MainActor
+    @Test func agentProfileServiceSeedsProjectCatalogAndLoadsMarkdownPrompts() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Profiles", rootPath: projectRoot.path)
+
+        let service = AgentProfileService(projectService: projectService)
+        let configuration = service.configuration(for: "bug-fix")
+        let directory = projectRoot.appendingPathComponent(AgentProfileDefaults.directoryName)
+
+        #expect(service.profiles.map(\.id) == ["bug-fix", "research", "implementation"])
+        #expect(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent(AgentProfileDefaults.manifestFileName).path
+        ))
+        #expect(configuration.profileName == "Bug Fix")
+        #expect(configuration.roles.map(\.assistantName) == [
+            "Bug Investigator",
+            "Fix Implementer",
+            "Regression Verifier"
+        ])
+        #expect(configuration.roles[0].instructions.contains("Do not edit files"))
+        #expect(configuration.roles[1].instructions.contains("deterministic regression test"))
+        #expect(configuration.roles[2].promptFilePath.hasSuffix("bug-fix-verifier.md"))
+    }
+
+    @MainActor
+    @Test func agentProfileServicePersistsSelectionAndAssistantOrder() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Profiles", rootPath: projectRoot.path)
+        let service = AgentProfileService(projectService: projectService)
+        service.selectProfile(id: "bug-fix")
+        let implementerId = try #require(service.selectedProfile?.assistants[1].id)
+
+        try service.moveAssistant(id: implementerId, direction: .up)
+
+        let reloaded = AgentProfileService(projectService: projectService)
+        #expect(reloaded.selectedProfileId == "bug-fix")
+        #expect(reloaded.selectedProfile?.assistants.map(\.name) == [
+            "Fix Implementer",
+            "Bug Investigator",
+            "Regression Verifier"
+        ])
+        #expect(reloaded.configuration(for: nil).roles.first?.assistantName == "Fix Implementer")
+    }
+
+    @MainActor
+    @Test func agentProfileServicePersistsAssistantExecutionSettings() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Profiles", rootPath: projectRoot.path)
+        let service = AgentProfileService(projectService: projectService)
+        service.selectProfile(id: "bug-fix")
+        let assistants = try #require(service.selectedProfile?.assistants)
+        let implementerId = assistants[1].id
+        let verifierId = assistants[2].id
+
+        try service.setAssistantEnabled(id: implementerId, enabled: false, profileId: "bug-fix")
+        try service.setAssistantEnabled(id: verifierId, enabled: false, profileId: "bug-fix")
+        try service.setAssistantModelOverride(
+            id: implementerId,
+            modelOverride: "claude-sonnet",
+            profileId: "bug-fix"
+        )
+
+        let reloaded = AgentProfileService(projectService: projectService)
+        let configuration = reloaded.configuration(for: "bug-fix")
+        #expect(configuration.roles.map(\.enabled) == [true, false, false])
+        #expect(configuration.roles[1].modelOverride == "claude-sonnet")
+    }
+
+    @MainActor
+    @Test func agentProfileServiceImportsMarkdownForTheMappedAssistant() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let sourceDirectory = try makeTemporaryDirectory()
+        let sourceURL = sourceDirectory.appendingPathComponent("custom.md")
+        try "# Custom Research\nReturn verified evidence only.".write(
+            to: sourceURL,
+            atomically: true,
+            encoding: .utf8
+        )
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Profiles", rootPath: projectRoot.path)
+        let service = AgentProfileService(projectService: projectService)
+        service.selectProfile(id: "research")
+        let researcherId = try #require(service.selectedProfile?.assistants.first?.id)
+
+        try service.replacePrompt(for: researcherId, withContentsOf: sourceURL)
+
+        let configuration = service.configuration(for: "research")
+        #expect(configuration.roles.count == 1)
+        #expect(configuration.roles[0].id == researcherId)
+        #expect(configuration.roles[0].instructions.contains("Return verified evidence only"))
+        #expect(configuration.roles[0].promptFilePath.hasSuffix("research.md"))
+    }
+
+    @MainActor
+    @Test func agentProfileServiceReloadsPromptFileBeforeBuildingRunConfiguration() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Profiles", rootPath: projectRoot.path)
+        let service = AgentProfileService(projectService: projectService)
+        service.selectProfile(id: "research")
+        let researcherId = try #require(service.selectedProfile?.assistants.first?.id)
+        let promptURL = try service.promptFileURL(for: researcherId)
+        try "# Edited Prompt\nEDITED_ON_DISK_MARKER".write(
+            to: promptURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configuration = service.configuration(for: "research")
+
+        #expect(configuration.roles.first?.instructions.contains("EDITED_ON_DISK_MARKER") == true)
     }
 
     @MainActor
@@ -1843,6 +2131,59 @@ struct WorkHarnessTests {
         #expect(result.steps.map(\.stepId) == [first.id, second.id])
         #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentStarted }.count == 2)
         #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentFinished }.count == 2)
+    }
+
+    @MainActor
+    @Test func multiAgentCoordinatorPassesMappedMarkdownPromptAndProfileMetadata() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let run = Run(goal: "Research authorization", mode: .multiAgent)
+        repository.insert(run)
+        let client = FakeACPClient()
+        let runtime = ACPClientRuntime(client: client)
+        let agent = Agent(role: .research, providerId: "fake.acp", model: "fake")
+        let candidate = AgentCandidate(
+            agent: agent,
+            capabilities: AgentCapabilities([.canUseTools])
+        )
+        let assistantId = UUID()
+        let configuration = MultiAgentRunConfiguration(
+            profileId: "research",
+            profileName: "Research",
+            roles: [
+                MultiAgentRoleConfiguration(
+                    id: assistantId,
+                    role: .research,
+                    assistantName: "Codebase Researcher",
+                    promptFilePath: "/tmp/project/.workharness/agent-profiles/research.md",
+                    instructions: "RESEARCH_PROMPT_MARKER"
+                )
+            ]
+        )
+        let step = AgentPlanStep(
+            configurationId: assistantId,
+            role: .research,
+            agentId: agent.id,
+            requiredCapabilities: [.canUseTools]
+        )
+
+        _ = try await MultiAgentCoordinator(repository: repository, recorder: recorder).execute(
+            plan: AgentExecutionPlan(goal: run.goal, steps: [step]),
+            candidates: [candidate],
+            runtimes: [agent.id: runtime],
+            runId: run.id,
+            configuration: configuration
+        )
+
+        let task = try #require(client.tasks.first)
+        let startedEvent = try #require(
+            repository.run(withId: run.id)?.events.first { $0.type == .agentStarted }
+        )
+        #expect(task.prompt.contains("RESEARCH_PROMPT_MARKER"))
+        #expect(task.prompt.contains("Assistant: Codebase Researcher"))
+        #expect(startedEvent.metadata["profileId"] == "research")
+        #expect(startedEvent.metadata["assistantName"] == "Codebase Researcher")
+        #expect(startedEvent.metadata["promptFilePath"]?.hasSuffix("research.md") == true)
     }
 
     @MainActor

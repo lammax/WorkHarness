@@ -254,6 +254,34 @@ network/CLI/wall-clock delay в unit tests и unrelated mass refactoring.
 Project settings не являются способом обойти принудительные WorkHarness tools,
 MCP config или approval policy.
 
+## Agent Profiles
+
+- `AgentRole` — специализация; `AgentWorkflowProfile` — data-driven workflow,
+  состав ассистентов и порядок вызова.
+- Профили проекта хранятся в `.workharness/agent-profiles/`: `profiles.json`
+  содержит mapping и порядок, каждый ассистент использует отдельный `.md` prompt.
+- Markdown prompt является source of truth. WorkHarness загружает его через
+  `AgentProfileServiceProtocol` и передаёт snapshot в новый Run.
+- Не зашивать профили и порядок в SwiftUI или generic planner. Settings меняет
+  их только через service boundary. Перед новым multi-agent Run prompts повторно
+  читаются с диска; обычный Chat профильные prompts не использует.
+- Multi-agent `RunEvent.metadata` должен сохранять profile/assistant/prompt path
+  для audit и воспроизводимого сравнения запусков.
+- Research выполняется read-only. Bug Fix проходит diagnosis, focused fix и
+  regression verification; Implementation — plan, code, review, test.
+
+## Run Recovery
+
+- Durable truth после перезапуска — SQLite `Run` и append-only `RunEvent`, а не
+  runtime/CLI/ACP session в памяти.
+- На старте сохранённые `running`/`waitingForApproval` Runs становятся
+  `interrupted` с одним `runInterrupted` event.
+- Resume создаёт новую runtime-сессию в том же Run и сначала проверяет текущий
+  workspace/git diff по сохранённой цели и последним событиям.
+- Restart создаёт новый Run с исходными mode, attachments и multi-agent config.
+- Не утверждать, что Resume точно продолжает потерянный процесс, и не повторять
+  уже выполненные изменения вслепую.
+
 ## Validation, git и report
 
 ```bash

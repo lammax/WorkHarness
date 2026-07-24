@@ -20,6 +20,8 @@ extension MainScreen {
 
         var selectedRunId: Run.ID?
         var selectedEventId: RunEvent.ID?
+        var isRecovering = false
+        var recoveryError: String?
 
         var runs: [Run] {
             runService.runs
@@ -85,6 +87,44 @@ extension MainScreen {
 
         func isEventSelected(_ event: RunEventState) -> Bool {
             selectedEvent?.id == event.id
+        }
+
+        func resumeSelectedRun() {
+            guard !isRecovering, let run = selectedRun, run.status == .interrupted else { return }
+            isRecovering = true
+            recoveryError = nil
+            Task { [weak self] in
+                guard let self else { return }
+                let didResume = await runService.resumeRun(runId: run.id)
+                if !didResume {
+                    recoveryError = RunsPageDesign.Header.resumeFailure
+                }
+                isRecovering = false
+            }
+        }
+
+        func restartSelectedRun() {
+            guard !isRecovering, let run = selectedRun, run.status == .interrupted else { return }
+            isRecovering = true
+            recoveryError = nil
+            Task { [weak self] in
+                guard let self else { return }
+                guard let newRunId = await runService.restartRun(runId: run.id) else {
+                    recoveryError = RunsPageDesign.Header.restartFailure
+                    isRecovering = false
+                    return
+                }
+                selectedRunId = newRunId
+                selectedEventId = nil
+                isRecovering = false
+            }
+        }
+
+        func cancelSelectedRun() {
+            guard !isRecovering, let run = selectedRun, run.status == .interrupted else { return }
+            Task {
+                await runService.cancelRun(runId: run.id)
+            }
         }
 
         private func orderedEvents(for run: Run) -> [RunEvent] {

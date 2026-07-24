@@ -32,6 +32,14 @@ extension MainScreen {
             static let verticalPadding: CGFloat = 12
             static let newRunTitle = "New Run"
             static let titleSeparator = " · "
+            static let resumeTitle = "Resume"
+            static let resumeIcon = "play.fill"
+            static let restartTitle = "Restart"
+            static let restartIcon = "arrow.clockwise"
+            static let cancelTitle = "Cancel"
+            static let cancelIcon = "xmark"
+            static let resumeFailure = "The interrupted Run could not be resumed."
+            static let restartFailure = "The interrupted Run could not be restarted."
         }
 
         enum EmptyState {
@@ -66,7 +74,7 @@ extension MainScreen {
                 case .toolCallRequested: "terminal"
                 case .toolCallStarted: "play.rectangle"
                 case .toolCallFinished: "checkmark.rectangle"
-                case .toolCallFailed: "exclamationmark.rectangle"
+                case .toolCallFailed: "exclamationmark.triangle"
                 case .toolResult: "doc.text.magnifyingglass"
                 case .fileChanged: "doc.badge.gearshape"
                 case .approvalRequested: "hand.raised"
@@ -79,6 +87,9 @@ extension MainScreen {
                 case .validationFinished: "checkmark.square"
                 case .error: "exclamationmark.triangle"
                 case .finalSummary: "text.badge.checkmark"
+                case .runInterrupted: "pause.circle"
+                case .runResumed: "play.circle.fill"
+                case .runRestarted: "arrow.clockwise.circle"
                 case .runCompleted: "flag.checkered"
                 case .runCancelled: "stop.circle"
                 case .runFailed: "flag.slash"
@@ -95,7 +106,7 @@ extension MainScreen {
                     .blue
                 case .providerStreamDelta:
                     .purple
-                case .runCancelled:
+                case .runCancelled, .runInterrupted:
                     .orange
                 default:
                     .secondary

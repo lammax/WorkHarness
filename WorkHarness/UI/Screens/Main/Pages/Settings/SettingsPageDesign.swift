@@ -29,11 +29,42 @@ extension MainScreen {
         enum Tabs {
             static let title = "Settings sections"
             static let executionTitle = "Execution & Providers"
+            static let profilesTitle = "Agent Profiles"
             static let applicationTitle = "Application"
             static let ragTitle = "RAG"
             static let executionIcon = "play.circle"
+            static let profilesIcon = "person.3.sequence"
             static let applicationIcon = "gearshape"
             static let ragIcon = "books.vertical"
+        }
+
+        enum AgentProfiles {
+            static let title = "Agent Profiles"
+            static let icon = "person.3.sequence"
+            static let description = "Each profile defines an ordered assistant chain. Prompts are loaded from separate Markdown files when the project opens."
+            static let directoryTitle = "Project prompt directory"
+            static let profilePickerTitle = "Active profile for new multi-agent Runs"
+            static let reloadButtonTitle = "Reload Files"
+            static let loadPromptButtonTitle = "Load MD"
+            static let openPromptButtonTitle = "Open"
+            static let emptyTitle = "No agent profiles"
+            static let emptyDescription = "Select a project with a root folder to create its default profiles."
+            static let noProjectDirectory = "Select a project with a root folder"
+            static let promptUnavailable = "Prompt file is empty or unavailable."
+            static let moveUpIcon = "arrow.up"
+            static let moveDownIcon = "arrow.down"
+            static let sectionSpacing: CGFloat = 12
+            static let assistantSpacing: CGFloat = 8
+            static let rowSpacing: CGFloat = 12
+            static let textSpacing: CGFloat = 4
+            static let buttonSpacing: CGFloat = 6
+            static let padding: CGFloat = 12
+            static let rowPadding: CGFloat = 10
+            static let cornerRadius: CGFloat = 8
+            static let rowCornerRadius: CGFloat = 6
+            static let rowBackgroundOpacity: CGFloat = 0.08
+            static let orderWidth: CGFloat = 22
+            static let promptLineLimit = 3
         }
 
         enum ExecutionBackend {

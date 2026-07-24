@@ -436,6 +436,32 @@ Pages/<PageName>/
 - [ ] Callbacks, которые могут удерживаться, используют `[weak self]`.
 - [ ] Нет прямых обращений View -> provider/tool/repository.
 
-## 18. Итоговое правило
+## 18. Agent Profiles и prompt-файлы
+
+- `AgentRole` описывает специализацию ассистента, а `AgentWorkflowProfile` — конкретный workflow, состав ассистентов и порядок их вызова.
+- Не зашивать новые workflow в SwiftUI или generic planner. Профили должны оставаться data-driven и загружаться через `AgentProfileServiceProtocol`.
+- Проектный каталог профилей: `<project-root>/.workharness/agent-profiles/`.
+  - `profiles.json` хранит профили, стабильные assistant IDs, соответствие assistant → Markdown-файл и порядок.
+  - каждый ассистент получает отдельный `.md` system prompt;
+  - prompt-файлы являются source of truth для инструкций, а в Run передаётся загруженный snapshot.
+- Settings работает только через `AgentProfileServiceProtocol`: выбор профиля, импорт/открытие Markdown, reload и изменение порядка.
+- Перед созданием нового multi-agent Run повторно читать prompt-файлы с диска, чтобы сохранённые пользователем правки применялись без перезапуска приложения. Обычный Chat профильные prompts не использует.
+- Planner строит шаги в порядке, заданном активным профилем; UI не должен содержать фиксированный список ролей.
+- В `RunEvent.metadata` для multi-agent шагов сохранять `profileId`, `profileName`, `assistantName` и `promptFilePath` для audit/replay.
+- `Research` профиль не меняет файлы. `Bug Fix` обязан пройти diagnosis → focused fix → regression verification.
+- Для profile service и planner обязательны детерминированные тесты на seed/load, mapping assistant → prompt, persistence порядка и фактический execution order.
+
+## 19. Recovery незавершённых Runs
+
+- SQLite `Run`/`RunEvent` являются durable source of truth; runtime/CLI/ACP session IDs и активные процессы в памяти не считать восстановленными после перезапуска приложения.
+- При старте приложения все сохранённые `running`/`waitingForApproval` Runs переводить в `interrupted` и добавлять ровно один append-only `runInterrupted` event.
+- Для `interrupted` Run предоставлять через `RunServiceProtocol` безопасные действия:
+  - Resume — новая runtime-сессия в том же Run с recovery-контекстом из цели, последних событий и текущего workspace;
+  - Restart — новый Run с исходной целью, mode, attachments и сохранённой multi-agent configuration;
+  - Cancel — terminal status без требования активной runtime-сессии.
+- Resume не должен выдавать новую сессию за точное продолжение потерянного процесса: сначала требовать проверки workspace/git diff и не повторять уже завершённые изменения вслепую.
+- Recovery transitions обязательно покрывать детерминированными тестами статусов, событий и контекста.
+
+## 20. Итоговое правило
 
 Если правило из `agent-harness` skill и локальное правило из этого файла расходятся, применять более строгое правило, если пользователь явно не сказал иначе.

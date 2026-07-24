@@ -13,6 +13,7 @@ protocol RunServiceProtocol: BaseServiceProtocol {
     var providerName: String { get }
     var selectedAgentRuntimeDescriptor: AgentRuntimeDescriptor? { get }
 
+    func reconcileInterruptedRuns()
     func run(withId runId: UUID) -> Run?
     func startRun(goal: String) async -> UUID?
     func startRun(goal: String, mode: RunMode) async -> UUID?
@@ -23,6 +24,8 @@ protocol RunServiceProtocol: BaseServiceProtocol {
         configuration: MultiAgentRunConfiguration,
         contextAttachments: [RunContextAttachment]
     ) async -> UUID?
+    func resumeRun(runId: UUID) async -> Bool
+    func restartRun(runId: UUID) async -> UUID?
     func cancelRun(runId: UUID) async
     func sendMessage(runId: UUID, message: String) async
     func sendMessage(runId: UUID, message: String, contextAttachments: [RunContextAttachment]) async

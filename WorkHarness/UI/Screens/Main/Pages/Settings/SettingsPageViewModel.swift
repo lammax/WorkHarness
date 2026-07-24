@@ -5,6 +5,7 @@
 // Created by Auto (Codex) on 08.07.2026.
 //
 
+import AppKit
 import Foundation
 import Observation
 
@@ -16,11 +17,15 @@ extension MainScreen {
         private let appSettingsService: AppSettingsServiceProtocol
         private let agentRuntimeRegistry: AgentRuntimeRegistry
         private let remoteControlService: RemoteControlServiceProtocol?
+        private let agentProfileService: AgentProfileServiceProtocol?
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
         private(set) var activeAgentRuntimeId: String?
         private(set) var agentRuntimes: [AgentRuntimeItem] = []
+        private(set) var agentProfiles: [AgentWorkflowProfile] = []
+        var selectedAgentProfileId = ""
+        private(set) var agentProfileDirectoryPath = SettingsPageDesign.AgentProfiles.noProjectDirectory
         var selectedAgentModelId: String
         private(set) var errorMessage: String?
         var selectedSafetyMode: SafetyMode
@@ -40,17 +45,22 @@ extension MainScreen {
         var ragTopKBeforeFiltering: Int
         var ragTopKAfterFiltering: Int
         var ragSimilarityThreshold: Double
+        var isPromptImporterPresented = false
+        private(set) var promptImportAssistantId: UUID?
+        private var agentProfileRevision = 0
 
         init(
             providerService: ProviderServiceProtocol,
             appSettingsService: AppSettingsServiceProtocol,
             agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
-            remoteControlService: RemoteControlServiceProtocol? = nil
+            remoteControlService: RemoteControlServiceProtocol? = nil,
+            agentProfileService: AgentProfileServiceProtocol? = nil
         ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
             self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
             self.remoteControlService = remoteControlService
+            self.agentProfileService = agentProfileService
             self.selectedAgentModelId = ""
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
@@ -71,6 +81,7 @@ extension MainScreen {
             self.ragSimilarityThreshold = appSettingsService.ragRetrievalSettings.similarityThreshold
             reloadProviders()
             reloadAgentRuntimes()
+            reloadAgentProfiles()
         }
 
         var activeProviderName: String {
@@ -132,6 +143,85 @@ extension MainScreen {
             set {
                 selectedSafetyMode = newValue ? .autoInsideSandbox : AppSettingsDefaults.defaultSafetyMode
             }
+        }
+
+        var selectedAgentProfile: AgentWorkflowProfile? {
+            agentProfiles.first { $0.id == selectedAgentProfileId }
+        }
+
+        func selectAgentProfile(id: String) {
+            agentProfileService?.selectProfile(id: id)
+            selectedAgentProfileId = agentProfileService?.selectedProfileId ?? id
+            errorMessage = nil
+        }
+
+        func reloadAgentProfiles() {
+            agentProfileService?.reload()
+            agentProfiles = agentProfileService?.profiles ?? []
+            selectedAgentProfileId = agentProfileService?.selectedProfileId ?? ""
+            agentProfileDirectoryPath = agentProfileService?.promptDirectoryPath
+                ?? SettingsPageDesign.AgentProfiles.noProjectDirectory
+            agentProfileRevision += 1
+            errorMessage = nil
+        }
+
+        func presentPromptImporter(for assistantId: UUID) {
+            promptImportAssistantId = assistantId
+            isPromptImporterPresented = true
+        }
+
+        func openPrompt(for assistantId: UUID) {
+            do {
+                guard let fileURL = try agentProfileService?.promptFileURL(for: assistantId) else {
+                    throw AgentProfileServiceError.promptFileUnavailable
+                }
+                guard NSWorkspace.shared.open(fileURL) else {
+                    throw AgentProfileServiceError.promptFileUnavailable
+                }
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func importPrompt(from url: URL) {
+            guard let promptImportAssistantId else { return }
+            do {
+                try agentProfileService?.replacePrompt(
+                    for: promptImportAssistantId,
+                    withContentsOf: url
+                )
+                agentProfileRevision += 1
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            self.promptImportAssistantId = nil
+        }
+
+        func setPromptImportError(_ message: String) {
+            promptImportAssistantId = nil
+            errorMessage = message
+        }
+
+        func moveAssistant(id: UUID, direction: AgentProfileMoveDirection) {
+            do {
+                try agentProfileService?.moveAssistant(id: id, direction: direction)
+                agentProfiles = agentProfileService?.profiles ?? agentProfiles
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func promptPreview(for assistantId: UUID) -> String {
+            _ = agentProfileRevision
+            let prompt = agentProfileService?.prompt(for: assistantId)
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !prompt.isEmpty else {
+                return SettingsPageDesign.AgentProfiles.promptUnavailable
+            }
+            return prompt
         }
 
         var selectedProvider: ProviderSettingsItem? {

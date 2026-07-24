@@ -16,14 +16,23 @@ extension MainScreen {
 
         var body: some View {
             VStack(spacing: Design.Layout.spacing) {
-                ChatHeaderView(run: viewModel.selectedRun, providerName: viewModel.providerName)
+                ChatHeaderView(
+                    run: viewModel.selectedRun,
+                    providerName: viewModel.providerName,
+                    isRecovering: viewModel.isSending,
+                    onResume: viewModel.resumeInterruptedRun,
+                    onRestart: viewModel.restartInterruptedRun,
+                    onCancel: viewModel.stopRun
+                )
 
                 Divider()
 
                 if viewModel.draftRunMode == .multiAgent {
                     MultiAgentPlanPreviewView(
                         configuration: $viewModel.multiAgentConfiguration,
-                        modelOptions: viewModel.agentModelOptions
+                        modelOptions: viewModel.agentModelOptions,
+                        onEnabledChanged: viewModel.setAssistantEnabled,
+                        onModelOverrideChanged: viewModel.setAssistantModelOverride
                     )
                 }
 
@@ -50,6 +59,7 @@ extension MainScreen {
                     isSending: viewModel.isSending,
                     onAttach: viewModel.presentAttachmentImporter,
                     onRemoveAttachment: viewModel.removeAttachment,
+                    onNewChat: viewModel.startNewChat,
                     onSend: viewModel.submitDraft,
                     onStop: viewModel.stopRun
                 )
@@ -78,6 +88,9 @@ extension MainScreen {
                     viewModel.setAttachmentError(error.localizedDescription)
                 }
             }
+            .onAppear {
+                viewModel.reloadAgentProfile()
+            }
         }
     }
 
@@ -86,6 +99,8 @@ extension MainScreen {
 
         @Binding var configuration: MultiAgentRunConfiguration
         let modelOptions: [AgentRuntimeModelOption]
+        let onEnabledChanged: (UUID, Bool) -> Void
+        let onModelOverrideChanged: (UUID, String?) -> Void
 
         var body: some View {
             HStack(spacing: Design.spacing) {
@@ -102,9 +117,12 @@ extension MainScreen {
                             .foregroundStyle(.secondary)
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Toggle(roleConfiguration.role.label, isOn: Binding(
+                        Toggle(roleConfiguration.assistantName, isOn: Binding(
                             get: { roleConfiguration.enabled },
-                            set: { value in configuration.roles[index].enabled = value }
+                            set: { value in
+                                configuration.roles[index].enabled = value
+                                onEnabledChanged(roleConfiguration.id, value)
+                            }
                         ))
                         .toggleStyle(.checkbox)
                         .font(.caption)
@@ -116,7 +134,11 @@ extension MainScreen {
                                 }
                                 return modelOverride
                             },
-                            set: { value in configuration.roles[index].modelOverride = value.isEmpty ? nil : value }
+                            set: { value in
+                                let modelOverride = value.isEmpty ? nil : value
+                                configuration.roles[index].modelOverride = modelOverride
+                                onModelOverrideChanged(roleConfiguration.id, modelOverride)
+                            }
                         )) {
                             Text(Design.runtimeDefaultModelTitle).tag("")
                             ForEach(modelOptions) { model in
@@ -141,6 +163,10 @@ extension MainScreen {
 
         let run: Run?
         let providerName: String
+        let isRecovering: Bool
+        let onResume: () -> Void
+        let onRestart: () -> Void
+        let onCancel: () -> Void
 
         var body: some View {
             HStack(spacing: Design.spacing) {
@@ -156,6 +182,22 @@ extension MainScreen {
                 Spacer()
 
                 if let run {
+                    if run.status == .interrupted {
+                        Button(action: onResume) {
+                            Label(Design.resumeTitle, systemImage: Design.resumeIcon)
+                        }
+                        .disabled(isRecovering)
+
+                        Button(action: onRestart) {
+                            Label(Design.restartTitle, systemImage: Design.restartIcon)
+                        }
+                        .disabled(isRecovering)
+
+                        Button(role: .destructive, action: onCancel) {
+                            Label(Design.cancelTitle, systemImage: Design.cancelIcon)
+                        }
+                        .disabled(isRecovering)
+                    }
                     StatusBadge(status: run.status)
                 }
             }

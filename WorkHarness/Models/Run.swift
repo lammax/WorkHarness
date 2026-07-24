@@ -17,6 +17,7 @@ struct Run: Identifiable, Codable, Equatable {
     var events: [RunEvent]
     var artifacts: [RunArtifact]
     var contextAttachments: [RunContextAttachment]
+    var multiAgentConfiguration: MultiAgentRunConfiguration?
     var tokenUsage: TokenUsage
     var costUsage: CostUsage
     let createdAt: Date
@@ -32,6 +33,7 @@ struct Run: Identifiable, Codable, Equatable {
         events: [RunEvent] = [],
         artifacts: [RunArtifact] = [],
         contextAttachments: [RunContextAttachment] = [],
+        multiAgentConfiguration: MultiAgentRunConfiguration? = nil,
         tokenUsage: TokenUsage = TokenUsage(),
         costUsage: CostUsage = CostUsage(),
         createdAt: Date = Date(),
@@ -46,6 +48,7 @@ struct Run: Identifiable, Codable, Equatable {
         self.events = events
         self.artifacts = artifacts
         self.contextAttachments = contextAttachments
+        self.multiAgentConfiguration = multiAgentConfiguration
         self.tokenUsage = tokenUsage
         self.costUsage = costUsage
         self.createdAt = createdAt
@@ -66,6 +69,10 @@ struct Run: Identifiable, Codable, Equatable {
             [RunContextAttachment].self,
             forKey: .contextAttachments
         ) ?? []
+        multiAgentConfiguration = try container.decodeIfPresent(
+            MultiAgentRunConfiguration.self,
+            forKey: .multiAgentConfiguration
+        )
         tokenUsage = try container.decode(TokenUsage.self, forKey: .tokenUsage)
         costUsage = try container.decode(CostUsage.self, forKey: .costUsage)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
@@ -95,6 +102,7 @@ enum RunStatus: String, Codable, CaseIterable, Equatable {
     case queued
     case running
     case waitingForApproval
+    case interrupted
     case completed
     case failed
     case cancelled
@@ -104,6 +112,7 @@ enum RunStatus: String, Codable, CaseIterable, Equatable {
         case .queued: "Queued"
         case .running: "Running"
         case .waitingForApproval: "Approval"
+        case .interrupted: "Interrupted"
         case .completed: "Completed"
         case .failed: "Failed"
         case .cancelled: "Cancelled"
