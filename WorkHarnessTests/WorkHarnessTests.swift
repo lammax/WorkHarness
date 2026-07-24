@@ -1238,6 +1238,45 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func runsPageViewModelOpensExistingArtifactAndReportsMissingFile() async throws {
+        let repository = InMemoryRunRepository()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkHarnessArtifactTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let reportURL = directory.appendingPathComponent("report.md")
+        try Data("# Report".utf8).write(to: reportURL)
+        let existingArtifact = RunArtifact(name: "Report", kind: "testing-report", path: reportURL.path)
+        let missingArtifact = RunArtifact(
+            name: "Missing",
+            kind: "screenshot",
+            path: directory.appendingPathComponent("missing.png").path
+        )
+        repository.insert(Run(goal: "Inspect evidence", artifacts: [existingArtifact, missingArtifact]))
+
+        var openedURLs: [URL] = []
+        let runService = makeRunService(
+            repository: repository,
+            artifactOpener: {
+                openedURLs.append($0)
+                return true
+            }
+        )
+        let viewModel = MainScreen.RunsPageViewModel(runService: runService)
+
+        viewModel.openArtifact(id: existingArtifact.id)
+
+        #expect(openedURLs == [reportURL])
+        #expect(viewModel.artifactError == nil)
+
+        viewModel.openArtifact(id: missingArtifact.id)
+
+        #expect(openedURLs == [reportURL])
+        #expect(viewModel.artifactError == MainScreen.RunsPageDesign.Detail.artifactOpenFailure)
+    }
+
+    @MainActor
     @Test func runsPageViewModelExposesEmptyEventsState() async throws {
         let repository = InMemoryRunRepository()
         repository.insert(Run(goal: "Run without events"))
@@ -3041,10 +3080,17 @@ private func makeRunService() -> RunService {
 }
 
 @MainActor
-private func makeRunService(repository: InMemoryRunRepository) -> RunService {
+private func makeRunService(
+    repository: InMemoryRunRepository,
+    artifactOpener: @escaping (URL) -> Bool = { _ in true }
+) -> RunService {
     let recorder = RunRecorder(repository: repository)
     let engine = HarnessEngine(repository: repository, recorder: recorder, providerService: makeProviderService(TestAIProvider()))
-    return RunService(repository: repository, harnessEngine: engine)
+    return RunService(
+        repository: repository,
+        harnessEngine: engine,
+        artifactOpener: artifactOpener
+    )
 }
 
 @MainActor

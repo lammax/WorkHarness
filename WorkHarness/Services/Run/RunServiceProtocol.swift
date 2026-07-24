@@ -34,6 +34,7 @@ protocol RunServiceProtocol: BaseServiceProtocol, RunLaunchingProtocol {
     func sendMessage(runId: UUID, message: String) async
     func sendMessage(runId: UUID, message: String, contextAttachments: [RunContextAttachment]) async
     func compactContext(runId: UUID) -> ContextFoldSummary?
+    func openArtifact(_ artifact: RunArtifact) -> Bool
 }
 
 extension RunServiceProtocol {

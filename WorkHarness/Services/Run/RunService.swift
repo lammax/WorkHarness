@@ -5,16 +5,26 @@
 // Created by Auto (Codex) on 07.07.2026.
 //
 
+import AppKit
 import Foundation
 
 @MainActor
 final class RunService: RunServiceProtocol {
     private let repository: RunRepository
     private let harnessEngine: HarnessEngine
+    private let fileManager: FileManager
+    private let artifactOpener: (URL) -> Bool
 
-    init(repository: RunRepository, harnessEngine: HarnessEngine) {
+    init(
+        repository: RunRepository,
+        harnessEngine: HarnessEngine,
+        fileManager: FileManager = .default,
+        artifactOpener: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }
+    ) {
         self.repository = repository
         self.harnessEngine = harnessEngine
+        self.fileManager = fileManager
+        self.artifactOpener = artifactOpener
     }
 
     var runs: [Run] {
@@ -89,5 +99,12 @@ final class RunService: RunServiceProtocol {
 
     func compactContext(runId: UUID) -> ContextFoldSummary? {
         harnessEngine.compactContext(runId: runId)
+    }
+
+    func openArtifact(_ artifact: RunArtifact) -> Bool {
+        guard let path = artifact.path, fileManager.fileExists(atPath: path) else {
+            return false
+        }
+        return artifactOpener(URL(fileURLWithPath: path))
     }
 }

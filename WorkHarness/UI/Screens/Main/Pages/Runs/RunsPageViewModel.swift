@@ -22,6 +22,7 @@ extension MainScreen {
         var selectedEventId: RunEvent.ID?
         var isRecovering = false
         var recoveryError: String?
+        var artifactError: String?
 
         var runs: [Run] {
             runService.runs
@@ -83,6 +84,17 @@ extension MainScreen {
 
         func selectEvent(id eventId: RunEvent.ID?) {
             selectedEventId = eventId
+        }
+
+        func openArtifact(id artifactId: RunArtifact.ID) {
+            artifactError = nil
+            guard
+                let artifact = selectedRun?.artifacts.first(where: { $0.id == artifactId }),
+                runService.openArtifact(artifact)
+            else {
+                artifactError = RunsPageDesign.Detail.artifactOpenFailure
+                return
+            }
         }
 
         func isEventSelected(_ event: RunEventState) -> Bool {
@@ -173,6 +185,7 @@ extension MainScreen {
                     id: artifact.id,
                     title: artifact.name,
                     subtitle: artifact.path ?? artifact.kind,
+                    canOpen: artifact.path != nil,
                     createdAt: artifact.createdAt
                 )
             }
@@ -239,6 +252,7 @@ extension MainScreen {
         let id: RunArtifact.ID
         var title: String
         var subtitle: String
+        var canOpen: Bool
         var createdAt: Date
     }
 }

@@ -133,7 +133,11 @@ extension MainScreen {
                         }
                         MetricsView(metrics: detail.metrics)
                         TimelineView(viewModel: viewModel, events: detail.events, hasEvents: detail.hasEvents)
-                        ArtifactsView(artifacts: detail.artifacts)
+                        ArtifactsView(
+                            artifacts: detail.artifacts,
+                            error: viewModel.artifactError,
+                            onOpen: viewModel.openArtifact
+                        )
                         EventInspectorView(event: detail.selectedEvent)
                     }
                     .padding(Design.Detail.padding)
@@ -294,6 +298,8 @@ extension MainScreen {
         typealias Design = RunsPageDesign
 
         let artifacts: [ArtifactState]
+        let error: String?
+        let onOpen: (RunArtifact.ID) -> Void
 
         var body: some View {
             SectionBlock(title: Design.Detail.artifactsTitle) {
@@ -304,13 +310,32 @@ extension MainScreen {
                 } else {
                     VStack(alignment: .leading, spacing: Design.Detail.sectionSpacing) {
                         ForEach(artifacts) { artifact in
-                            VStack(alignment: .leading, spacing: Design.Detail.sectionTitleSpacing) {
-                                Text(artifact.title)
-                                    .font(.headline)
-                                Text(artifact.subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                            HStack(spacing: Design.Detail.artifactSpacing) {
+                                VStack(alignment: .leading, spacing: Design.Detail.sectionTitleSpacing) {
+                                    Text(artifact.title)
+                                        .font(.headline)
+                                    Text(artifact.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    onOpen(artifact.id)
+                                } label: {
+                                    Label(Design.Detail.artifactOpenTitle, systemImage: Design.Detail.artifactOpenIcon)
+                                }
+                                .disabled(!artifact.canOpen)
+                                .accessibilityIdentifier(Design.Detail.artifactOpenIdentifier)
                             }
+                        }
+
+                        if let error {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
                         }
                     }
                 }

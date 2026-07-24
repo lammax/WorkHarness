@@ -61,6 +61,11 @@ extension MainScreen {
             static let metricsTitle = "Stats"
             static let artifactsTitle = "Artifacts"
             static let artifactsPlaceholder = "Artifacts will appear here when runs start producing files, logs, diffs, or reports."
+            static let artifactOpenTitle = "Open"
+            static let artifactOpenIcon = "arrow.up.forward.app"
+            static let artifactOpenIdentifier = "runs.artifact.open"
+            static let artifactOpenFailure = "The artifact file is unavailable or could not be opened."
+            static let artifactSpacing: CGFloat = 12
         }
 
         enum Metric {
