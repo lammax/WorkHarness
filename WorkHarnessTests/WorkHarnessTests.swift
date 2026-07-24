@@ -497,6 +497,7 @@ struct WorkHarnessTests {
         #expect(Set(agentRuntimeRegistry.runtimes.map(\.id)).isSubset(of: ["cursor.acp", "claude.cli"]))
         #expect(contextBuilder is ContextBuilder)
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
+        #expect(toolRegistry.availableTools.contains { $0.id == "mobile.screen" })
         #expect(mcpToolClient is MCPToolClient)
         #expect(toolService.availableTools.contains { $0.id == "shell.run" })
         #expect(mcpApprovalGateway is MCPApprovalGateway)
@@ -567,6 +568,33 @@ struct WorkHarnessTests {
         #expect(call.arguments["path"] as? String == "README.md")
         #expect(call.arguments["project_root"] as? String == "/tmp/project")
         #expect(call.arguments["overwrite"] as? Bool == true)
+    }
+
+    @MainActor
+    @Test func mcpToolClientRoutesMobileAutomationThroughDedicatedGateway() async throws {
+        let transport = RecordingMCPToolTransport(response: MCPToolTransportResponse(
+            output: "captured",
+            isError: false
+        ))
+        let client = MCPToolClient(transport: transport)
+
+        let result = try await client.invoke(MCPToolInvocation(
+            toolId: "mobile.screen",
+            arguments: [
+                "action": "capture",
+                "argumentsJSON": #"{"platform":"ios","preset":"medium"}"#
+            ],
+            projectRootPath: "/tmp/project"
+        ))
+        let call = try #require(transport.calls.first)
+
+        #expect(result.status == .succeeded)
+        #expect(call.endpoint == URL(string: "http://127.0.0.1:3009/mcp"))
+        #expect(call.name == "screen")
+        #expect(call.arguments["action"] as? String == "capture")
+        #expect(call.arguments["platform"] as? String == "ios")
+        #expect(call.arguments["preset"] as? String == "medium")
+        #expect(call.arguments["argumentsJSON"] == nil)
     }
 
     @MainActor

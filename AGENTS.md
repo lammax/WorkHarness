@@ -193,6 +193,7 @@ Tool layer должен быть отделен от UI и Providers.
 - `FileOperationsMCPServer`
 - `GitHubMCPServer`
 - `LocalLLMMCPServer`
+- `MobileAutomationMCPServer`
 - `RAGMCPServer`
 - `SupportMCPServer`
 - `UtilityMCPServer`

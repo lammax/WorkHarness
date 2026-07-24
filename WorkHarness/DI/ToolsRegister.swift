@@ -16,7 +16,7 @@ extension Container {
                 ShellTool(),
                 GitTool(),
                 RAGSearchTool()
-            ])
+            ] + MobileAutomationTool.approvedTools)
         }.inObjectScope(.container)
 
         register(MCPServerProcessSupervisorProtocol.self) { resolver in

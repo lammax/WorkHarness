@@ -103,7 +103,8 @@ final class MCPServerProcessSupervisor: MCPServerProcessSupervisorProtocol {
     private nonisolated static let executableNamesByPort = [
         3003: "RAGMCPServer",
         3005: "FileOperationsMCPServer",
-        3008: "DeveloperToolsMCPServer"
+        3008: "DeveloperToolsMCPServer",
+        3009: "MobileAutomationMCPServer"
     ]
 }
 

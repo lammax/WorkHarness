@@ -89,14 +89,42 @@ final class MCPToolClient: MCPToolClientProtocol {
             return Route(endpoint: Self.developerToolsEndpoint, toolName: "workspace_run_git", arguments: arguments)
         case "rag.search":
             return Route(endpoint: Self.ragEndpoint, toolName: "rag_answer", arguments: arguments)
+        case let toolId where toolId.hasPrefix(Self.mobileToolPrefix):
+            let toolName = String(toolId.dropFirst(Self.mobileToolPrefix.count))
+            guard !toolName.isEmpty else {
+                throw MCPToolClientError.unsupportedTool(invocation.toolId)
+            }
+            if let argumentsJSON = invocation.arguments["argumentsJSON"] {
+                arguments.merge(
+                    try decodedJSONObject(argumentsJSON),
+                    uniquingKeysWith: { current, _ in current }
+                )
+                arguments.removeValue(forKey: "argumentsJSON")
+            }
+            return Route(
+                endpoint: Self.mobileAutomationEndpoint,
+                toolName: toolName,
+                arguments: arguments
+            )
         default:
             throw MCPToolClientError.unsupportedTool(invocation.toolId)
         }
     }
 
+    private func decodedJSONObject(_ value: String) throws -> [String: Any] {
+        guard let data = value.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any] else {
+            throw MCPToolClientError.invalidArgumentsJSON
+        }
+        return dictionary
+    }
+
     private nonisolated static let fileOperationsEndpoint = URL(string: "http://127.0.0.1:3005/mcp")!
     private nonisolated static let ragEndpoint = URL(string: "http://127.0.0.1:3003/mcp")!
     private nonisolated static let developerToolsEndpoint = URL(string: "http://127.0.0.1:3008/mcp")!
+    private nonisolated static let mobileAutomationEndpoint = URL(string: "http://127.0.0.1:3009/mcp")!
+    private nonisolated static let mobileToolPrefix = "mobile."
 }
 
 @MainActor
@@ -209,6 +237,7 @@ private enum MCPToolClientError: LocalizedError {
     case unsupportedTool(String)
     case httpStatus(Int)
     case invalidResponse
+    case invalidArgumentsJSON
     case server(String)
 
     var errorDescription: String? {
@@ -219,6 +248,8 @@ private enum MCPToolClientError: LocalizedError {
             "MCP tool server returned HTTP \(statusCode)."
         case .invalidResponse:
             "MCP tool server returned an invalid response."
+        case .invalidArgumentsJSON:
+            "Mobile automation argumentsJSON must be a JSON object."
         case .server(let message):
             "MCP tool server error: \(message)"
         }

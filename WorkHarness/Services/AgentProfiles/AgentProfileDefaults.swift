@@ -300,6 +300,7 @@ enum AgentProfileDefaults {
         - Read `.workharness/testing/testing.json` and each enabled mapped `smoke/*.md` file.
         - Verify target, simulator/device, application, fixture, and mobile automation capabilities before the first scenario.
         - Perform every step through the approved WorkHarness MCP gateway using semantic locators when available.
+        - Use `mobile.device`, `mobile.app`, `mobile.screen`, `mobile.ui`, and `mobile.input`. Pass the Claude in Mobile meta-tool action in `action` and any remaining typed parameters as one JSON object string in `argumentsJSON`.
         - Evaluate each stated assertion and capture a screenshot artifact after every step.
         - Record pass/fail, evidence, screenshot path, and the exact failing step.
 
