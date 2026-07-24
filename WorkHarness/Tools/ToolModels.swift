@@ -95,17 +95,37 @@ struct ToolResult: Codable, Equatable {
     var status: ToolExecutionStatus
     var output: String
     var metadata: [String: String]
+    var artifacts: [RunArtifact]
 
     init(
         toolId: String,
         status: ToolExecutionStatus,
         output: String,
-        metadata: [String: String] = [:]
+        metadata: [String: String] = [:],
+        artifacts: [RunArtifact] = []
     ) {
         self.toolId = toolId
         self.status = status
         self.output = output
         self.metadata = metadata
+        self.artifacts = artifacts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case toolId
+        case status
+        case output
+        case metadata
+        case artifacts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        toolId = try container.decode(String.self, forKey: .toolId)
+        status = try container.decode(ToolExecutionStatus.self, forKey: .status)
+        output = try container.decode(String.self, forKey: .output)
+        metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
+        artifacts = try container.decodeIfPresent([RunArtifact].self, forKey: .artifacts) ?? []
     }
 }
 

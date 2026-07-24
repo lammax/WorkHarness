@@ -78,6 +78,7 @@ extension MainScreen {
                 case .toolCallFinished: "checkmark.rectangle"
                 case .toolCallFailed: "exclamationmark.triangle"
                 case .toolResult: "doc.text.magnifyingglass"
+                case .artifactCreated: "photo.badge.checkmark"
                 case .fileChanged: "doc.badge.gearshape"
                 case .approvalRequested: "hand.raised"
                 case .approvalGranted: "checkmark.shield"

@@ -16,6 +16,7 @@ struct MCPToolInvocation: Equatable {
 struct MCPToolTransportResponse: Equatable {
     var output: String
     var isError: Bool
+    var artifacts: [RunArtifact] = []
 }
 
 @MainActor
@@ -65,7 +66,8 @@ final class MCPToolClient: MCPToolClientProtocol {
             metadata: [
                 "mcpEndpoint": route.endpoint.absoluteString,
                 "mcpToolName": route.toolName
-            ]
+            ],
+            artifacts: response.artifacts
         )
     }
 
@@ -167,11 +169,32 @@ final class MCPHTTPToolTransport: MCPToolTransportProtocol {
             throw MCPToolClientError.invalidResponse
         }
 
-        let output = content.compactMap { $0["text"] as? String }.joined(separator: "\n")
+        var artifacts: [RunArtifact] = []
+        let output = content.compactMap { item -> String? in
+            guard let text = item["text"] as? String else { return nil }
+            if let artifact = Self.decodeArtifactMarker(text) {
+                artifacts.append(artifact)
+                return nil
+            }
+            return text
+        }.joined(separator: "\n")
         return MCPToolTransportResponse(
             output: output,
-            isError: result["isError"] as? Bool ?? false
+            isError: result["isError"] as? Bool ?? false,
+            artifacts: artifacts
         )
+    }
+
+    private nonisolated static func decodeArtifactMarker(_ text: String) -> RunArtifact? {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let marker = object["workharnessArtifact"] as? [String: Any],
+              let name = marker["name"] as? String,
+              let kind = marker["kind"] as? String,
+              let path = marker["path"] as? String else {
+            return nil
+        }
+        return RunArtifact(name: name, kind: kind, path: path)
     }
 
     private func initializeIfNeeded(endpoint: URL) async throws {

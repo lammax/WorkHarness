@@ -18,4 +18,10 @@ final class RunRecorder {
     func record(runId: UUID, type: RunEventType, message: String, metadata: [String: String] = [:]) {
         repository.appendEvent(.init(runId: runId, type: type, message: message, metadata: metadata))
     }
+
+    func recordArtifact(runId: UUID, artifact: RunArtifact) {
+        repository.updateRun(runId) { run in
+            run.artifacts.append(artifact)
+        }
+    }
 }

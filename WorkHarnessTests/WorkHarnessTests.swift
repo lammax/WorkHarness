@@ -572,9 +572,15 @@ struct WorkHarnessTests {
 
     @MainActor
     @Test func mcpToolClientRoutesMobileAutomationThroughDedicatedGateway() async throws {
+        let artifact = RunArtifact(
+            name: "Mobile screenshot",
+            kind: "screenshot",
+            path: "/tmp/project/.workharness/testing/reports/artifacts/screen.png"
+        )
         let transport = RecordingMCPToolTransport(response: MCPToolTransportResponse(
             output: "captured",
-            isError: false
+            isError: false,
+            artifacts: [artifact]
         ))
         let client = MCPToolClient(transport: transport)
 
@@ -589,12 +595,55 @@ struct WorkHarnessTests {
         let call = try #require(transport.calls.first)
 
         #expect(result.status == .succeeded)
+        #expect(result.artifacts == [artifact])
         #expect(call.endpoint == URL(string: "http://127.0.0.1:3009/mcp"))
         #expect(call.name == "screen")
         #expect(call.arguments["action"] as? String == "capture")
         #expect(call.arguments["platform"] as? String == "ios")
         #expect(call.arguments["preset"] as? String == "medium")
         #expect(call.arguments["argumentsJSON"] == nil)
+    }
+
+    @MainActor
+    @Test func toolServiceRecordsMobileScreenshotAsRunArtifact() async throws {
+        let repository = InMemoryRunRepository()
+        let run = Run(goal: "Capture a smoke-test screenshot")
+        repository.insert(run)
+        let artifact = RunArtifact(
+            name: "Mobile screenshot",
+            kind: "screenshot",
+            path: "/tmp/project/.workharness/testing/reports/artifacts/screen.png"
+        )
+        let mcpClient = FakeMCPToolClient(result: ToolResult(
+            toolId: "mobile.screen",
+            status: .succeeded,
+            output: "captured",
+            artifacts: [artifact]
+        ))
+        let service = makeToolService(
+            repository: repository,
+            mcpClient: mcpClient,
+            tools: [try #require(MobileAutomationTool.approvedTools.first { $0.id == "mobile.screen" })]
+        )
+
+        let result = try await service.execute(.init(
+            runId: run.id,
+            toolId: "mobile.screen",
+            arguments: ["action": "capture"],
+            projectRootPath: "/tmp/project"
+        ))
+        let storedRun = try #require(repository.run(withId: run.id))
+
+        #expect(result.artifacts == [artifact])
+        #expect(storedRun.artifacts == [artifact])
+        #expect(storedRun.events.map(\.type) == [
+            .toolCallRequested,
+            .toolCallStarted,
+            .toolCallFinished,
+            .artifactCreated,
+            .toolResult
+        ])
+        #expect(storedRun.events[3].metadata["path"] == artifact.path)
     }
 
     @MainActor

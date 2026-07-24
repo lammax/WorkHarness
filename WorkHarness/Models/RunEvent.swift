@@ -48,6 +48,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
     case toolCallFinished
     case toolCallFailed
     case toolResult
+    case artifactCreated
     case fileChanged
     case approvalRequested
     case approvalGranted
@@ -83,6 +84,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable {
         case .toolCallFinished: "Tool Finished"
         case .toolCallFailed: "Tool Failed"
         case .toolResult: "Tool Result"
+        case .artifactCreated: "Artifact Created"
         case .fileChanged: "File Changed"
         case .approvalRequested: "Approval Requested"
         case .approvalGranted: "Approval Granted"

@@ -128,6 +128,19 @@ final class ToolService: ToolServiceProtocol {
                 message: tool.displayName,
                 metadata: metadata.merging(["status": result.status.rawValue]) { _, new in new }
             )
+            for artifact in result.artifacts {
+                recorder.recordArtifact(runId: request.runId, artifact: artifact)
+                recorder.record(
+                    runId: request.runId,
+                    type: .artifactCreated,
+                    message: artifact.name,
+                    metadata: [
+                        "artifactId": artifact.id.uuidString,
+                        "kind": artifact.kind,
+                        "path": artifact.path ?? ""
+                    ]
+                )
+            }
             recorder.record(
                 runId: request.runId,
                 type: .toolResult,
