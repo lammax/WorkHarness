@@ -470,11 +470,26 @@ struct TestingConfigurationTests {
             uuidString: "60000000-0000-0000-0000-000000000003"
         )!)
         let runRepository = InMemoryRunRepository()
+        let assistantNames = [
+            "Coverage Analyst",
+            "Test Author",
+            "Code Test Runner",
+            "Smoke Scenario Maintainer",
+            "Smoke Runner",
+            "Test Reporter"
+        ]
         runRepository.insert(Run(
             id: launcher.runId,
             goal: "Full testing fixture",
             status: .completed,
-            events: [
+            events: assistantNames.map {
+                RunEvent(
+                    runId: launcher.runId,
+                    type: .agentFinished,
+                    message: "\($0) finished.",
+                    metadata: ["assistantName": $0]
+                )
+            } + [
                 RunEvent(
                     runId: launcher.runId,
                     type: .assistantMessage,
@@ -535,12 +550,70 @@ struct TestingConfigurationTests {
         let report = try String(contentsOfFile: reportPath, encoding: .utf8)
         #expect(report.contains("# Testing Report"))
         #expect(report.contains("**Final Verdict:** PASSED"))
+        #expect(report.contains("## User Request"))
+        #expect(report.contains("I deployed a new feature. Validate it."))
+        #expect(report.contains("**Smoke Scenario Maintainer:** COMPLETED"))
+        #expect(report.contains("## Screenshot Evidence"))
         #expect(report.contains("`/tmp/testing-fixture.png`"))
         #expect(report.contains(testingService.catalog.target.codeTestCommand))
         #expect(
             runRepository.run(withId: runId)?.events.suffix(2).map(\.type)
                 == [.artifactCreated, .finalSummary]
         )
+    }
+
+    @MainActor
+    @Test func testingWorkflowReportBlocksWhenRequiredPhaseIsMissing() async throws {
+        let projectRoot = try makeTestingDirectory()
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Mobile", rootPath: projectRoot.path)
+        let testingService = TestingConfigurationService(projectService: projectService)
+        let launcher = TestingFakeRunLauncher(runId: UUID())
+        let runRepository = InMemoryRunRepository()
+        runRepository.insert(Run(
+            id: launcher.runId,
+            goal: "Incomplete testing fixture",
+            status: .completed,
+            events: [
+                RunEvent(
+                    runId: launcher.runId,
+                    type: .agentFinished,
+                    message: "Test Reporter finished.",
+                    metadata: ["assistantName": "Test Reporter"]
+                ),
+                RunEvent(
+                    runId: launcher.runId,
+                    type: .assistantMessage,
+                    message: "## Final Verdict\nPASSED",
+                    metadata: ["assistantName": "Test Reporter"]
+                )
+            ]
+        ))
+        let service = TestingWorkflowService(
+            testingConfigurationService: testingService,
+            testingEnvironmentService: TestingFakeEnvironmentService(
+                diagnostics: makeDiagnostics()
+            ),
+            agentProfileService: AgentProfileService(projectService: projectService),
+            runLauncher: launcher,
+            runRepository: runRepository,
+            recorder: RunRecorder(repository: runRepository),
+            projectService: projectService
+        )
+
+        let runId = try await service.startFullRun(request: nil)
+        let reportArtifact = try #require(
+            runRepository.run(withId: runId)?.artifacts.first {
+                $0.kind == "testing-report"
+            }
+        )
+        let reportPath = try #require(reportArtifact.path)
+        let report = try String(contentsOfFile: reportPath, encoding: .utf8)
+
+        #expect(report.contains("**Final Verdict:** BLOCKED"))
+        #expect(report.contains("**Coverage Analyst:** MISSING"))
+        #expect(report.contains("**Test Reporter:** COMPLETED"))
     }
 
     @MainActor

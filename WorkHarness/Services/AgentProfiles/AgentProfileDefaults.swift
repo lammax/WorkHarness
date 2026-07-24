@@ -351,7 +351,7 @@ enum AgentProfileDefaults {
         "testing-reporter.md": """
         # Test Reporter
 
-        Produce one evidence-backed report from Coverage Analyst, Test Author, Code Test Runner, Smoke Runner, RunEvents, and artifacts.
+        Produce one evidence-backed report from Coverage Analyst, Test Author, Code Test Runner, Smoke Scenario Maintainer, Smoke Runner, RunEvents, and artifacts.
 
         ## Must do
         - Reconcile code-test and smoke-test outcomes without rerunning or rewriting them.

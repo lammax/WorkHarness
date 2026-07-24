@@ -89,6 +89,7 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
 
         try createReport(
             runId: runId,
+            request: request,
             scenarios: scenarios,
             diagnostics: diagnostics
         )
@@ -97,6 +98,7 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
 
     private func createReport(
         runId: UUID,
+        request: String?,
         scenarios: [SmokeScenario],
         diagnostics: TestingEnvironmentDiagnostics
     ) throws {
@@ -116,6 +118,7 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
             .appendingPathExtension("md")
         try reportMarkdown(
             run: run,
+            request: request,
             scenarios: scenarios,
             diagnostics: diagnostics
         ).write(to: reportURL, atomically: true, encoding: .utf8)
@@ -146,12 +149,22 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
 
     private func reportMarkdown(
         run: Run,
+        request: String?,
         scenarios: [SmokeScenario],
         diagnostics: TestingEnvironmentDiagnostics
     ) -> String {
         let target = testingConfigurationService.catalog.target
+        let requestText = request?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userContext = requestText.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "Validate the current project state."
         let environment = diagnostics.checks.map {
             "- **\($0.title):** \($0.status.rawValue.uppercased()) — \($0.message)"
+        }.joined(separator: "\n")
+        let phases = Self.requiredAssistantNames.map { assistantName in
+            let finished = run.events.contains {
+                $0.type == .agentFinished && $0.metadata["assistantName"] == assistantName
+            }
+            return "- **\(assistantName):** \(finished ? "COMPLETED" : "MISSING")"
         }.joined(separator: "\n")
         let scenarioList = scenarios.enumerated().map {
             "\($0.offset + 1). **\($0.element.name)** — `\($0.element.promptFileName)`"
@@ -161,6 +174,10 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
             : run.artifacts.map {
                 "- **\($0.kind):** `\($0.path ?? $0.name)`"
             }.joined(separator: "\n")
+        let screenshots = run.artifacts.filter { $0.kind == "screenshot" }
+        let screenshotList = screenshots.isEmpty
+            ? "- No screenshot artifacts were recorded."
+            : screenshots.map { "- `\($0.path ?? $0.name)`" }.joined(separator: "\n")
         let failures = run.events.filter(Self.isFailureEvent)
         let failureList = failures.isEmpty
             ? "- No Run failure events were recorded."
@@ -174,6 +191,10 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
         - **Status:** \(run.status.label)
         - **Final Verdict:** \(verdict(for: run))
 
+        ## User Request
+
+        \(userContext)
+
         ## Commands
 
         - **Build:** `\(target.buildCommand)`
@@ -183,6 +204,10 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
 
         \(environment)
 
+        ## Workflow Phases
+
+        \(phases)
+
         ## Smoke Scenarios
 
         \(scenarioList)
@@ -190,6 +215,10 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
         ## Artifacts
 
         \(artifacts)
+
+        ## Screenshot Evidence
+
+        \(screenshotList)
 
         ## Failure Events
 
@@ -222,6 +251,14 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
             return "BLOCKED"
         default:
             break
+        }
+
+        guard Self.requiredAssistantNames.allSatisfy({ assistantName in
+            run.events.contains {
+                $0.type == .agentFinished && $0.metadata["assistantName"] == assistantName
+            }
+        }) else {
+            return "BLOCKED"
         }
 
         let output = reporterOutput(from: run).uppercased()
@@ -284,6 +321,14 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
 
     private static let profileId = "testing"
     private static let reporterFileName = "testing-reporter.md"
+    private static let requiredAssistantNames = [
+        "Coverage Analyst",
+        "Test Author",
+        "Code Test Runner",
+        "Smoke Scenario Maintainer",
+        "Smoke Runner",
+        "Test Reporter"
+    ]
     private static let requiredPromptFiles = [
         "testing-coverage-analyst.md",
         "testing-test-author.md",
