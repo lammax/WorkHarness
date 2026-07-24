@@ -140,6 +140,9 @@ struct TestingConfigurationTests {
         ])
         #expect(configuration.roles[0].instructions.contains("at least three production modules"))
         #expect(configuration.roles[3].instructions.contains("screenshot artifact after every step"))
+        #expect(configuration.roles[3].instructions.contains(#"{"target":"ios"}"#))
+        #expect(configuration.roles[3].instructions.contains(#"{"package":"<bundle identifier>"}"#))
+        #expect(configuration.roles[3].instructions.contains("WebDriverAgent cold start"))
         #expect(configuration.roles[4].instructions.contains("Final Verdict"))
     }
 
@@ -283,6 +286,7 @@ struct TestingConfigurationTests {
         #expect(!request.goal.contains(firstScenario.name))
         #expect(request.goal.contains("Authentication error"))
         #expect(request.goal.contains("Do not run unit, integration, build, lint"))
+        #expect(request.goal.contains("/smoke"))
         let reportArtifact = try #require(
             runRepository.run(withId: runId)?.artifacts.first { $0.kind == "smoke-report" }
         )

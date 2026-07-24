@@ -256,7 +256,7 @@ final class SmokeTestService: SmokeTestServiceProtocol {
         }.joined(separator: "\n")
 
         return """
-        Run the enabled smoke scenarios after this explicit Settings action.
+        Run the enabled smoke scenarios after this explicit user request from Testing settings or a `/smoke` chat command.
         Do not run unit, integration, build, lint, or code-authoring phases.
 
         Target:
