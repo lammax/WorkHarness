@@ -19,9 +19,9 @@ enum TestingConfigurationDefaults {
             xcodeContainerPath: "WorkHarnessMobile.xcodeproj",
             scheme: "WorkHarnessMobile",
             bundleIdentifier: "com.lammax.projects.ios.ai.harness.work.mobile.WorkHarnessMobile",
-            deviceName: "iPhone 16 Pro",
-            buildCommand: "xcodebuild build -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 16 Pro'",
-            codeTestCommand: "xcodebuild test -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 16 Pro'"
+            deviceName: "iPhone 17 Pro",
+            buildCommand: "xcodebuild build -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro'",
+            codeTestCommand: "xcodebuild test -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro'"
         ),
         scenarios: [
             scenario(
@@ -62,8 +62,9 @@ enum TestingConfigurationDefaults {
         # Pairing succeeds
 
         ## Preconditions
-        - Launch WorkHarnessMobile with the deterministic UI-testing fixture.
-        - Use the fixture host and pairing code exposed by the test configuration.
+        - Launch a Debug build of WorkHarnessMobile.
+        - Use fixture host `fixture.workharness.local:8443`.
+        - Use fixture pairing code `246810`.
 
         ## Steps
         1. Capture the initial Pairing screen.
@@ -79,7 +80,8 @@ enum TestingConfigurationDefaults {
         # Authentication error
 
         ## Preconditions
-        - Launch WorkHarnessMobile with the deterministic UI-testing fixture.
+        - Launch a Debug build of WorkHarnessMobile.
+        - Use fixture host `fixture.workharness.local:8443`.
 
         ## Steps
         1. Enter the fixture host.
