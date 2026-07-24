@@ -143,16 +143,18 @@ struct TestingConfigurationTests {
             "Coverage Analyst",
             "Test Author",
             "Code Test Runner",
+            "Smoke Scenario Maintainer",
             "Smoke Runner",
             "Test Reporter"
         ])
         #expect(configuration.roles[0].instructions.contains("at least three production modules"))
-        #expect(configuration.roles[3].instructions.contains("screenshot artifact after every step"))
-        #expect(configuration.roles[3].instructions.contains(#"{"target":"ios"}"#))
-        #expect(configuration.roles[3].instructions.contains(#"{"package":"<bundle identifier>"}"#))
-        #expect(configuration.roles[3].instructions.contains(#""artifactName":"<scenario>-step-<NN>-<slug>""#))
-        #expect(configuration.roles[3].instructions.contains("WebDriverAgent cold start"))
-        #expect(configuration.roles[4].instructions.contains("Final Verdict"))
+        #expect(configuration.roles[3].instructions.contains("If no smoke update was explicitly requested"))
+        #expect(configuration.roles[4].instructions.contains("screenshot artifact after every step"))
+        #expect(configuration.roles[4].instructions.contains(#"{"target":"ios"}"#))
+        #expect(configuration.roles[4].instructions.contains(#"{"package":"<bundle identifier>"}"#))
+        #expect(configuration.roles[4].instructions.contains(#""artifactName":"<scenario>-step-<NN>-<slug>""#))
+        #expect(configuration.roles[4].instructions.contains("WebDriverAgent cold start"))
+        #expect(configuration.roles[5].instructions.contains("Final Verdict"))
     }
 
     @MainActor
@@ -186,7 +188,74 @@ struct TestingConfigurationTests {
 
         #expect(service.selectedProfileId == "research")
         #expect(service.profiles.map(\.id) == ["bug-fix", "research", "implementation", "testing"])
-        #expect(service.configuration(for: "testing").roles.count == 5)
+        #expect(service.configuration(for: "testing").roles.count == 6)
+    }
+
+    @MainActor
+    @Test func agentProfileServiceMigratesMissingBuiltInAssistantInDefaultOrder() throws {
+        let projectRoot = try makeTestingDirectory()
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        let profileDirectory = projectRoot.appendingPathComponent(
+            AgentProfileDefaults.directoryName,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: profileDirectory,
+            withIntermediateDirectories: true
+        )
+        var legacyCatalog = AgentProfileDefaults.catalog
+        let testingIndex = try #require(
+            legacyCatalog.profiles.firstIndex { $0.id == "testing" }
+        )
+        legacyCatalog.profiles[testingIndex].assistants.removeAll {
+            $0.name == "Smoke Scenario Maintainer"
+        }
+        let smokeIndex = try #require(
+            legacyCatalog.profiles[testingIndex].assistants.firstIndex {
+                $0.name == "Smoke Runner"
+            }
+        )
+        legacyCatalog.profiles[testingIndex].assistants[smokeIndex].enabled = false
+        legacyCatalog.profiles[testingIndex].assistants[smokeIndex].modelOverride = "fixture-model"
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(legacyCatalog).write(
+            to: profileDirectory.appendingPathComponent(
+                AgentProfileDefaults.manifestFileName
+            ),
+            options: .atomic
+        )
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Existing", rootPath: projectRoot.path)
+
+        let service = AgentProfileService(projectService: projectService)
+        let testingProfile = try #require(
+            service.profiles.first { $0.id == "testing" }
+        )
+
+        #expect(testingProfile.assistants.map(\.name) == [
+            "Coverage Analyst",
+            "Test Author",
+            "Code Test Runner",
+            "Smoke Scenario Maintainer",
+            "Smoke Runner",
+            "Test Reporter"
+        ])
+        let migratedSmokeRunner = try #require(
+            testingProfile.assistants.first { $0.name == "Smoke Runner" }
+        )
+        #expect(!migratedSmokeRunner.enabled)
+        #expect(migratedSmokeRunner.modelOverride == "fixture-model")
+        #expect(
+            service.prompt(
+                for: try #require(
+                    testingProfile.assistants.first {
+                        $0.name == "Smoke Scenario Maintainer"
+                    }
+                ).id
+            ).contains("Review smoke coverage")
+        )
     }
 
     @MainActor
@@ -445,6 +514,7 @@ struct TestingConfigurationTests {
             "Coverage Analyst",
             "Test Author",
             "Code Test Runner",
+            "Smoke Scenario Maintainer",
             "Smoke Runner",
             "Test Reporter"
         ])

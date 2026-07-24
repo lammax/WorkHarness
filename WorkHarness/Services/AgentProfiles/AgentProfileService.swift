@@ -47,7 +47,7 @@ final class AgentProfileService: AgentProfileServiceProtocol {
             let manifestURL = directoryURL.appendingPathComponent(AgentProfileDefaults.manifestFileName)
             let data = try Data(contentsOf: manifestURL)
             let storedCatalog = try JSONDecoder().decode(AgentProfileCatalog.self, from: data)
-            let catalog = catalogByAddingMissingBuiltInProfiles(to: storedCatalog)
+            let catalog = catalogByAddingMissingBuiltInContent(to: storedCatalog)
             if catalog != storedCatalog {
                 try encodedCatalog(catalog).write(to: manifestURL, options: .atomic)
             }
@@ -247,19 +247,62 @@ final class AgentProfileService: AgentProfileServiceProtocol {
         return try encoder.encode(catalog)
     }
 
-    private func catalogByAddingMissingBuiltInProfiles(
+    private func catalogByAddingMissingBuiltInContent(
         to storedCatalog: AgentProfileCatalog
     ) -> AgentProfileCatalog {
         let storedProfileIds = Set(storedCatalog.profiles.map(\.id))
         let missingProfiles = AgentProfileDefaults.catalog.profiles.filter {
             !storedProfileIds.contains($0.id)
         }
-        guard !missingProfiles.isEmpty else { return storedCatalog }
+        var profiles = storedCatalog.profiles
+        for profileIndex in profiles.indices {
+            guard let builtInProfile = AgentProfileDefaults.catalog.profiles.first(where: {
+                $0.id == profiles[profileIndex].id
+            }) else {
+                continue
+            }
+            profiles[profileIndex].assistants = assistantsByAddingMissingBuiltInContent(
+                to: profiles[profileIndex].assistants,
+                builtInAssistants: builtInProfile.assistants
+            )
+        }
 
         return AgentProfileCatalog(
             selectedProfileId: storedCatalog.selectedProfileId,
-            profiles: storedCatalog.profiles + missingProfiles
+            profiles: profiles + missingProfiles
         )
+    }
+
+    private func assistantsByAddingMissingBuiltInContent(
+        to storedAssistants: [AgentProfileAssistant],
+        builtInAssistants: [AgentProfileAssistant]
+    ) -> [AgentProfileAssistant] {
+        var assistants = storedAssistants
+        for (builtInIndex, builtInAssistant) in builtInAssistants.enumerated() {
+            guard !assistants.contains(where: { $0.id == builtInAssistant.id }) else {
+                continue
+            }
+
+            let followingIds = Set(
+                builtInAssistants.dropFirst(builtInIndex + 1).map(\.id)
+            )
+            if let insertionIndex = assistants.firstIndex(where: {
+                followingIds.contains($0.id)
+            }) {
+                assistants.insert(builtInAssistant, at: insertionIndex)
+                continue
+            }
+
+            let precedingIds = Set(builtInAssistants.prefix(builtInIndex).map(\.id))
+            if let previousIndex = assistants.lastIndex(where: {
+                precedingIds.contains($0.id)
+            }) {
+                assistants.insert(builtInAssistant, at: previousIndex + 1)
+            } else {
+                assistants.append(builtInAssistant)
+            }
+        }
+        return assistants
     }
 
     private func promptPath(for assistant: AgentProfileAssistant) -> String {

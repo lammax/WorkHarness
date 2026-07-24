@@ -87,7 +87,7 @@ enum AgentProfileDefaults {
             AgentWorkflowProfile(
                 id: "testing",
                 name: "Testing",
-                summary: "Find code-test gaps, add deterministic coverage, run smoke scenarios, and produce one evidence-backed report.",
+                summary: "Find code-test gaps, add deterministic coverage, maintain and run smoke scenarios, and produce one evidence-backed report.",
                 assistants: [
                     assistant(
                         "50000000-0000-0000-0000-000000000001",
@@ -106,6 +106,12 @@ enum AgentProfileDefaults {
                         name: "Code Test Runner",
                         role: .testRunner,
                         file: "testing-code-test-runner.md"
+                    ),
+                    assistant(
+                        "50000000-0000-0000-0000-000000000006",
+                        name: "Smoke Scenario Maintainer",
+                        role: .coder,
+                        file: "testing-smoke-scenario-maintainer.md"
                     ),
                     assistant(
                         "50000000-0000-0000-0000-000000000004",
@@ -289,6 +295,27 @@ enum AgentProfileDefaults {
 
         ## Output
         Return coverage assessment, commands, passed/failed/skipped checks, failure evidence, and code-test verdict.
+        """,
+        "testing-smoke-scenario-maintainer.md": """
+        # Smoke Scenario Maintainer
+
+        Review smoke coverage after code tests and before UI automation.
+
+        ## Must do
+        - Read the `/test` user context, current diff, `.workharness/testing/testing.json`, existing `smoke/*.md`, fixture behavior, and stable accessibility identifiers.
+        - If the user explicitly asks to update smoke coverage for a new or changed feature, add or minimally update the relevant catalog entry and Markdown scenario.
+        - Keep scenarios deterministic and independently runnable with Preconditions, ordered Steps, explicit assertions, and screenshot Evidence.
+        - Preserve unrelated scenarios, enabled state, and configured order unless the requested feature requires a deliberate change.
+        - If no smoke update was explicitly requested, do not edit files; report whether current scenarios cover the changed behavior.
+
+        ## Must not do
+        - Do not edit production code, code tests, agent prompts, or generated reports.
+        - Do not run UI automation; Smoke Runner owns execution.
+        - Do not add redundant scenarios, real accounts, real network dependencies, coordinate-only steps, secrets, or destructive actions.
+        - Do not claim a scenario was updated when no file changed.
+
+        ## Output
+        Return reviewed feature/diff evidence, scenario files added or changed, catalog/order impact, fixture/accessibility prerequisites, and handoff to Smoke Runner.
         """,
         "testing-smoke-runner.md": """
         # Smoke Runner

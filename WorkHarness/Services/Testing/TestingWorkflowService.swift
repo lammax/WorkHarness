@@ -254,8 +254,9 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
         1. Find meaningful code-test gaps in at least three production modules.
         2. Add deterministic unit or integration tests for those gaps.
         3. Run the configured build and code-test commands.
-        4. Run every enabled smoke scenario through the approved mobile MCP gateway.
-        5. Produce one evidence-backed report. A skipped or blocked required phase is not a pass.
+        4. Review smoke coverage. Update the catalog and Markdown scenarios only if the user context explicitly requests coverage for a new or changed feature.
+        5. Run every enabled smoke scenario through the approved mobile MCP gateway.
+        6. Produce one evidence-backed report. A skipped or blocked required phase is not a pass.
 
         Commands:
         - Build: \(target.buildCommand)
@@ -287,6 +288,7 @@ final class TestingWorkflowService: TestingWorkflowServiceProtocol {
         "testing-coverage-analyst.md",
         "testing-test-author.md",
         "testing-code-test-runner.md",
+        "testing-smoke-scenario-maintainer.md",
         "testing-smoke-runner.md",
         reporterFileName
     ]

@@ -31,7 +31,7 @@ enum TestingWorkflowServiceError: LocalizedError, Equatable {
         case .noEnabledScenarios:
             "Enable at least one smoke scenario before starting the full testing flow."
         case .testingProfileIncomplete:
-            "The Testing profile must enable Coverage Analyst, Test Author, Code Test Runner, Smoke Runner, and Test Reporter."
+            "The Testing profile must enable every required code-test, smoke-maintenance, smoke-runner, and reporting assistant."
         case .runStartFailed:
             "WorkHarness could not start the full testing Run."
         case .completedRunUnavailable:
