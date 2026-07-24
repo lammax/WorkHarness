@@ -462,6 +462,22 @@ Pages/<PageName>/
 - Resume не должен выдавать новую сессию за точное продолжение потерянного процесса: сначала требовать проверки workspace/git diff и не повторять уже завершённые изменения вслепую.
 - Recovery transitions обязательно покрывать детерминированными тестами статусов, событий и контекста.
 
-## 20. Итоговое правило
+## 20. Testing profiles и smoke-сценарии
+
+- Проектная конфигурация тестирования хранится в `<project-root>/.workharness/testing/`.
+  - `testing.json` хранит test target, build/test commands, порядок сценариев и enabled state;
+  - каждый smoke-сценарий хранится в отдельном Markdown-файле внутри `smoke/`;
+  - Markdown является source of truth для шагов, assertions и требований к screenshots.
+- Settings редактирует конфигурацию только через `TestingConfigurationServiceProtocol`; View не читает и не пишет файлы напрямую.
+- Smoke-тесты запускаются только явным действием пользователя через специальную кнопку в Settings. Не запускать smoke-набор автоматически при старте приложения, обычном чате, сохранении настроек или после каждого изменения кода.
+- Code tests и smoke tests являются разными validation layers, но результаты должны объединяться в одном Run/report.
+- Smoke automation проходит через Tool/MCP/approval boundary WorkHarness. Не подключать Claude in Mobile напрямую к agent runtime в обход gateway, RunEvents и audit trail.
+- Каждый smoke-шаг должен иметь наблюдаемый результат: pass/fail, сообщение, screenshot artifact и связь с Run.
+- Для UI automation использовать детерминированный fixture mode, стабильные accessibility identifiers и simulator/device configuration. Не полагаться на координаты, real network или случайные задержки, если доступен semantic locator.
+- Каталог сценариев должен быть data-driven: UI и orchestrator не содержат фиксированный список smoke-сценариев.
+- Reports/screenshots не должны загрязнять Git по умолчанию; хранить их в отдельном artifacts/report каталоге.
+- Для testing configuration service обязательны детерминированные тесты seed/load, persistence target, enabled/order и mapping scenario → Markdown.
+
+## 21. Итоговое правило
 
 Если правило из `agent-harness` skill и локальное правило из этого файла расходятся, применять более строгое правило, если пользователь явно не сказал иначе.

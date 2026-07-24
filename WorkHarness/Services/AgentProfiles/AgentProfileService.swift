@@ -44,8 +44,13 @@ final class AgentProfileService: AgentProfileServiceProtocol {
 
         do {
             try seedCatalogIfNeeded(at: directoryURL)
-            let data = try Data(contentsOf: directoryURL.appendingPathComponent(AgentProfileDefaults.manifestFileName))
-            let catalog = try JSONDecoder().decode(AgentProfileCatalog.self, from: data)
+            let manifestURL = directoryURL.appendingPathComponent(AgentProfileDefaults.manifestFileName)
+            let data = try Data(contentsOf: manifestURL)
+            let storedCatalog = try JSONDecoder().decode(AgentProfileCatalog.self, from: data)
+            let catalog = catalogByAddingMissingBuiltInProfiles(to: storedCatalog)
+            if catalog != storedCatalog {
+                try encodedCatalog(catalog).write(to: manifestURL, options: .atomic)
+            }
             profiles = catalog.profiles
             selectedProfileId = catalog.profiles.contains { $0.id == catalog.selectedProfileId }
                 ? catalog.selectedProfileId
@@ -186,9 +191,7 @@ final class AgentProfileService: AgentProfileServiceProtocol {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let manifestURL = directoryURL.appendingPathComponent(AgentProfileDefaults.manifestFileName)
         if !fileManager.fileExists(atPath: manifestURL.path) {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(AgentProfileDefaults.catalog).write(to: manifestURL, options: .atomic)
+            try encodedCatalog(AgentProfileDefaults.catalog).write(to: manifestURL, options: .atomic)
         }
 
         for (fileName, prompt) in AgentProfileDefaults.prompts {
@@ -232,11 +235,30 @@ final class AgentProfileService: AgentProfileServiceProtocol {
             throw AgentProfileServiceError.projectRootUnavailable
         }
         let catalog = AgentProfileCatalog(selectedProfileId: selectedProfileId, profiles: profiles)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(catalog).write(
+        try encodedCatalog(catalog).write(
             to: directoryURL.appendingPathComponent(AgentProfileDefaults.manifestFileName),
             options: .atomic
+        )
+    }
+
+    private func encodedCatalog(_ catalog: AgentProfileCatalog) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(catalog)
+    }
+
+    private func catalogByAddingMissingBuiltInProfiles(
+        to storedCatalog: AgentProfileCatalog
+    ) -> AgentProfileCatalog {
+        let storedProfileIds = Set(storedCatalog.profiles.map(\.id))
+        let missingProfiles = AgentProfileDefaults.catalog.profiles.filter {
+            !storedProfileIds.contains($0.id)
+        }
+        guard !missingProfiles.isEmpty else { return storedCatalog }
+
+        return AgentProfileCatalog(
+            selectedProfileId: storedCatalog.selectedProfileId,
+            profiles: storedCatalog.profiles + missingProfiles
         )
     }
 

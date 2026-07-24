@@ -282,6 +282,26 @@ MCP config или approval policy.
 - Не утверждать, что Resume точно продолжает потерянный процесс, и не повторять
   уже выполненные изменения вслепую.
 
+## Testing configuration и smoke automation
+
+- Проектная testing-конфигурация хранится в `.workharness/testing/`:
+  `testing.json` содержит target, команды, enabled state и порядок, а `smoke/*.md`
+  — отдельные сценарии с шагами, assertions и требованиями к screenshots.
+- Settings работает с этими файлами только через
+  `TestingConfigurationServiceProtocol`.
+- Smoke-сценарии запускаются только по явному нажатию специальной кнопки в
+  Settings. Не запускать их автоматически при старте приложения, сохранении
+  настроек, обычном чате или после каждого изменения кода.
+- Code tests и smoke tests — отдельные validation layers, объединяемые в один
+  Run/report.
+- Claude in Mobile и другие UI automation tools подключаются только через
+  WorkHarness Tool/MCP/approval gateway. Не обходить RunEvents, permissions и
+  audit прямым MCP config agent runtime.
+- Smoke flow использует deterministic fixture, accessibility identifiers и
+  semantic locators. Каждый шаг фиксирует pass/fail и screenshot artifact.
+- Сценарии data-driven; не зашивать их список в SwiftUI или orchestrator.
+- Runtime reports/screenshots хранить отдельно от versioned scenario sources.
+
 ## Validation, git и report
 
 ```bash

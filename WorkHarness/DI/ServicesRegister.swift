@@ -50,6 +50,12 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(TestingConfigurationServiceProtocol.self) { resolver in
+            TestingConfigurationService(
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(RunServiceProtocol.self) { resolver in
             RunService(
                 repository: resolver.resolve(RunRepository.self)!,

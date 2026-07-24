@@ -18,6 +18,7 @@ extension MainScreen {
         private let agentRuntimeRegistry: AgentRuntimeRegistry
         private let remoteControlService: RemoteControlServiceProtocol?
         private let agentProfileService: AgentProfileServiceProtocol?
+        private let testingConfigurationService: TestingConfigurationServiceProtocol?
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
@@ -26,6 +27,15 @@ extension MainScreen {
         private(set) var agentProfiles: [AgentWorkflowProfile] = []
         var selectedAgentProfileId = ""
         private(set) var agentProfileDirectoryPath = SettingsPageDesign.AgentProfiles.noProjectDirectory
+        private(set) var smokeScenarios: [SmokeScenario] = []
+        private(set) var testingConfigurationDirectoryPath = SettingsPageDesign.Testing.noProjectDirectory
+        var testingPlatform: SmokeTestPlatform = .iOSSimulator
+        var testingXcodeContainerPath = ""
+        var testingScheme = ""
+        var testingBundleIdentifier = ""
+        var testingDeviceName = ""
+        var testingBuildCommand = ""
+        var testingCodeTestCommand = ""
         var selectedAgentModelId: String
         private(set) var errorMessage: String?
         var selectedSafetyMode: SafetyMode
@@ -47,20 +57,25 @@ extension MainScreen {
         var ragSimilarityThreshold: Double
         var isPromptImporterPresented = false
         private(set) var promptImportAssistantId: UUID?
+        var isSmokeScenarioImporterPresented = false
+        private(set) var smokeScenarioImportId: UUID?
         private var agentProfileRevision = 0
+        private var smokeScenarioRevision = 0
 
         init(
             providerService: ProviderServiceProtocol,
             appSettingsService: AppSettingsServiceProtocol,
             agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
             remoteControlService: RemoteControlServiceProtocol? = nil,
-            agentProfileService: AgentProfileServiceProtocol? = nil
+            agentProfileService: AgentProfileServiceProtocol? = nil,
+            testingConfigurationService: TestingConfigurationServiceProtocol? = nil
         ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
             self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
             self.remoteControlService = remoteControlService
             self.agentProfileService = agentProfileService
+            self.testingConfigurationService = testingConfigurationService
             self.selectedAgentModelId = ""
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
@@ -82,6 +97,7 @@ extension MainScreen {
             reloadProviders()
             reloadAgentRuntimes()
             reloadAgentProfiles()
+            reloadTestingConfiguration()
         }
 
         var activeProviderName: String {
@@ -147,6 +163,19 @@ extension MainScreen {
 
         var selectedAgentProfile: AgentWorkflowProfile? {
             agentProfiles.first { $0.id == selectedAgentProfileId }
+        }
+
+        var hasUnsavedTestingTargetChanges: Bool {
+            guard let persistedTarget = testingConfigurationService?.catalog.target else {
+                return false
+            }
+            return currentTestingTarget != persistedTarget
+        }
+
+        var testingTargetStatus: String {
+            hasUnsavedTestingTargetChanges
+                ? SettingsPageDesign.Testing.unsavedStatus
+                : SettingsPageDesign.Testing.savedStatus
         }
 
         func selectAgentProfile(id: String) {
@@ -220,6 +249,102 @@ extension MainScreen {
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !prompt.isEmpty else {
                 return SettingsPageDesign.AgentProfiles.promptUnavailable
+            }
+            return prompt
+        }
+
+        func reloadTestingConfiguration() {
+            testingConfigurationService?.reload()
+            smokeScenarios = testingConfigurationService?.catalog.scenarios ?? []
+            testingConfigurationDirectoryPath = testingConfigurationService?.configurationDirectoryPath
+                ?? SettingsPageDesign.Testing.noProjectDirectory
+            if let target = testingConfigurationService?.catalog.target {
+                applyTestingTarget(target)
+            }
+            smokeScenarioRevision += 1
+            errorMessage = nil
+        }
+
+        func saveTestingTarget() {
+            do {
+                try testingConfigurationService?.saveTarget(currentTestingTarget)
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func revertTestingTarget() {
+            if let target = testingConfigurationService?.catalog.target {
+                applyTestingTarget(target)
+            }
+            errorMessage = nil
+        }
+
+        func setSmokeScenarioEnabled(id: UUID, enabled: Bool) {
+            do {
+                try testingConfigurationService?.setScenarioEnabled(id: id, enabled: enabled)
+                smokeScenarios = testingConfigurationService?.catalog.scenarios ?? smokeScenarios
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func moveSmokeScenario(id: UUID, direction: SmokeScenarioMoveDirection) {
+            do {
+                try testingConfigurationService?.moveScenario(id: id, direction: direction)
+                smokeScenarios = testingConfigurationService?.catalog.scenarios ?? smokeScenarios
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func presentSmokeScenarioImporter(for scenarioId: UUID) {
+            smokeScenarioImportId = scenarioId
+            isSmokeScenarioImporterPresented = true
+        }
+
+        func openSmokeScenario(for scenarioId: UUID) {
+            do {
+                guard let fileURL = try testingConfigurationService?.scenarioFileURL(
+                    for: scenarioId
+                ), NSWorkspace.shared.open(fileURL) else {
+                    throw TestingConfigurationServiceError.scenarioFileUnavailable
+                }
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func importSmokeScenario(from url: URL) {
+            guard let smokeScenarioImportId else { return }
+            do {
+                try testingConfigurationService?.replaceScenario(
+                    for: smokeScenarioImportId,
+                    withContentsOf: url
+                )
+                smokeScenarioRevision += 1
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            self.smokeScenarioImportId = nil
+        }
+
+        func setSmokeScenarioImportError(_ message: String) {
+            smokeScenarioImportId = nil
+            errorMessage = message
+        }
+
+        func smokeScenarioPreview(for scenarioId: UUID) -> String {
+            _ = smokeScenarioRevision
+            let prompt = testingConfigurationService?.scenarioPrompt(for: scenarioId)
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !prompt.isEmpty else {
+                return SettingsPageDesign.Testing.scenarioUnavailable
             }
             return prompt
         }
@@ -519,6 +644,28 @@ extension MainScreen {
                 return defaultModelId
             }
             return runtime.modelOptions.first?.id ?? ""
+        }
+
+        private var currentTestingTarget: TestingTargetConfiguration {
+            TestingTargetConfiguration(
+                platform: testingPlatform,
+                xcodeContainerPath: testingXcodeContainerPath,
+                scheme: testingScheme,
+                bundleIdentifier: testingBundleIdentifier,
+                deviceName: testingDeviceName,
+                buildCommand: testingBuildCommand,
+                codeTestCommand: testingCodeTestCommand
+            )
+        }
+
+        private func applyTestingTarget(_ target: TestingTargetConfiguration) {
+            testingPlatform = target.platform
+            testingXcodeContainerPath = target.xcodeContainerPath
+            testingScheme = target.scheme
+            testingBundleIdentifier = target.bundleIdentifier
+            testingDeviceName = target.deviceName
+            testingBuildCommand = target.buildCommand
+            testingCodeTestCommand = target.codeTestCommand
         }
     }
 

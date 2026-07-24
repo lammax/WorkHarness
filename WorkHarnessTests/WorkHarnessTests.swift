@@ -2001,7 +2001,7 @@ struct WorkHarnessTests {
         let configuration = service.configuration(for: "bug-fix")
         let directory = projectRoot.appendingPathComponent(AgentProfileDefaults.directoryName)
 
-        #expect(service.profiles.map(\.id) == ["bug-fix", "research", "implementation"])
+        #expect(service.profiles.map(\.id) == ["bug-fix", "research", "implementation", "testing"])
         #expect(FileManager.default.fileExists(
             atPath: directory.appendingPathComponent(AgentProfileDefaults.manifestFileName).path
         ))

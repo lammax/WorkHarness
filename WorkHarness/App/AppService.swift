@@ -17,4 +17,5 @@ enum AppService {
     case rag
     case remoteControl
     case agentProfiles
+    case testing
 }

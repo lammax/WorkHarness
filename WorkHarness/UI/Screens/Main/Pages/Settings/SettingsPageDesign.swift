@@ -30,10 +30,12 @@ extension MainScreen {
             static let title = "Settings sections"
             static let executionTitle = "Execution & Providers"
             static let profilesTitle = "Agent Profiles"
+            static let testingTitle = "Testing"
             static let applicationTitle = "Application"
             static let ragTitle = "RAG"
             static let executionIcon = "play.circle"
             static let profilesIcon = "person.3.sequence"
+            static let testingIcon = "checkmark.circle.badge.questionmark"
             static let applicationIcon = "gearshape"
             static let ragIcon = "books.vertical"
         }
@@ -55,6 +57,46 @@ extension MainScreen {
             static let moveDownIcon = "arrow.down"
             static let sectionSpacing: CGFloat = 12
             static let assistantSpacing: CGFloat = 8
+            static let rowSpacing: CGFloat = 12
+            static let textSpacing: CGFloat = 4
+            static let buttonSpacing: CGFloat = 6
+            static let padding: CGFloat = 12
+            static let rowPadding: CGFloat = 10
+            static let cornerRadius: CGFloat = 8
+            static let rowCornerRadius: CGFloat = 6
+            static let rowBackgroundOpacity: CGFloat = 0.08
+            static let orderWidth: CGFloat = 22
+            static let promptLineLimit = 3
+        }
+
+        enum Testing {
+            static let title = "Testing"
+            static let icon = "checkmark.circle.badge.questionmark"
+            static let description = "Project-owned code-test configuration and ordered Markdown smoke scenarios. Scenario changes are saved to the selected project."
+            static let targetTitle = "Test Target"
+            static let scenariosTitle = "Smoke Scenarios"
+            static let directoryTitle = "Project testing directory"
+            static let platformTitle = "Smoke platform"
+            static let xcodeContainerTitle = "Xcode project or workspace"
+            static let schemeTitle = "Scheme"
+            static let bundleIdentifierTitle = "Bundle identifier"
+            static let deviceNameTitle = "Simulator or device name"
+            static let buildCommandTitle = "Build command"
+            static let codeTestCommandTitle = "Code-test command"
+            static let reloadButtonTitle = "Reload Files"
+            static let saveButtonTitle = "Save Target"
+            static let revertButtonTitle = "Revert"
+            static let savedStatus = "Saved"
+            static let unsavedStatus = "Unsaved target changes"
+            static let loadScenarioButtonTitle = "Load MD"
+            static let openScenarioButtonTitle = "Open"
+            static let noProjectDirectory = "Select a project with a root folder"
+            static let scenarioUnavailable = "Scenario file is empty or unavailable."
+            static let moveUpIcon = "arrow.up"
+            static let moveDownIcon = "arrow.down"
+            static let sectionSpacing: CGFloat = 14
+            static let fieldSpacing: CGFloat = 10
+            static let scenarioSpacing: CGFloat = 8
             static let rowSpacing: CGFloat = 12
             static let textSpacing: CGFloat = 4
             static let buttonSpacing: CGFloat = 6

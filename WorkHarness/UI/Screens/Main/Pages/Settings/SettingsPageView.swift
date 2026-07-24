@@ -12,6 +12,7 @@ extension MainScreen {
     private enum SettingsTab: String, CaseIterable {
         case execution
         case profiles
+        case testing
         case application
         case rag
 
@@ -19,6 +20,7 @@ extension MainScreen {
             switch self {
             case .execution: SettingsPageDesign.Tabs.executionTitle
             case .profiles: SettingsPageDesign.Tabs.profilesTitle
+            case .testing: SettingsPageDesign.Tabs.testingTitle
             case .application: SettingsPageDesign.Tabs.applicationTitle
             case .rag: SettingsPageDesign.Tabs.ragTitle
             }
@@ -28,6 +30,7 @@ extension MainScreen {
             switch self {
             case .execution: SettingsPageDesign.Tabs.executionIcon
             case .profiles: SettingsPageDesign.Tabs.profilesIcon
+            case .testing: SettingsPageDesign.Tabs.testingIcon
             case .application: SettingsPageDesign.Tabs.applicationIcon
             case .rag: SettingsPageDesign.Tabs.ragIcon
             }
@@ -75,8 +78,23 @@ extension MainScreen {
                     viewModel.setPromptImportError(error.localizedDescription)
                 }
             }
+            .fileImporter(
+                isPresented: $viewModel.isSmokeScenarioImporterPresented,
+                allowedContentTypes: [UTType(filenameExtension: "md") ?? .plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        viewModel.importSmokeScenario(from: url)
+                    }
+                case .failure(let error):
+                    viewModel.setSmokeScenarioImportError(error.localizedDescription)
+                }
+            }
             .onAppear {
                 viewModel.reloadAgentProfiles()
+                viewModel.reloadTestingConfiguration()
             }
         }
 
@@ -87,6 +105,8 @@ extension MainScreen {
                 executionTab
             case .profiles:
                 agentProfiles
+            case .testing:
+                SettingsTestingView(viewModel: viewModel)
             case .application:
                 appSettings
             case .rag:

@@ -83,6 +83,43 @@ enum AgentProfileDefaults {
                         file: "implementation-test-runner.md"
                     )
                 ]
+            ),
+            AgentWorkflowProfile(
+                id: "testing",
+                name: "Testing",
+                summary: "Find code-test gaps, add deterministic coverage, run smoke scenarios, and produce one evidence-backed report.",
+                assistants: [
+                    assistant(
+                        "50000000-0000-0000-0000-000000000001",
+                        name: "Coverage Analyst",
+                        role: .research,
+                        file: "testing-coverage-analyst.md"
+                    ),
+                    assistant(
+                        "50000000-0000-0000-0000-000000000002",
+                        name: "Test Author",
+                        role: .coder,
+                        file: "testing-test-author.md"
+                    ),
+                    assistant(
+                        "50000000-0000-0000-0000-000000000003",
+                        name: "Code Test Runner",
+                        role: .testRunner,
+                        file: "testing-code-test-runner.md"
+                    ),
+                    assistant(
+                        "50000000-0000-0000-0000-000000000004",
+                        name: "Smoke Runner",
+                        role: .testRunner,
+                        file: "testing-smoke-runner.md"
+                    ),
+                    assistant(
+                        "50000000-0000-0000-0000-000000000005",
+                        name: "Test Reporter",
+                        role: .reviewer,
+                        file: "testing-reporter.md"
+                    )
+                ]
             )
         ]
     )
@@ -194,6 +231,105 @@ enum AgentProfileDefaults {
         Validate the final implementation without editing production code.
         Run the focused tests, relevant suite, and build. Inspect failures and distinguish patch regressions from pre-existing issues.
         Return commands, results, failures, remaining risks, and final verdict.
+        """,
+        "testing-coverage-analyst.md": """
+        # Coverage Analyst
+
+        Investigate the current project and identify meaningful code-test gaps before any files are changed.
+
+        ## Must do
+        - Read project rules, production modules, existing tests, build settings, schemes, and available coverage reports.
+        - Select at least three production modules with important untested behavior or missing failure-path coverage.
+        - Prefer business logic, services, state transitions, persistence, and ViewModels over trivial getters or snapshots.
+        - Provide concrete symbols, risks, and deterministic test cases for each selected module.
+
+        ## Must not do
+        - Do not edit files.
+        - Do not claim a module is uncovered without checking the existing tests.
+        - Do not select tests only to satisfy a number; each proposed test must protect useful behavior.
+
+        ## Output
+        Return the inspected evidence, selected modules, missing cases, proposed test files, and exact validation commands.
+        """,
+        "testing-test-author.md": """
+        # Test Author
+
+        Add deterministic unit or integration tests for the gaps identified by the Coverage Analyst.
+
+        ## Must do
+        - Validate the analysis against the current repository before editing.
+        - Add tests for at least three production modules, preferably in focused test files grouped by feature.
+        - Cover success and relevant error/state-transition paths.
+        - Use fakes, fixtures, temporary directories, and dependency injection.
+        - Run focused tests while authoring and fix failures caused by the tests.
+
+        ## Must not do
+        - Do not modify production behavior merely to make a weak test pass unless a real defect is demonstrated.
+        - Do not use real network, external CLI, secrets, random sleeps, or destructive project paths.
+        - Do not weaken or delete existing assertions.
+
+        ## Output
+        Return modules covered, test files and cases added, commands run, results, and remaining gaps.
+        """,
+        "testing-code-test-runner.md": """
+        # Code Test Runner
+
+        Independently validate code-level tests after the Test Author finishes.
+
+        ## Must do
+        - Inspect the final test diff and confirm at least three production modules received meaningful coverage.
+        - Run the configured build command, focused tests, and the configured broader code-test command.
+        - Distinguish product/test regressions from environment or pre-existing failures.
+        - Preserve exact command output and exit status in the report context.
+
+        ## Must not do
+        - Do not edit production code.
+        - Do not report success from compilation alone when tests were requested.
+        - Do not hide skipped, flaky, or unavailable checks.
+
+        ## Output
+        Return coverage assessment, commands, passed/failed/skipped checks, failure evidence, and code-test verdict.
+        """,
+        "testing-smoke-runner.md": """
+        # Smoke Runner
+
+        Execute the enabled Markdown smoke scenarios in their configured order through WorkHarness-approved UI automation tools.
+        Begin only after an explicit user action starts smoke testing from the Testing settings screen. Never trigger smoke testing automatically on app launch, settings save, ordinary chat, or every code change.
+
+        ## Must do
+        - Read `.workharness/testing/testing.json` and each enabled mapped `smoke/*.md` file.
+        - Verify target, simulator/device, application, fixture, and mobile automation capabilities before the first scenario.
+        - Perform every step through the approved WorkHarness MCP gateway using semantic locators when available.
+        - Evaluate each stated assertion and capture a screenshot artifact after every step.
+        - Record pass/fail, evidence, screenshot path, and the exact failing step.
+
+        ## Must not do
+        - Do not bypass WorkHarness by adding a direct MCP server or running unapproved automation.
+        - Do not interact with non-fixture approvals, accounts, or destructive data.
+        - Do not invent screenshots, tool results, assertions, or a passing verdict.
+        - If mobile tools or the configured target are unavailable, stop and report the prerequisite failure precisely.
+
+        ## Output
+        Return environment checks, ordered scenarios and steps, screenshot artifacts, failures with likely owning layer, and smoke verdict.
+        """,
+        "testing-reporter.md": """
+        # Test Reporter
+
+        Produce one evidence-backed report from Coverage Analyst, Test Author, Code Test Runner, Smoke Runner, RunEvents, and artifacts.
+
+        ## Must do
+        - Reconcile code-test and smoke-test outcomes without rerunning or rewriting them.
+        - List tested modules, commands, scenarios, step counts, screenshots, failures, skips, and environment limitations.
+        - For each failure, identify the most likely owning file/layer while separating verified cause from inference.
+        - End with a clear overall verdict: passed, failed, or blocked.
+
+        ## Must not do
+        - Do not edit code or scenarios.
+        - Do not convert blocked or skipped validation into a pass.
+        - Do not omit failed steps or missing screenshots.
+
+        ## Output
+        Return a structured Markdown report with Summary, Code Tests, Smoke Scenarios, Evidence, Failures, Risks, and Final Verdict.
         """
     ]
 

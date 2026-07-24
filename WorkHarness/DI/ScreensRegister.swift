@@ -31,7 +31,8 @@ extension Container {
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
                 agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!,
                 remoteControlService: resolver.resolve(RemoteControlServiceProtocol.self)!,
-                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
+                testingConfigurationService: resolver.resolve(TestingConfigurationServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 
