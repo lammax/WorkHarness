@@ -108,6 +108,26 @@ extension MainScreen {
                         }
                     }
                 }
+
+                HStack {
+                    Text(viewModel.smokeTestStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+
+                    Spacer()
+
+                    Button(
+                        viewModel.isRunningSmokeTests
+                            ? Design.runSmokeRunningTitle
+                            : Design.runSmokeButtonTitle
+                    ) {
+                        viewModel.runSmokeTests()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.canRunSmokeTests)
+                    .accessibilityIdentifier(Design.runSmokeAccessibilityId)
+                }
             }
         }
 

@@ -27,6 +27,10 @@ extension MainScreen {
             static let errorBottomPadding: CGFloat = 8
         }
 
+        enum Command {
+            static let smokeUnavailable = "Smoke commands are unavailable for the selected project."
+        }
+
         enum Header {
             static let spacing: CGFloat = 12
             static let titleSpacing: CGFloat = 4

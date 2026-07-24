@@ -15,6 +15,7 @@ extension MainScreen {
         private let runService: RunServiceProtocol
         private let contextAttachmentService: RunContextAttachmentServiceProtocol
         private let agentProfileService: AgentProfileServiceProtocol?
+        private let smokeTestService: SmokeTestServiceProtocol?
         private var submissionTask: Task<Void, Never>?
 
         var selectedRunId: UUID?
@@ -29,11 +30,13 @@ extension MainScreen {
         init(
             runService: RunServiceProtocol,
             contextAttachmentService: RunContextAttachmentServiceProtocol,
-            agentProfileService: AgentProfileServiceProtocol? = nil
+            agentProfileService: AgentProfileServiceProtocol? = nil,
+            smokeTestService: SmokeTestServiceProtocol? = nil
         ) {
             self.runService = runService
             self.contextAttachmentService = contextAttachmentService
             self.agentProfileService = agentProfileService
+            self.smokeTestService = smokeTestService
             self.multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? .default
         }
 
@@ -128,6 +131,10 @@ extension MainScreen {
             let attachments = draftContextAttachments
             draftMessage = ""
             draftContextAttachments = []
+            if let selection = SmokeTestCommand.selection(from: trimmedMessage) {
+                await runSmokeCommand(selection)
+                return
+            }
             await send(trimmedMessage, contextAttachments: attachments)
         }
 
@@ -276,6 +283,24 @@ extension MainScreen {
                     contextAttachments: contextAttachments
                 ) else { return }
                 selectedRunId = runId
+            }
+        }
+
+        private func runSmokeCommand(_ selection: SmokeTestSelection) async {
+            guard !isSending else { return }
+            guard let smokeTestService else {
+                errorMessage = ChatPageDesign.Command.smokeUnavailable
+                return
+            }
+
+            isSending = true
+            errorMessage = nil
+            defer { isSending = false }
+
+            do {
+                selectedRunId = try await smokeTestService.startScenarios(selection)
+            } catch {
+                errorMessage = error.localizedDescription
             }
         }
     }

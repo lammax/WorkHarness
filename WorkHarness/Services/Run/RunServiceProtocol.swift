@@ -8,7 +8,12 @@
 import Foundation
 
 @MainActor
-protocol RunServiceProtocol: BaseServiceProtocol {
+protocol RunLaunchingProtocol: AnyObject {
+    func startRun(goal: String, mode: RunMode, configuration: MultiAgentRunConfiguration) async -> UUID?
+}
+
+@MainActor
+protocol RunServiceProtocol: BaseServiceProtocol, RunLaunchingProtocol {
     var runs: [Run] { get }
     var providerName: String { get }
     var selectedAgentRuntimeDescriptor: AgentRuntimeDescriptor? { get }
@@ -17,7 +22,6 @@ protocol RunServiceProtocol: BaseServiceProtocol {
     func run(withId runId: UUID) -> Run?
     func startRun(goal: String) async -> UUID?
     func startRun(goal: String, mode: RunMode) async -> UUID?
-    func startRun(goal: String, mode: RunMode, configuration: MultiAgentRunConfiguration) async -> UUID?
     func startRun(
         goal: String,
         mode: RunMode,

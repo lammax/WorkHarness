@@ -69,6 +69,15 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(SmokeTestServiceProtocol.self) { resolver in
+            SmokeTestService(
+                testingConfigurationService: resolver.resolve(TestingConfigurationServiceProtocol.self)!,
+                testingEnvironmentService: resolver.resolve(TestingEnvironmentServiceProtocol.self)!,
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
+                runLauncher: resolver.resolve(RunServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(RunContextAttachmentServiceProtocol.self) { _ in
             RunContextAttachmentService()
         }.inObjectScope(.container)

@@ -225,6 +225,121 @@ struct TestingConfigurationTests {
                 == MainScreen.SettingsPageDesign.Testing.diagnosticsReady
         )
     }
+
+    @MainActor
+    @Test func smokeTestServiceStartsOnlyEnabledSmokeRolesAsMultiAgentRun() async throws {
+        let projectRoot = try makeTestingDirectory()
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Mobile", rootPath: projectRoot.path)
+        let testingService = TestingConfigurationService(projectService: projectService)
+        let firstScenario = try #require(testingService.catalog.scenarios.first)
+        try testingService.setScenarioEnabled(id: firstScenario.id, enabled: false)
+        let launcher = TestingFakeRunLauncher(runId: UUID(
+            uuidString: "60000000-0000-0000-0000-000000000001"
+        )!)
+        let service = SmokeTestService(
+            testingConfigurationService: testingService,
+            testingEnvironmentService: TestingFakeEnvironmentService(
+                diagnostics: makeDiagnostics()
+            ),
+            agentProfileService: AgentProfileService(projectService: projectService),
+            runLauncher: launcher
+        )
+
+        let runId = try await service.startEnabledScenarios()
+        let request = try #require(launcher.request)
+
+        #expect(runId == launcher.runId)
+        #expect(request.mode == .multiAgent)
+        #expect(request.configuration.roles.map(\.assistantName) == [
+            "Smoke Runner",
+            "Test Reporter"
+        ])
+        #expect(!request.goal.contains(firstScenario.name))
+        #expect(request.goal.contains("Authentication error"))
+        #expect(request.goal.contains("Do not run unit, integration, build, lint"))
+
+        _ = try await service.startScenarios(.matching(firstScenario.name))
+        #expect(launcher.request?.goal.contains(firstScenario.name) == true)
+        #expect(launcher.request?.goal.contains("Authentication error") == false)
+
+        _ = try await service.startScenarios(.all)
+        #expect(launcher.request?.goal.contains(firstScenario.name) == true)
+        #expect(launcher.request?.goal.contains("Authentication error") == true)
+    }
+
+    @MainActor
+    @Test func settingsStartsSmokeRunOnlyAfterExplicitAction() async throws {
+        let projectRoot = try makeTestingDirectory()
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Mobile", rootPath: projectRoot.path)
+        let testingService = TestingConfigurationService(projectService: projectService)
+        let smokeService = TestingFakeSmokeTestService()
+        let appSettings = InMemoryAppSettingsService()
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: ProviderService(
+                registry: ProviderRegistry(providers: [MockAIProvider()]),
+                appSettingsService: appSettings
+            ),
+            appSettingsService: appSettings,
+            testingConfigurationService: testingService,
+            testingEnvironmentService: TestingFakeEnvironmentService(
+                diagnostics: makeDiagnostics()
+            ),
+            smokeTestService: smokeService
+        )
+
+        #expect(smokeService.startCount == 0)
+        #expect(!viewModel.canRunSmokeTests)
+        viewModel.checkTestingEnvironment()
+        while viewModel.isCheckingTestingEnvironment {
+            await Task.yield()
+        }
+        #expect(viewModel.canRunSmokeTests)
+
+        viewModel.runSmokeTests()
+        while viewModel.isRunningSmokeTests {
+            await Task.yield()
+        }
+
+        #expect(smokeService.startCount == 1)
+        #expect(viewModel.lastSmokeRunId == smokeService.runId)
+    }
+
+    @MainActor
+    @Test func chatSmokeCommandUsesSharedServiceWithoutSendingOrdinaryMessage() async throws {
+        let repository = InMemoryRunRepository()
+        let appSettings = InMemoryAppSettingsService()
+        let runService = RunService(
+            repository: repository,
+            harnessEngine: HarnessEngine(
+                repository: repository,
+                recorder: RunRecorder(repository: repository),
+                providerService: ProviderService(
+                    registry: ProviderRegistry(providers: [MockAIProvider()]),
+                    appSettingsService: appSettings
+                )
+            )
+        )
+        let smokeService = TestingFakeSmokeTestService()
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: runService,
+            contextAttachmentService: RunContextAttachmentService(),
+            smokeTestService: smokeService
+        )
+
+        viewModel.draftMessage = "/smoke Pairing succeeds"
+        await viewModel.submitDraftAndWait()
+
+        #expect(smokeService.selections == [.matching("Pairing succeeds")])
+        #expect(viewModel.selectedRunId == smokeService.runId)
+        #expect(repository.runs.isEmpty)
+        #expect(SmokeTestCommand.selection(from: "/smoke") == .enabled)
+        #expect(SmokeTestCommand.selection(from: "/smoke --all") == .all)
+        #expect(SmokeTestCommand.selection(from: "/smoke-test") == nil)
+    }
 }
 
 private func makeTestingDirectory() throws -> URL {
@@ -288,5 +403,45 @@ private final class TestingFakeEnvironmentService: TestingEnvironmentServiceProt
 
     func checkEnvironment() async throws -> TestingEnvironmentDiagnostics {
         diagnostics
+    }
+}
+
+@MainActor
+private final class TestingFakeRunLauncher: RunLaunchingProtocol {
+    struct Request {
+        let goal: String
+        let mode: RunMode
+        let configuration: MultiAgentRunConfiguration
+    }
+
+    let runId: UUID
+    private(set) var request: Request?
+
+    init(runId: UUID) {
+        self.runId = runId
+    }
+
+    func startRun(
+        goal: String,
+        mode: RunMode,
+        configuration: MultiAgentRunConfiguration
+    ) async -> UUID? {
+        request = Request(goal: goal, mode: mode, configuration: configuration)
+        return runId
+    }
+}
+
+@MainActor
+private final class TestingFakeSmokeTestService: SmokeTestServiceProtocol {
+    let runId = UUID(uuidString: "60000000-0000-0000-0000-000000000002")!
+    private(set) var selections: [SmokeTestSelection] = []
+
+    var startCount: Int {
+        selections.count
+    }
+
+    func startScenarios(_ selection: SmokeTestSelection) async throws -> UUID {
+        selections.append(selection)
+        return runId
     }
 }

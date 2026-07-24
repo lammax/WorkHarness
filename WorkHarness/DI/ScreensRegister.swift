@@ -13,7 +13,8 @@ extension Container {
             MainScreen.ChatPageViewModel(
                 runService: resolver.resolve(RunServiceProtocol.self)!,
                 contextAttachmentService: resolver.resolve(RunContextAttachmentServiceProtocol.self)!,
-                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
+                smokeTestService: resolver.resolve(SmokeTestServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 
@@ -33,7 +34,8 @@ extension Container {
                 remoteControlService: resolver.resolve(RemoteControlServiceProtocol.self)!,
                 agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
                 testingConfigurationService: resolver.resolve(TestingConfigurationServiceProtocol.self)!,
-                testingEnvironmentService: resolver.resolve(TestingEnvironmentServiceProtocol.self)!
+                testingEnvironmentService: resolver.resolve(TestingEnvironmentServiceProtocol.self)!,
+                smokeTestService: resolver.resolve(SmokeTestServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 

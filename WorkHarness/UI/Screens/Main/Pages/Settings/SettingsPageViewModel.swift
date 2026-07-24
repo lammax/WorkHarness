@@ -20,6 +20,7 @@ extension MainScreen {
         private let agentProfileService: AgentProfileServiceProtocol?
         private let testingConfigurationService: TestingConfigurationServiceProtocol?
         private let testingEnvironmentService: TestingEnvironmentServiceProtocol?
+        private let smokeTestService: SmokeTestServiceProtocol?
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
@@ -32,6 +33,8 @@ extension MainScreen {
         private(set) var testingConfigurationDirectoryPath = SettingsPageDesign.Testing.noProjectDirectory
         private(set) var testingEnvironmentDiagnostics: TestingEnvironmentDiagnostics?
         private(set) var isCheckingTestingEnvironment = false
+        private(set) var isRunningSmokeTests = false
+        private(set) var lastSmokeRunId: UUID?
         var testingPlatform: SmokeTestPlatform = .iOSSimulator
         var testingXcodeContainerPath = ""
         var testingScheme = ""
@@ -72,7 +75,8 @@ extension MainScreen {
             remoteControlService: RemoteControlServiceProtocol? = nil,
             agentProfileService: AgentProfileServiceProtocol? = nil,
             testingConfigurationService: TestingConfigurationServiceProtocol? = nil,
-            testingEnvironmentService: TestingEnvironmentServiceProtocol? = nil
+            testingEnvironmentService: TestingEnvironmentServiceProtocol? = nil,
+            smokeTestService: SmokeTestServiceProtocol? = nil
         ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
@@ -81,6 +85,7 @@ extension MainScreen {
             self.agentProfileService = agentProfileService
             self.testingConfigurationService = testingConfigurationService
             self.testingEnvironmentService = testingEnvironmentService
+            self.smokeTestService = smokeTestService
             self.selectedAgentModelId = ""
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
@@ -192,6 +197,26 @@ extension MainScreen {
                 : SettingsPageDesign.Testing.diagnosticsNeedsAttention
         }
 
+        var canRunSmokeTests: Bool {
+            smokeTestService != nil
+                && !isRunningSmokeTests
+                && !hasUnsavedTestingTargetChanges
+                && smokeScenarios.contains(where: \.enabled)
+                && testingEnvironmentDiagnostics?.canStartSmokeTests == true
+        }
+
+        var smokeTestStatus: String {
+            if isRunningSmokeTests {
+                return SettingsPageDesign.Testing.smokeRunningStatus
+            }
+            if let lastSmokeRunId {
+                return "\(SettingsPageDesign.Testing.smokeFinishedStatus) \(lastSmokeRunId.uuidString)"
+            }
+            return canRunSmokeTests
+                ? SettingsPageDesign.Testing.smokeReadyStatus
+                : SettingsPageDesign.Testing.smokeNotReadyStatus
+        }
+
         func selectAgentProfile(id: String) {
             agentProfileService?.selectProfile(id: id)
             selectedAgentProfileId = agentProfileService?.selectedProfileId ?? id
@@ -294,6 +319,22 @@ extension MainScreen {
                     errorMessage = error.localizedDescription
                 }
                 isCheckingTestingEnvironment = false
+            }
+        }
+
+        func runSmokeTests() {
+            guard canRunSmokeTests, let smokeTestService else { return }
+            isRunningSmokeTests = true
+            lastSmokeRunId = nil
+            errorMessage = nil
+
+            Task {
+                do {
+                    lastSmokeRunId = try await smokeTestService.startEnabledScenarios()
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+                isRunningSmokeTests = false
             }
         }
 
