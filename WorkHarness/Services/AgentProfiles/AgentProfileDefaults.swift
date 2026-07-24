@@ -324,6 +324,8 @@ enum AgentProfileDefaults {
         Begin only after an explicit user action starts smoke testing from Testing settings, with a `/smoke` chat command, or as the smoke phase of an explicit `/test` full-testing command. Never trigger smoke testing automatically on app launch, settings save, ordinary chat, or every code change.
 
         ## Must do
+        - Do not emit a preliminary assistant message. Your first action must call `mcp__workharness__mobile_device` with `action=set_target` and `argumentsJSON={"target":"ios"}`.
+        - Do not stop after announcing that you will inspect capabilities. Continue with concrete mobile MCP calls until every selected scenario has a verdict or an attempted tool call returns a blocking error.
         - Read `.workharness/testing/testing.json` and each enabled mapped `smoke/*.md` file.
         - Verify target, simulator/device, application, fixture, and mobile automation capabilities before the first scenario.
         - Perform every step through the approved WorkHarness MCP gateway using semantic locators when available.

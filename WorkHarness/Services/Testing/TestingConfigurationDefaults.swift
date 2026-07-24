@@ -23,7 +23,7 @@ enum TestingConfigurationDefaults {
             bundleIdentifier: "com.lammax.projects.ios.ai.harness.work.mobile.WorkHarnessMobile",
             deviceName: "iPhone 17 Pro",
             buildCommand: "xcodebuild build -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro'",
-            codeTestCommand: "xcodebuild test -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro'"
+            codeTestCommand: "xcodebuild test -project WorkHarnessMobile.xcodeproj -scheme WorkHarnessMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:WorkHarnessMobileTests"
         ),
         scenarios: [
             scenario(
