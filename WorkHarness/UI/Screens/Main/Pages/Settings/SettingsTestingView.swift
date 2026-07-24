@@ -39,6 +39,8 @@ extension MainScreen {
                 Divider()
                 testingTarget
                 Divider()
+                testingEnvironment
+                Divider()
 
                 Text(Design.scenariosTitle)
                     .font(.headline)
@@ -60,6 +62,73 @@ extension MainScreen {
                 .thinMaterial,
                 in: RoundedRectangle(cornerRadius: Design.cornerRadius)
             )
+        }
+
+        private var testingEnvironment: some View {
+            VStack(alignment: .leading, spacing: Design.fieldSpacing) {
+                HStack {
+                    Text(Design.diagnosticsTitle)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text(viewModel.testingEnvironmentStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button(
+                        viewModel.isCheckingTestingEnvironment
+                            ? Design.diagnosticsCheckingTitle
+                            : Design.diagnosticsButtonTitle
+                    ) {
+                        viewModel.checkTestingEnvironment()
+                    }
+                    .disabled(viewModel.isCheckingTestingEnvironment)
+                }
+
+                if let diagnostics = viewModel.testingEnvironmentDiagnostics {
+                    ForEach(diagnostics.checks) { check in
+                        HStack(alignment: .top, spacing: Design.rowSpacing) {
+                            Image(systemName: diagnosticIcon(for: check.status))
+                                .foregroundStyle(diagnosticColor(for: check.status))
+
+                            VStack(alignment: .leading, spacing: Design.textSpacing) {
+                                Text(check.title)
+                                    .fontWeight(.semibold)
+                                Text(check.message)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                if let remediation = check.remediation {
+                                    Text(remediation)
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private func diagnosticIcon(
+            for status: TestingDiagnosticStatus
+        ) -> String {
+            switch status {
+            case .ready: Design.diagnosticIconReady
+            case .warning: Design.diagnosticIconWarning
+            case .unavailable: Design.diagnosticIconUnavailable
+            }
+        }
+
+        private func diagnosticColor(
+            for status: TestingDiagnosticStatus
+        ) -> Color {
+            switch status {
+            case .ready: Design.diagnosticReadyColor
+            case .warning: Design.diagnosticWarningColor
+            case .unavailable: Design.diagnosticUnavailableColor
+            }
         }
 
         private var testingTarget: some View {

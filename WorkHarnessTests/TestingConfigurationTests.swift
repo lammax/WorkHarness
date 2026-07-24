@@ -176,6 +176,55 @@ struct TestingConfigurationTests {
         #expect(service.profiles.map(\.id) == ["bug-fix", "research", "implementation", "testing"])
         #expect(service.configuration(for: "testing").roles.count == 5)
     }
+
+    @MainActor
+    @Test func environmentServiceDecodesMobileHealthReport() async throws {
+        let diagnostics = makeDiagnostics()
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let output = String(decoding: try encoder.encode(diagnostics), as: UTF8.self)
+        let service = TestingEnvironmentService(
+            mcpClient: TestingFakeMCPClient(result: ToolResult(
+                toolId: "mobile.health",
+                status: .succeeded,
+                output: output
+            ))
+        )
+
+        let result = try await service.checkEnvironment()
+
+        #expect(result == diagnostics)
+        #expect(result.canStartSmokeTests)
+    }
+
+    @MainActor
+    @Test func settingsViewModelChecksEnvironmentOnlyOnExplicitAction() async throws {
+        let diagnostics = makeDiagnostics()
+        let appSettings = InMemoryAppSettingsService()
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: ProviderService(
+                registry: ProviderRegistry(providers: [MockAIProvider()]),
+                appSettingsService: appSettings
+            ),
+            appSettingsService: appSettings,
+            testingEnvironmentService: TestingFakeEnvironmentService(
+                diagnostics: diagnostics
+            )
+        )
+
+        #expect(viewModel.testingEnvironmentDiagnostics == nil)
+
+        viewModel.checkTestingEnvironment()
+        while viewModel.isCheckingTestingEnvironment {
+            await Task.yield()
+        }
+
+        #expect(viewModel.testingEnvironmentDiagnostics == diagnostics)
+        #expect(
+            viewModel.testingEnvironmentStatus
+                == MainScreen.SettingsPageDesign.Testing.diagnosticsReady
+        )
+    }
 }
 
 private func makeTestingDirectory() throws -> URL {
@@ -185,4 +234,59 @@ private func makeTestingDirectory() throws -> URL {
     )
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
+}
+
+private func makeDiagnostics() -> TestingEnvironmentDiagnostics {
+    TestingEnvironmentDiagnostics(
+        checkedAt: Date(timeIntervalSince1970: 1_721_811_600),
+        checks: [
+            TestingDiagnosticCheck(
+                id: "claudeInMobile",
+                title: "Claude in Mobile",
+                status: .ready,
+                message: "Installed",
+                remediation: nil
+            ),
+            TestingDiagnosticCheck(
+                id: "xcode",
+                title: "Xcode",
+                status: .ready,
+                message: "Xcode 26",
+                remediation: nil
+            ),
+            TestingDiagnosticCheck(
+                id: "simulator",
+                title: "iOS Simulator",
+                status: .ready,
+                message: "Booted",
+                remediation: nil
+            )
+        ]
+    )
+}
+
+@MainActor
+private final class TestingFakeMCPClient: MCPToolClientProtocol {
+    private let result: ToolResult
+
+    init(result: ToolResult) {
+        self.result = result
+    }
+
+    func invoke(_ invocation: MCPToolInvocation) async throws -> ToolResult {
+        result
+    }
+}
+
+@MainActor
+private final class TestingFakeEnvironmentService: TestingEnvironmentServiceProtocol {
+    let diagnostics: TestingEnvironmentDiagnostics
+
+    init(diagnostics: TestingEnvironmentDiagnostics) {
+        self.diagnostics = diagnostics
+    }
+
+    func checkEnvironment() async throws -> TestingEnvironmentDiagnostics {
+        diagnostics
+    }
 }

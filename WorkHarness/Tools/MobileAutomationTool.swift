@@ -17,6 +17,13 @@ struct MobileAutomationTool: ToolProtocol {
 
     static let approvedTools: [MobileAutomationTool] = [
         MobileAutomationTool(
+            id: "mobile.health",
+            displayName: "Mobile Automation Health",
+            description: "Check Claude in Mobile, Xcode, Simulator, Appium, and WebDriverAgent availability.",
+            permission: .readOnly,
+            inputSchema: []
+        ),
+        MobileAutomationTool(
             id: "mobile.device",
             displayName: "Mobile Device",
             description: "List or select Claude in Mobile devices and inspect the active target.",

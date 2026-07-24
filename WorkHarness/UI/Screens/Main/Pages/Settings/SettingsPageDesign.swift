@@ -6,6 +6,7 @@
 //
 
 import CoreGraphics
+import SwiftUI
 
 extension MainScreen {
     enum SettingsPageDesign {
@@ -74,6 +75,12 @@ extension MainScreen {
             static let icon = "checkmark.circle.badge.questionmark"
             static let description = "Project-owned code-test configuration and ordered Markdown smoke scenarios. Scenario changes are saved to the selected project."
             static let targetTitle = "Test Target"
+            static let diagnosticsTitle = "Environment"
+            static let diagnosticsButtonTitle = "Check Environment"
+            static let diagnosticsCheckingTitle = "Checking…"
+            static let diagnosticsNotChecked = "Not checked"
+            static let diagnosticsReady = "Ready for smoke tests"
+            static let diagnosticsNeedsAttention = "Setup required"
             static let scenariosTitle = "Smoke Scenarios"
             static let directoryTitle = "Project testing directory"
             static let platformTitle = "Smoke platform"
@@ -107,6 +114,12 @@ extension MainScreen {
             static let rowBackgroundOpacity: CGFloat = 0.08
             static let orderWidth: CGFloat = 22
             static let promptLineLimit = 3
+            static let diagnosticIconReady = "checkmark.circle.fill"
+            static let diagnosticIconWarning = "exclamationmark.triangle.fill"
+            static let diagnosticIconUnavailable = "xmark.circle.fill"
+            static let diagnosticReadyColor = Color.green
+            static let diagnosticWarningColor = Color.orange
+            static let diagnosticUnavailableColor = Color.red
         }
 
         enum ExecutionBackend {

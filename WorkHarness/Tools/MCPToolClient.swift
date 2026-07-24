@@ -89,6 +89,12 @@ final class MCPToolClient: MCPToolClientProtocol {
             return Route(endpoint: Self.developerToolsEndpoint, toolName: "workspace_run_git", arguments: arguments)
         case "rag.search":
             return Route(endpoint: Self.ragEndpoint, toolName: "rag_answer", arguments: arguments)
+        case "mobile.health":
+            return Route(
+                endpoint: Self.mobileAutomationEndpoint,
+                toolName: "workharness_health",
+                arguments: [:]
+            )
         case let toolId where toolId.hasPrefix(Self.mobileToolPrefix):
             let toolName = String(toolId.dropFirst(Self.mobileToolPrefix.count))
             guard !toolName.isEmpty else {

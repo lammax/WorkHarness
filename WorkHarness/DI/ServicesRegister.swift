@@ -56,6 +56,12 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(TestingEnvironmentServiceProtocol.self) { resolver in
+            TestingEnvironmentService(
+                mcpClient: resolver.resolve(MCPToolClientProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(RunServiceProtocol.self) { resolver in
             RunService(
                 repository: resolver.resolve(RunRepository.self)!,

@@ -19,6 +19,7 @@ extension MainScreen {
         private let remoteControlService: RemoteControlServiceProtocol?
         private let agentProfileService: AgentProfileServiceProtocol?
         private let testingConfigurationService: TestingConfigurationServiceProtocol?
+        private let testingEnvironmentService: TestingEnvironmentServiceProtocol?
 
         private(set) var providers: [ProviderSettingsItem] = []
         private(set) var activeProviderId: String?
@@ -29,6 +30,8 @@ extension MainScreen {
         private(set) var agentProfileDirectoryPath = SettingsPageDesign.AgentProfiles.noProjectDirectory
         private(set) var smokeScenarios: [SmokeScenario] = []
         private(set) var testingConfigurationDirectoryPath = SettingsPageDesign.Testing.noProjectDirectory
+        private(set) var testingEnvironmentDiagnostics: TestingEnvironmentDiagnostics?
+        private(set) var isCheckingTestingEnvironment = false
         var testingPlatform: SmokeTestPlatform = .iOSSimulator
         var testingXcodeContainerPath = ""
         var testingScheme = ""
@@ -68,7 +71,8 @@ extension MainScreen {
             agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
             remoteControlService: RemoteControlServiceProtocol? = nil,
             agentProfileService: AgentProfileServiceProtocol? = nil,
-            testingConfigurationService: TestingConfigurationServiceProtocol? = nil
+            testingConfigurationService: TestingConfigurationServiceProtocol? = nil,
+            testingEnvironmentService: TestingEnvironmentServiceProtocol? = nil
         ) {
             self.providerService = providerService
             self.appSettingsService = appSettingsService
@@ -76,6 +80,7 @@ extension MainScreen {
             self.remoteControlService = remoteControlService
             self.agentProfileService = agentProfileService
             self.testingConfigurationService = testingConfigurationService
+            self.testingEnvironmentService = testingEnvironmentService
             self.selectedAgentModelId = ""
             self.selectedSafetyMode = appSettingsService.defaultSafetyMode
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
@@ -178,6 +183,15 @@ extension MainScreen {
                 : SettingsPageDesign.Testing.savedStatus
         }
 
+        var testingEnvironmentStatus: String {
+            guard let testingEnvironmentDiagnostics else {
+                return SettingsPageDesign.Testing.diagnosticsNotChecked
+            }
+            return testingEnvironmentDiagnostics.canStartSmokeTests
+                ? SettingsPageDesign.Testing.diagnosticsReady
+                : SettingsPageDesign.Testing.diagnosticsNeedsAttention
+        }
+
         func selectAgentProfile(id: String) {
             agentProfileService?.selectProfile(id: id)
             selectedAgentProfileId = agentProfileService?.selectedProfileId ?? id
@@ -263,6 +277,24 @@ extension MainScreen {
             }
             smokeScenarioRevision += 1
             errorMessage = nil
+        }
+
+        func checkTestingEnvironment() {
+            guard !isCheckingTestingEnvironment,
+                  let testingEnvironmentService else { return }
+            isCheckingTestingEnvironment = true
+            errorMessage = nil
+
+            Task {
+                do {
+                    testingEnvironmentDiagnostics = try await testingEnvironmentService
+                        .checkEnvironment()
+                } catch {
+                    testingEnvironmentDiagnostics = nil
+                    errorMessage = error.localizedDescription
+                }
+                isCheckingTestingEnvironment = false
+            }
         }
 
         func saveTestingTarget() {
