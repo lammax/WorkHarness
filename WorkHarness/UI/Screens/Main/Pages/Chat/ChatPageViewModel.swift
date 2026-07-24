@@ -16,6 +16,7 @@ extension MainScreen {
         private let contextAttachmentService: RunContextAttachmentServiceProtocol
         private let agentProfileService: AgentProfileServiceProtocol?
         private let smokeTestService: SmokeTestServiceProtocol?
+        private let testingWorkflowService: TestingWorkflowServiceProtocol?
         private var submissionTask: Task<Void, Never>?
 
         var selectedRunId: UUID?
@@ -31,12 +32,14 @@ extension MainScreen {
             runService: RunServiceProtocol,
             contextAttachmentService: RunContextAttachmentServiceProtocol,
             agentProfileService: AgentProfileServiceProtocol? = nil,
-            smokeTestService: SmokeTestServiceProtocol? = nil
+            smokeTestService: SmokeTestServiceProtocol? = nil,
+            testingWorkflowService: TestingWorkflowServiceProtocol? = nil
         ) {
             self.runService = runService
             self.contextAttachmentService = contextAttachmentService
             self.agentProfileService = agentProfileService
             self.smokeTestService = smokeTestService
+            self.testingWorkflowService = testingWorkflowService
             self.multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? .default
         }
 
@@ -133,6 +136,10 @@ extension MainScreen {
             draftContextAttachments = []
             if let selection = SmokeTestCommand.selection(from: trimmedMessage) {
                 await runSmokeCommand(selection)
+                return
+            }
+            if let command = TestingWorkflowCommand.parse(trimmedMessage) {
+                await runTestingWorkflow(command)
                 return
             }
             await send(trimmedMessage, contextAttachments: attachments)
@@ -299,6 +306,26 @@ extension MainScreen {
 
             do {
                 selectedRunId = try await smokeTestService.startScenarios(selection)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        private func runTestingWorkflow(_ command: TestingWorkflowCommand) async {
+            guard !isSending else { return }
+            guard let testingWorkflowService else {
+                errorMessage = ChatPageDesign.Command.testingUnavailable
+                return
+            }
+
+            isSending = true
+            errorMessage = nil
+            defer { isSending = false }
+
+            do {
+                selectedRunId = try await testingWorkflowService.startFullRun(
+                    request: command.request
+                )
             } catch {
                 errorMessage = error.localizedDescription
             }

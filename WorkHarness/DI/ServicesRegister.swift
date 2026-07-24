@@ -81,6 +81,18 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(TestingWorkflowServiceProtocol.self) { resolver in
+            TestingWorkflowService(
+                testingConfigurationService: resolver.resolve(TestingConfigurationServiceProtocol.self)!,
+                testingEnvironmentService: resolver.resolve(TestingEnvironmentServiceProtocol.self)!,
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
+                runLauncher: resolver.resolve(RunServiceProtocol.self)!,
+                runRepository: resolver.resolve(RunRepository.self)!,
+                recorder: resolver.resolve(RunRecorder.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(RunContextAttachmentServiceProtocol.self) { _ in
             RunContextAttachmentService()
         }.inObjectScope(.container)

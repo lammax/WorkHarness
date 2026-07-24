@@ -14,7 +14,8 @@ extension Container {
                 runService: resolver.resolve(RunServiceProtocol.self)!,
                 contextAttachmentService: resolver.resolve(RunContextAttachmentServiceProtocol.self)!,
                 agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
-                smokeTestService: resolver.resolve(SmokeTestServiceProtocol.self)!
+                smokeTestService: resolver.resolve(SmokeTestServiceProtocol.self)!,
+                testingWorkflowService: resolver.resolve(TestingWorkflowServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 

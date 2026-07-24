@@ -29,6 +29,7 @@ extension MainScreen {
 
         enum Command {
             static let smokeUnavailable = "Smoke commands are unavailable for the selected project."
+            static let testingUnavailable = "Testing commands are unavailable for the selected project."
         }
 
         enum Header {

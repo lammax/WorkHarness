@@ -389,6 +389,122 @@ struct TestingConfigurationTests {
         #expect(SmokeTestCommand.selection(from: "/smoke --all") == .all)
         #expect(SmokeTestCommand.selection(from: "/smoke-test") == nil)
     }
+
+    @MainActor
+    @Test func testingWorkflowServiceRunsCompleteProfileAndCreatesUnifiedReport() async throws {
+        let projectRoot = try makeTestingDirectory()
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Mobile", rootPath: projectRoot.path)
+        let testingService = TestingConfigurationService(projectService: projectService)
+        let launcher = TestingFakeRunLauncher(runId: UUID(
+            uuidString: "60000000-0000-0000-0000-000000000003"
+        )!)
+        let runRepository = InMemoryRunRepository()
+        runRepository.insert(Run(
+            id: launcher.runId,
+            goal: "Full testing fixture",
+            status: .completed,
+            events: [
+                RunEvent(
+                    runId: launcher.runId,
+                    type: .assistantMessage,
+                    message: "## Final Verdict\nPASSED",
+                    metadata: ["assistantName": "Test Reporter"]
+                )
+            ],
+            artifacts: [
+                RunArtifact(
+                    name: "Fixture screenshot",
+                    kind: "screenshot",
+                    path: "/tmp/testing-fixture.png"
+                )
+            ]
+        ))
+        let service = TestingWorkflowService(
+            testingConfigurationService: testingService,
+            testingEnvironmentService: TestingFakeEnvironmentService(
+                diagnostics: makeDiagnostics()
+            ),
+            agentProfileService: AgentProfileService(projectService: projectService),
+            runLauncher: launcher,
+            runRepository: runRepository,
+            recorder: RunRecorder(repository: runRepository),
+            projectService: projectService
+        )
+
+        let runId = try await service.startFullRun(
+            request: "I deployed a new feature. Validate it."
+        )
+        let request = try #require(launcher.request)
+
+        #expect(runId == launcher.runId)
+        #expect(request.mode == .multiAgent)
+        #expect(request.configuration.profileName == "Testing · Full")
+        #expect(request.configuration.roles.map(\.assistantName) == [
+            "Coverage Analyst",
+            "Test Author",
+            "Code Test Runner",
+            "Smoke Runner",
+            "Test Reporter"
+        ])
+        #expect(request.goal.contains("I deployed a new feature. Validate it."))
+        #expect(request.goal.contains("at least three production modules"))
+        #expect(request.goal.contains(testingService.catalog.target.buildCommand))
+        #expect(request.goal.contains("Pairing succeeds"))
+        #expect(request.configuration.roles.allSatisfy {
+            $0.instructions.contains("explicitly started by the user with `/test`")
+        })
+
+        let reportArtifact = try #require(
+            runRepository.run(withId: runId)?.artifacts.first {
+                $0.kind == "testing-report"
+            }
+        )
+        let reportPath = try #require(reportArtifact.path)
+        let report = try String(contentsOfFile: reportPath, encoding: .utf8)
+        #expect(report.contains("# Testing Report"))
+        #expect(report.contains("**Final Verdict:** PASSED"))
+        #expect(report.contains("`/tmp/testing-fixture.png`"))
+        #expect(report.contains(testingService.catalog.target.codeTestCommand))
+        #expect(
+            runRepository.run(withId: runId)?.events.suffix(2).map(\.type)
+                == [.artifactCreated, .finalSummary]
+        )
+    }
+
+    @MainActor
+    @Test func chatTestCommandStartsFullWorkflowWithoutSendingOrdinaryMessage() async {
+        let repository = InMemoryRunRepository()
+        let appSettings = InMemoryAppSettingsService()
+        let runService = RunService(
+            repository: repository,
+            harnessEngine: HarnessEngine(
+                repository: repository,
+                recorder: RunRecorder(repository: repository),
+                providerService: ProviderService(
+                    registry: ProviderRegistry(providers: [MockAIProvider()]),
+                    appSettingsService: appSettings
+                )
+            )
+        )
+        let workflowService = TestingFakeWorkflowService()
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: runService,
+            contextAttachmentService: RunContextAttachmentService(),
+            testingWorkflowService: workflowService
+        )
+
+        viewModel.draftMessage = "/test I deployed a new feature"
+        await viewModel.submitDraftAndWait()
+
+        #expect(workflowService.requests == ["I deployed a new feature"])
+        #expect(viewModel.selectedRunId == workflowService.runId)
+        #expect(repository.runs.isEmpty)
+        #expect(TestingWorkflowCommand.parse("/test") == TestingWorkflowCommand(request: nil))
+        #expect(TestingWorkflowCommand.parse("/test --all") == TestingWorkflowCommand(request: nil))
+        #expect(TestingWorkflowCommand.parse("/testing") == nil)
+    }
 }
 
 private func makeTestingDirectory() throws -> URL {
@@ -491,6 +607,17 @@ private final class TestingFakeSmokeTestService: SmokeTestServiceProtocol {
 
     func startScenarios(_ selection: SmokeTestSelection) async throws -> UUID {
         selections.append(selection)
+        return runId
+    }
+}
+
+@MainActor
+private final class TestingFakeWorkflowService: TestingWorkflowServiceProtocol {
+    let runId = UUID(uuidString: "60000000-0000-0000-0000-000000000004")!
+    private(set) var requests: [String?] = []
+
+    func startFullRun(request: String?) async throws -> UUID {
+        requests.append(request)
         return runId
     }
 }

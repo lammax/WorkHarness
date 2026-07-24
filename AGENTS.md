@@ -471,6 +471,7 @@ Pages/<PageName>/
   - Markdown является source of truth для шагов, assertions и требований к screenshots.
 - Settings редактирует конфигурацию только через `TestingConfigurationServiceProtocol`; View не читает и не пишет файлы напрямую.
 - Smoke-тесты запускаются только явным действием пользователя: специальной кнопкой в Settings или командой `/smoke` в чате. Не запускать smoke-набор автоматически при старте приложения, обычном сообщении чата, сохранении настроек или после каждого изменения кода.
+- Полный Testing flow запускается только явной командой `/test` в чате. Он выполняет настроенный Testing profile целиком: анализ покрытия, добавление code tests, build/test, enabled smoke-сценарии и единый report. Текст после `/test` передаётся как контекст задачи.
 - Code tests и smoke tests являются разными validation layers, но результаты должны объединяться в одном Run/report.
 - Smoke automation проходит через Tool/MCP/approval boundary WorkHarness. Не подключать Claude in Mobile напрямую к agent runtime в обход gateway, RunEvents и audit trail.
 - Каждый smoke-шаг должен иметь наблюдаемый результат: pass/fail, сообщение, screenshot artifact с устойчивым step label и связь с Run.

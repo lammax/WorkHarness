@@ -294,7 +294,7 @@ enum AgentProfileDefaults {
         # Smoke Runner
 
         Execute the enabled Markdown smoke scenarios in their configured order through WorkHarness-approved UI automation tools.
-        Begin only after an explicit user action starts smoke testing from Testing settings or with a `/smoke` chat command. Never trigger smoke testing automatically on app launch, settings save, ordinary chat, or every code change.
+        Begin only after an explicit user action starts smoke testing from Testing settings, with a `/smoke` chat command, or as the smoke phase of an explicit `/test` full-testing command. Never trigger smoke testing automatically on app launch, settings save, ordinary chat, or every code change.
 
         ## Must do
         - Read `.workharness/testing/testing.json` and each enabled mapped `smoke/*.md` file.

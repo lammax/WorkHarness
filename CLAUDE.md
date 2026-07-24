@@ -293,6 +293,9 @@ MCP config или approval policy.
   Settings или командой `/smoke` в чате. Не запускать их автоматически при
   старте приложения, сохранении настроек, обычном сообщении чата или после
   каждого изменения кода.
+- Полный Testing flow запускается только явной командой `/test` в чате:
+  Coverage Analyst → Test Author → Code Test Runner → Smoke Runner →
+  Test Reporter. Текст после `/test` является контекстом задачи.
 - Code tests и smoke tests — отдельные validation layers, объединяемые в один
   Run/report.
 - Claude in Mobile и другие UI automation tools подключаются только через
