@@ -17,6 +17,8 @@ extension MainScreen {
         enum Timeline {
             static let spacing: CGFloat = 12
             static let padding: CGFloat = 16
+            static let bottomAnchorID = "chat-timeline-bottom"
+            static let bottomAnchorHeight: CGFloat = 1
         }
 
         enum Composer {

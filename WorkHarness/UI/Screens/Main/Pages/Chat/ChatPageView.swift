@@ -36,18 +36,33 @@ extension MainScreen {
                     )
                 }
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: Design.Timeline.spacing) {
-                        if viewModel.displayEvents.isEmpty {
-                            EmptyChatStateView()
-                        } else {
-                            ForEach(viewModel.displayEvents) { event in
-                                RunEventRow(event: event)
-                                    .id(event.id)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: Design.Timeline.spacing) {
+                            if viewModel.displayEvents.isEmpty {
+                                EmptyChatStateView()
+                            } else {
+                                ForEach(viewModel.displayEvents) { event in
+                                    RunEventRow(event: event)
+                                        .id(event.id)
+                                }
                             }
+
+                            Color.clear
+                                .frame(height: Design.Timeline.bottomAnchorHeight)
+                                .id(Design.Timeline.bottomAnchorID)
                         }
+                        .padding(Design.Timeline.padding)
                     }
-                    .padding(Design.Timeline.padding)
+                    .onAppear {
+                        scrollToTimelineBottom(using: proxy)
+                    }
+                    .onChange(of: viewModel.selectedRunId) {
+                        scrollToTimelineBottom(using: proxy)
+                    }
+                    .onChange(of: viewModel.displayEvents) {
+                        scrollToTimelineBottom(using: proxy)
+                    }
                 }
 
                 Divider()
@@ -91,6 +106,10 @@ extension MainScreen {
             .onAppear {
                 viewModel.reloadAgentProfile()
             }
+        }
+
+        private func scrollToTimelineBottom(using proxy: ScrollViewProxy) {
+            proxy.scrollTo(Design.Timeline.bottomAnchorID, anchor: .bottom)
         }
     }
 
