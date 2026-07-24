@@ -32,6 +32,8 @@ enum SmokeTestServiceError: LocalizedError, Equatable {
     case scenarioNotFound(String)
     case smokeRunnerUnavailable
     case runStartFailed
+    case completedRunUnavailable
+    case reportDirectoryUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -45,6 +47,10 @@ enum SmokeTestServiceError: LocalizedError, Equatable {
             "The Testing profile has no enabled Smoke Runner."
         case .runStartFailed:
             "WorkHarness could not start the smoke-test Run."
+        case .completedRunUnavailable:
+            "The completed smoke-test Run could not be loaded for reporting."
+        case .reportDirectoryUnavailable:
+            "Select a project root before creating a smoke-test report."
         }
     }
 }

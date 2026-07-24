@@ -238,13 +238,37 @@ struct TestingConfigurationTests {
         let launcher = TestingFakeRunLauncher(runId: UUID(
             uuidString: "60000000-0000-0000-0000-000000000001"
         )!)
+        let runRepository = InMemoryRunRepository()
+        runRepository.insert(Run(
+            id: launcher.runId,
+            goal: "Smoke fixture",
+            status: .completed,
+            events: [
+                RunEvent(
+                    runId: launcher.runId,
+                    type: .assistantMessage,
+                    message: "## Final Verdict\nPASSED",
+                    metadata: ["assistantName": "Test Reporter"]
+                )
+            ],
+            artifacts: [
+                RunArtifact(
+                    name: "Pairing screenshot",
+                    kind: "screenshot",
+                    path: "/tmp/pairing.png"
+                )
+            ]
+        ))
         let service = SmokeTestService(
             testingConfigurationService: testingService,
             testingEnvironmentService: TestingFakeEnvironmentService(
                 diagnostics: makeDiagnostics()
             ),
             agentProfileService: AgentProfileService(projectService: projectService),
-            runLauncher: launcher
+            runLauncher: launcher,
+            runRepository: runRepository,
+            recorder: RunRecorder(repository: runRepository),
+            projectService: projectService
         )
 
         let runId = try await service.startEnabledScenarios()
@@ -259,6 +283,17 @@ struct TestingConfigurationTests {
         #expect(!request.goal.contains(firstScenario.name))
         #expect(request.goal.contains("Authentication error"))
         #expect(request.goal.contains("Do not run unit, integration, build, lint"))
+        let reportArtifact = try #require(
+            runRepository.run(withId: runId)?.artifacts.first { $0.kind == "smoke-report" }
+        )
+        let reportPath = try #require(reportArtifact.path)
+        let report = try String(contentsOfFile: reportPath, encoding: .utf8)
+        #expect(report.contains("**Final Verdict:** PASSED"))
+        #expect(report.contains("`/tmp/pairing.png`"))
+        #expect(
+            runRepository.run(withId: runId)?.events.suffix(2).map(\.type)
+                == [.artifactCreated, .finalSummary]
+        )
 
         _ = try await service.startScenarios(.matching(firstScenario.name))
         #expect(launcher.request?.goal.contains(firstScenario.name) == true)
