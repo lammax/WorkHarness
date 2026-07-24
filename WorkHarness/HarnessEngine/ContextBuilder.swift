@@ -9,6 +9,11 @@ import Foundation
 
 @MainActor
 final class ContextBuilder: ContextBuilderProtocol {
+    static let autoApprovalInstruction = """
+    [WORKHARNESS_APPROVAL_MODE: AUTO_INSIDE_PROJECT]
+    Auto-approval is enabled for eligible actions inside the current project. When the user's task requests or clearly implies a workspace change, invoke the appropriate WorkHarness MCP tool immediately. Do not ask for confirmation in prose and do not stop before the tool call: WorkHarness applies its approval policy automatically. This does not expand the user's requested scope or permit access outside the project root; the WorkHarness MCP gateway remains the authority for execution.
+    """
+
     func buildSnapshot(from input: ContextBuildInput) -> ContextSnapshot {
         let project = input.currentProject
         let rootPath = input.rootPath ?? project?.rootPath
@@ -21,6 +26,10 @@ final class ContextBuilder: ContextBuilderProtocol {
 
         if let rootPath, !rootPath.isEmpty {
             contextItems.append("Project root: \(rootPath)")
+        }
+
+        if input.safetyMode == .autoInsideSandbox {
+            contextItems.append(Self.autoApprovalInstruction)
         }
 
         if let recentRunSummary = input.recentRunSummary?.trimmingCharacters(in: .whitespacesAndNewlines),

@@ -26,6 +26,7 @@ struct ContextBuildInput: Equatable {
     var memoryItems: [String]
     var ragResults: [RAGCitation]
     var tokenBudget: TokenBudget?
+    var safetyMode: SafetyMode
 
     init(
         runId: UUID,
@@ -40,7 +41,8 @@ struct ContextBuildInput: Equatable {
         contextAttachments: [RunContextAttachment] = [],
         memoryItems: [String] = [],
         ragResults: [RAGCitation] = [],
-        tokenBudget: TokenBudget? = nil
+        tokenBudget: TokenBudget? = nil,
+        safetyMode: SafetyMode = AppSettingsDefaults.defaultSafetyMode
     ) {
         self.runId = runId
         self.agent = agent
@@ -55,5 +57,6 @@ struct ContextBuildInput: Equatable {
         self.memoryItems = memoryItems
         self.ragResults = ragResults
         self.tokenBudget = tokenBudget
+        self.safetyMode = safetyMode
     }
 }

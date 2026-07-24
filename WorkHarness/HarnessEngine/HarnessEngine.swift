@@ -338,6 +338,7 @@ final class HarnessEngine {
 
     private func context(for runId: UUID, prompt: String, agent: Agent, providerId: String, ragResults: [RAGCitation] = []) -> ContextSnapshot {
         let currentProject = projectService?.currentProject
+        let safetyMode = appSettingsService?.defaultSafetyMode ?? AppSettingsDefaults.defaultSafetyMode
         let snapshot = contextBuilder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
@@ -349,7 +350,8 @@ final class HarnessEngine {
             contextAttachments: repository.run(withId: runId)?.contextAttachments ?? [],
             memoryItems: currentProjectMemory(for: currentProject),
             ragResults: ragResults,
-            tokenBudget: defaultTokenBudget(for: agent)
+            tokenBudget: defaultTokenBudget(for: agent),
+            safetyMode: safetyMode
         ))
 
         recorder.record(
@@ -361,7 +363,8 @@ final class HarnessEngine {
                 "providerId": providerId,
                 "agentId": agent.id.uuidString,
                 "tokenEstimate": "\(snapshot.tokenCount)",
-                "ragResultCount": "\(snapshot.includedRAGResults.count)"
+                "ragResultCount": "\(snapshot.includedRAGResults.count)",
+                "safetyMode": safetyMode.rawValue
             ]
         )
 

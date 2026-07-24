@@ -19,8 +19,10 @@ Claude работает внутри WorkHarness, а не в unrestricted Claude
 - Доступные project tools обнаруживать через MCP. File/shell/git/RAG operations
   выполняются только через разрешённые WorkHarness tools.
 - Все пути ограничены активным project root. Не выходить за его пределы.
-- Writes, shell и mutating git проходят WorkHarness approval. Ждать решение;
-  не обходить и не симулировать approval.
+- Writes, shell и mutating git проходят WorkHarness approval. Сразу вызывать
+  соответствующий MCP tool: не просить подтверждение обычным текстом и не
+  останавливаться до tool call. WorkHarness сам применит текущую approval policy
+  и при необходимости приостановит вызов до решения пользователя.
 - Если capability отсутствует или approval отклонён, продолжить безопасную
   read-only работу и точно указать, что осталось непроверенным.
 - `file.write` заменяет файл целиком: непосредственно перед записью прочитать

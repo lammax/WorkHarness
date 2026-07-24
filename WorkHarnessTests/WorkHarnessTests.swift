@@ -1305,6 +1305,32 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func contextBuilderAddsAutoApprovalInstructionOnlyForAutoMode() {
+        let builder = ContextBuilder()
+        let runId = UUID()
+        let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
+
+        let automaticSnapshot = builder.buildSnapshot(from: ContextBuildInput(
+            runId: runId,
+            agent: agent,
+            providerId: "test.provider",
+            userMessage: "Update the file",
+            safetyMode: .autoInsideSandbox
+        ))
+        let manualSnapshot = builder.buildSnapshot(from: ContextBuildInput(
+            runId: runId,
+            agent: agent,
+            providerId: "test.provider",
+            userMessage: "Update the file",
+            safetyMode: .askBeforeWrite
+        ))
+
+        #expect(automaticSnapshot.contextItems.contains(ContextBuilder.autoApprovalInstruction))
+        #expect(automaticSnapshot.summary.contains("[WORKHARNESS_APPROVAL_MODE: AUTO_INSIDE_PROJECT]"))
+        #expect(!manualSnapshot.contextItems.contains(ContextBuilder.autoApprovalInstruction))
+    }
+
+    @MainActor
     @Test func acpRuntimeRunsFakeAgentAndMapsEventsToRunTimeline() async throws {
         let repository = InMemoryRunRepository()
         let run = Run(goal: "Implement ACP runtime")
@@ -1343,7 +1369,10 @@ struct WorkHarnessTests {
     @Test func harnessEngineRunsSelectedACPAgentThroughRunFlow() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
-        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.acp")
+        let appSettings = InMemoryAppSettingsService(
+            defaultAgentRuntimeId: "fake.acp",
+            defaultSafetyMode: .autoInsideSandbox
+        )
         appSettings.setAgentModelId("fake-selected-model", for: "fake.acp")
         let registry = AgentRuntimeRegistry()
         let client = FakeACPClient()
@@ -1364,6 +1393,9 @@ struct WorkHarnessTests {
         #expect(run.agents.first?.providerId == "agent-runtime:fake.acp")
         #expect(run.status == .completed)
         #expect(client.configuredModelId == "fake-selected-model")
+        #expect(client.tasks.first?.context?.summary.contains(
+            "[WORKHARNESS_APPROVAL_MODE: AUTO_INSIDE_PROJECT]"
+        ) == true)
         #expect(run.events.contains { $0.type == .fileChanged && $0.message == "Sources/App.swift" })
         #expect(run.events.contains { $0.type == .runCompleted })
     }
