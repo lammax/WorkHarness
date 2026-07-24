@@ -30,6 +30,14 @@ struct TestingConfigurationTests {
                 TestingConfigurationDefaults.manifestFileName
             ).path
         ))
+        let gitIgnoreURL = directory.appendingPathComponent(
+            TestingConfigurationDefaults.gitIgnoreFileName
+        )
+        #expect(FileManager.default.fileExists(atPath: gitIgnoreURL.path))
+        #expect(
+            try String(contentsOf: gitIgnoreURL, encoding: .utf8)
+                == TestingConfigurationDefaults.gitIgnoreContents
+        )
         #expect(service.scenarioPrompt(for: firstScenario.id).contains("Capture a screenshot"))
         #expect(try service.scenarioFileURL(for: firstScenario.id).lastPathComponent == "pairing-success.md")
     }
@@ -142,6 +150,7 @@ struct TestingConfigurationTests {
         #expect(configuration.roles[3].instructions.contains("screenshot artifact after every step"))
         #expect(configuration.roles[3].instructions.contains(#"{"target":"ios"}"#))
         #expect(configuration.roles[3].instructions.contains(#"{"package":"<bundle identifier>"}"#))
+        #expect(configuration.roles[3].instructions.contains(#""artifactName":"<scenario>-step-<NN>-<slug>""#))
         #expect(configuration.roles[3].instructions.contains("WebDriverAgent cold start"))
         #expect(configuration.roles[4].instructions.contains("Final Verdict"))
     }
@@ -287,6 +296,7 @@ struct TestingConfigurationTests {
         #expect(request.goal.contains("Authentication error"))
         #expect(request.goal.contains("Do not run unit, integration, build, lint"))
         #expect(request.goal.contains("/smoke"))
+        #expect(request.configuration.roles[0].instructions.contains("/smoke"))
         let reportArtifact = try #require(
             runRepository.run(withId: runId)?.artifacts.first { $0.kind == "smoke-report" }
         )

@@ -289,16 +289,18 @@ MCP config или approval policy.
   — отдельные сценарии с шагами, assertions и требованиями к screenshots.
 - Settings работает с этими файлами только через
   `TestingConfigurationServiceProtocol`.
-- Smoke-сценарии запускаются только по явному нажатию специальной кнопки в
-  Settings. Не запускать их автоматически при старте приложения, сохранении
-  настроек, обычном чате или после каждого изменения кода.
+- Smoke-сценарии запускаются только явным действием: специальной кнопкой в
+  Settings или командой `/smoke` в чате. Не запускать их автоматически при
+  старте приложения, сохранении настроек, обычном сообщении чата или после
+  каждого изменения кода.
 - Code tests и smoke tests — отдельные validation layers, объединяемые в один
   Run/report.
 - Claude in Mobile и другие UI automation tools подключаются только через
   WorkHarness Tool/MCP/approval gateway. Не обходить RunEvents, permissions и
   audit прямым MCP config agent runtime.
 - Smoke flow использует deterministic fixture, accessibility identifiers и
-  semantic locators. Каждый шаг фиксирует pass/fail и screenshot artifact.
+  semantic locators. Каждый шаг фиксирует pass/fail и screenshot artifact с
+  устойчивым step label.
 - Сценарии data-driven; не зашивать их список в SwiftUI или orchestrator.
 - Runtime reports/screenshots хранить отдельно от versioned scenario sources.
 

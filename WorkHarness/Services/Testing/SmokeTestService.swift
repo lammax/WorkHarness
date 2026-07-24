@@ -58,7 +58,7 @@ final class SmokeTestService: SmokeTestServiceProtocol {
         configuration.roles = configuration.roles.map { role in
             var role = role
             role.instructions = """
-            This Run was explicitly started from Settings > Testing. Execute smoke testing only. \
+            This Run was explicitly started by the user from Testing settings or a `/smoke` chat command. Execute smoke testing only. \
             Do not run the code-coverage, test-authoring, or code-test phases.
 
             \(role.instructions)

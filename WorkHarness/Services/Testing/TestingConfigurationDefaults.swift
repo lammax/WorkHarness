@@ -12,6 +12,8 @@ enum TestingConfigurationDefaults {
     static let scenarioDirectoryName = "smoke"
     static let reportsDirectoryName = "reports"
     static let manifestFileName = "testing.json"
+    static let gitIgnoreFileName = ".gitignore"
+    static let gitIgnoreContents = "reports/\n"
 
     static let catalog = TestingConfigurationCatalog(
         target: TestingTargetConfiguration(

@@ -307,8 +307,9 @@ enum AgentProfileDefaults {
           - Launch the app with `mobile.app`: `action=launch`, `argumentsJSON={"package":"<bundle identifier>"}`.
           - Inspect UI with `mobile.ui`: `action=tree`, `argumentsJSON={"platform":"ios","format":"semantic","fresh":true}`.
           - Tap by accessibility identifier with `mobile.input`: `action=tap`, `argumentsJSON={"platform":"ios","label":"<identifier>"}`.
+          - Capture every step with `mobile.screen`: `action=capture`, `argumentsJSON={"platform":"ios","artifactName":"<scenario>-step-<NN>-<slug>"}`.
         - Treat the first WebDriverAgent cold start as environment preparation: retry the first semantic UI inspection once after its build completes. Do not hide a repeated failure.
-        - Evaluate each stated assertion and capture a screenshot artifact after every step.
+        - Evaluate each stated assertion and capture a uniquely labeled screenshot artifact after every step.
         - Record pass/fail, evidence, screenshot path, and the exact failing step.
 
         ## Must not do

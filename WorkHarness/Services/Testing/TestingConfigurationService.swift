@@ -153,6 +153,17 @@ final class TestingConfigurationService: TestingConfigurationServiceProtocol {
         try fileManager.createDirectory(at: scenarioDirectoryURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: reportsDirectoryURL, withIntermediateDirectories: true)
 
+        let gitIgnoreURL = directoryURL.appendingPathComponent(
+            TestingConfigurationDefaults.gitIgnoreFileName
+        )
+        if !fileManager.fileExists(atPath: gitIgnoreURL.path) {
+            try TestingConfigurationDefaults.gitIgnoreContents.write(
+                to: gitIgnoreURL,
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+
         let manifestURL = directoryURL.appendingPathComponent(
             TestingConfigurationDefaults.manifestFileName
         )
