@@ -158,21 +158,35 @@ extension MainScreen {
             static let titleSpacing: CGFloat = 4
         }
 
+        enum LocalLLM {
+            static let title = "Local LLM Settings"
+            static let endpointTitle = "Endpoint"
+            static let endpointPlaceholder = "http://127.0.0.1:3007/mcp"
+            static let modelTitle = "Model"
+            static let refreshModelsButtonTitle = "Refresh Models"
+            static let modelsNotLoaded = "Refresh to load installed models from LocalLLMMCPServer."
+            static let modelsLoading = "Loading installed local models…"
+            static let modelsEmpty = "No local generation models were returned."
+            static let modelsFailed = "Could not load local models."
+            static let modelsLoadedSuffix = "local models available"
+            static let configuredModelProvider = "configured"
+            static let saveButtonTitle = "Save"
+            static let revertButtonTitle = "Revert"
+            static let restoreDefaultsButtonTitle = "Restore Defaults"
+            static let savedStatus = "Saved"
+            static let unsavedStatus = "Unsaved changes"
+            static let spacing: CGFloat = 12
+            static let fieldSpacing: CGFloat = 18
+            static let padding: CGFloat = 12
+            static let cornerRadius: CGFloat = 8
+        }
+
         enum AppSettings {
             static let title = "Application Settings"
             static let safetyModeTitle = "Safety mode"
             static let autoApproveWorkspaceActionsTitle = "Auto-approve actions inside the current project"
             static let autoApproveWorkspaceActionsDescription = "File writes, shell commands, and mutating Git operations will run without individual approval prompts after Save."
             static let mcpBasePathTitle = "MCP server base path"
-            static let localLLMEndpointTitle = "Local LLM endpoint"
-            static let localLLMModelTitle = "Local LLM model"
-            static let refreshLocalLLMModelsButtonTitle = "Refresh Models"
-            static let localLLMModelsNotLoaded = "Refresh to load installed models from LocalLLMMCPServer."
-            static let localLLMModelsLoading = "Loading installed local models…"
-            static let localLLMModelsEmpty = "No local generation models were returned."
-            static let localLLMModelsFailed = "Could not load local models."
-            static let localLLMModelsLoadedSuffix = "local models available"
-            static let configuredModelProvider = "configured"
             static let remoteControlTitle = "Remote Control"
             static let remoteControlEnabledTitle = "Enable localhost API"
             static let remoteControlAllowLANTitle = "Allow local network access"
@@ -187,7 +201,6 @@ extension MainScreen {
             static let savedStatus = "Saved"
             static let unsavedStatus = "Unsaved changes"
             static let mcpBasePathPlaceholder = "/Users/me/MCP_server"
-            static let localLLMEndpointPlaceholder = "http://127.0.0.1:3007/mcp"
             static let spacing: CGFloat = 12
             static let rowSpacing: CGFloat = 10
             static let fieldSpacing: CGFloat = 18

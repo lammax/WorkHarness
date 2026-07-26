@@ -50,7 +50,7 @@ extension MainScreen {
         var localLLMModel: String
         private(set) var localLLMModels: [LocalLLMModelOption] = []
         private(set) var isLoadingLocalLLMModels = false
-        private(set) var localLLMModelStatus = SettingsPageDesign.AppSettings.localLLMModelsNotLoaded
+        private(set) var localLLMModelStatus = SettingsPageDesign.LocalLLM.modelsNotLoaded
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
         var remoteControlEnabled: Bool
@@ -70,6 +70,7 @@ extension MainScreen {
         private(set) var smokeScenarioImportId: UUID?
         private var agentProfileRevision = 0
         private var smokeScenarioRevision = 0
+        private var persistedLocalLLMSettingsSnapshot: LocalLLMSettingsSnapshot
 
         init(
             providerService: ProviderServiceProtocol,
@@ -94,6 +95,10 @@ extension MainScreen {
             self.mcpServerBasePath = appSettingsService.mcpServerBasePath
             self.localLLMEndpoint = appSettingsService.localLLMEndpoint
             self.localLLMModel = appSettingsService.localLLMModel
+            self.persistedLocalLLMSettingsSnapshot = LocalLLMSettingsSnapshot(
+                endpoint: appSettingsService.localLLMEndpoint,
+                model: appSettingsService.localLLMModel
+            )
             self.defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             self.defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             self.remoteControlEnabled = appSettingsService.remoteControlEnabled
@@ -165,7 +170,7 @@ extension MainScreen {
                 LocalLLMModelOption(
                     id: localLLMModel,
                     displayName: localLLMModel,
-                    provider: SettingsPageDesign.AppSettings.configuredModelProvider,
+                    provider: SettingsPageDesign.LocalLLM.configuredModelProvider,
                     contextWindowTokens: defaultMaxInputTokens,
                     maxOutputTokens: defaultMaxOutputTokens,
                     supportsStreaming: false
@@ -179,6 +184,16 @@ extension MainScreen {
 
         var appSettingsStatus: String {
             hasUnsavedAppSettingsChanges ? SettingsPageDesign.AppSettings.unsavedStatus : SettingsPageDesign.AppSettings.savedStatus
+        }
+
+        var hasUnsavedLocalLLMChanges: Bool {
+            currentLocalLLMSettingsSnapshot != persistedLocalLLMSettingsSnapshot
+        }
+
+        var localLLMSettingsStatus: String {
+            hasUnsavedLocalLLMChanges
+                ? SettingsPageDesign.LocalLLM.unsavedStatus
+                : SettingsPageDesign.LocalLLM.savedStatus
         }
 
         var autoApproveWorkspaceActions: Bool {
@@ -506,7 +521,7 @@ extension MainScreen {
         func reloadLocalLLMModels() {
             guard !isLoadingLocalLLMModels else { return }
             isLoadingLocalLLMModels = true
-            localLLMModelStatus = SettingsPageDesign.AppSettings.localLLMModelsLoading
+            localLLMModelStatus = SettingsPageDesign.LocalLLM.modelsLoading
             errorMessage = nil
 
             Task {
@@ -518,11 +533,11 @@ extension MainScreen {
                         $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
                     }
                     localLLMModelStatus = localLLMModels.isEmpty
-                        ? SettingsPageDesign.AppSettings.localLLMModelsEmpty
-                        : "\(localLLMModels.count) \(SettingsPageDesign.AppSettings.localLLMModelsLoadedSuffix)"
+                        ? SettingsPageDesign.LocalLLM.modelsEmpty
+                        : "\(localLLMModels.count) \(SettingsPageDesign.LocalLLM.modelsLoadedSuffix)"
                 } catch {
                     localLLMModels = []
-                    localLLMModelStatus = SettingsPageDesign.AppSettings.localLLMModelsFailed
+                    localLLMModelStatus = SettingsPageDesign.LocalLLM.modelsFailed
                     errorMessage = error.localizedDescription
                 }
                 isLoadingLocalLLMModels = false
@@ -548,8 +563,6 @@ extension MainScreen {
         func saveSettings() {
             appSettingsService.defaultSafetyMode = selectedSafetyMode
             appSettingsService.mcpServerBasePath = mcpServerBasePath
-            appSettingsService.localLLMEndpoint = localLLMEndpoint
-            appSettingsService.localLLMModel = localLLMModel
             appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
             appSettingsService.defaultMaxOutputTokens = defaultMaxOutputTokens
             appSettingsService.remoteControlEnabled = remoteControlEnabled
@@ -566,8 +579,6 @@ extension MainScreen {
             appSettingsService.ragRetrievalSettings = currentRAGRetrievalSettings
 
             mcpServerBasePath = appSettingsService.mcpServerBasePath
-            localLLMEndpoint = appSettingsService.localLLMEndpoint
-            localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             remoteControlEnabled = appSettingsService.remoteControlEnabled
@@ -585,15 +596,13 @@ extension MainScreen {
         }
 
         func revertSettings() {
-            loadSettingsFromService()
+            loadApplicationSettingsFromService()
             errorMessage = nil
         }
 
         func restoreDefaultSettingsDraft() {
             selectedSafetyMode = AppSettingsDefaults.defaultSafetyMode
             mcpServerBasePath = AppSettingsDefaults.mcpServerBasePath
-            localLLMEndpoint = AppSettingsDefaults.localLLMEndpoint
-            localLLMModel = AppSettingsDefaults.localLLMModel
             defaultMaxInputTokens = AppSettingsDefaults.defaultMaxInputTokens
             defaultMaxOutputTokens = AppSettingsDefaults.defaultMaxOutputTokens
             remoteControlEnabled = AppSettingsDefaults.remoteControlEnabled
@@ -613,6 +622,25 @@ extension MainScreen {
 
         func resetSettings() {
             restoreDefaultSettingsDraft()
+        }
+
+        func saveLocalLLMSettings() {
+            appSettingsService.localLLMEndpoint = localLLMEndpoint
+            appSettingsService.localLLMModel = localLLMModel
+            loadLocalLLMSettingsFromService()
+            persistedLocalLLMSettingsSnapshot = currentLocalLLMSettingsSnapshot
+            errorMessage = nil
+        }
+
+        func revertLocalLLMSettings() {
+            loadLocalLLMSettingsFromService()
+            errorMessage = nil
+        }
+
+        func restoreDefaultLocalLLMSettingsDraft() {
+            localLLMEndpoint = AppSettingsDefaults.localLLMEndpoint
+            localLLMModel = AppSettingsDefaults.localLLMModel
+            errorMessage = nil
         }
 
         private func capabilityRows(for capabilities: ProviderCapabilities) -> [ProviderCapabilityRow] {
@@ -646,11 +674,9 @@ extension MainScreen {
             models.isEmpty ? SettingsPageDesign.ProviderFallback.notAvailable : models.joined(separator: SettingsPageDesign.ProviderFallback.listSeparator)
         }
 
-        private func loadSettingsFromService() {
+        private func loadApplicationSettingsFromService() {
             selectedSafetyMode = appSettingsService.defaultSafetyMode
             mcpServerBasePath = appSettingsService.mcpServerBasePath
-            localLLMEndpoint = appSettingsService.localLLMEndpoint
-            localLLMModel = appSettingsService.localLLMModel
             defaultMaxInputTokens = appSettingsService.defaultMaxInputTokens
             defaultMaxOutputTokens = appSettingsService.defaultMaxOutputTokens
             remoteControlEnabled = appSettingsService.remoteControlEnabled
@@ -659,6 +685,11 @@ extension MainScreen {
             remoteControlToken = appSettingsService.remoteControlToken
             loadSelectedAgentModel()
             loadRAGSettingsFromService()
+        }
+
+        private func loadLocalLLMSettingsFromService() {
+            localLLMEndpoint = appSettingsService.localLLMEndpoint
+            localLLMModel = appSettingsService.localLLMModel
         }
 
         private func loadRAGSettingsFromService() {
@@ -687,8 +718,6 @@ extension MainScreen {
             EditableAppSettingsSnapshot(
                 safetyMode: selectedSafetyMode,
                 mcpServerBasePath: mcpServerBasePath,
-                localLLMEndpoint: localLLMEndpoint,
-                localLLMModel: localLLMModel,
                 defaultMaxInputTokens: defaultMaxInputTokens,
                 defaultMaxOutputTokens: defaultMaxOutputTokens,
                 remoteControlEnabled: remoteControlEnabled,
@@ -705,8 +734,6 @@ extension MainScreen {
             EditableAppSettingsSnapshot(
                 safetyMode: appSettingsService.defaultSafetyMode,
                 mcpServerBasePath: appSettingsService.mcpServerBasePath,
-                localLLMEndpoint: appSettingsService.localLLMEndpoint,
-                localLLMModel: appSettingsService.localLLMModel,
                 defaultMaxInputTokens: appSettingsService.defaultMaxInputTokens,
                 defaultMaxOutputTokens: appSettingsService.defaultMaxOutputTokens,
                 remoteControlEnabled: appSettingsService.remoteControlEnabled,
@@ -716,6 +743,13 @@ extension MainScreen {
                 agentModelId: persistedAgentModelId,
                 ragAnswerMode: appSettingsService.ragAnswerMode,
                 ragRetrievalSettings: appSettingsService.ragRetrievalSettings
+            )
+        }
+
+        private var currentLocalLLMSettingsSnapshot: LocalLLMSettingsSnapshot {
+            LocalLLMSettingsSnapshot(
+                endpoint: localLLMEndpoint,
+                model: localLLMModel
             )
         }
 
@@ -790,8 +824,6 @@ extension MainScreen {
     private struct EditableAppSettingsSnapshot: Equatable {
         var safetyMode: SafetyMode
         var mcpServerBasePath: String
-        var localLLMEndpoint: String
-        var localLLMModel: String
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
         var remoteControlEnabled: Bool
@@ -801,6 +833,11 @@ extension MainScreen {
         var agentModelId: String
         var ragAnswerMode: RAGAnswerMode
         var ragRetrievalSettings: RAGRetrievalSettings
+    }
+
+    private struct LocalLLMSettingsSnapshot: Equatable {
+        var endpoint: String
+        var model: String
     }
 
     struct ProviderSettingsItem: Identifiable, Equatable {

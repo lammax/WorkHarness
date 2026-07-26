@@ -372,6 +372,10 @@ extension MainScreen {
                     LabeledContent(Design.BackendDetails.transportTitle, value: selectedProvider.transport)
                     LabeledContent(Design.BackendDetails.availabilityTitle, value: selectedProvider.availability)
 
+                    if selectedProvider.id == MCPProviderDescriptor.localLLM.id {
+                        localLLMSettings
+                    }
+
                     VStack(alignment: .leading, spacing: Design.CapabilityList.spacing) {
                         Text(Design.CapabilityList.title)
                             .font(.headline)
@@ -383,6 +387,67 @@ extension MainScreen {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+
+        private var localLLMSettings: some View {
+            VStack(alignment: .leading, spacing: Design.LocalLLM.spacing) {
+                HStack {
+                    Text(Design.LocalLLM.title)
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text(viewModel.localLLMSettingsStatus)
+                        .font(.caption)
+                        .foregroundStyle(viewModel.hasUnsavedLocalLLMChanges ? .orange : .secondary)
+
+                    Button(Design.LocalLLM.revertButtonTitle) {
+                        viewModel.revertLocalLLMSettings()
+                    }
+                    .disabled(!viewModel.hasUnsavedLocalLLMChanges)
+
+                    Button(Design.LocalLLM.restoreDefaultsButtonTitle) {
+                        viewModel.restoreDefaultLocalLLMSettingsDraft()
+                    }
+
+                    Button(Design.LocalLLM.saveButtonTitle) {
+                        viewModel.saveLocalLLMSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.hasUnsavedLocalLLMChanges)
+                }
+
+                SettingsTextField(
+                    title: Design.LocalLLM.endpointTitle,
+                    placeholder: Design.LocalLLM.endpointPlaceholder,
+                    text: $viewModel.localLLMEndpoint
+                )
+
+                HStack(spacing: Design.LocalLLM.fieldSpacing) {
+                    Picker(
+                        Design.LocalLLM.modelTitle,
+                        selection: $viewModel.localLLMModel
+                    ) {
+                        ForEach(viewModel.localLLMModelOptions) { model in
+                            Text(model.displayName).tag(model.id)
+                        }
+                    }
+
+                    Button(Design.LocalLLM.refreshModelsButtonTitle) {
+                        viewModel.reloadLocalLLMModels()
+                    }
+                    .disabled(viewModel.isLoadingLocalLLMModels)
+                }
+
+                Text(viewModel.localLLMModelStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(Design.LocalLLM.padding)
+            .background(
+                .quaternary.opacity(0.25),
+                in: RoundedRectangle(cornerRadius: Design.LocalLLM.cornerRadius)
+            )
         }
 
         private func backendTitle(
@@ -456,32 +521,6 @@ extension MainScreen {
                         placeholder: Design.AppSettings.mcpBasePathPlaceholder,
                         text: $viewModel.mcpServerBasePath
                     )
-
-                    SettingsTextField(
-                        title: Design.AppSettings.localLLMEndpointTitle,
-                        placeholder: Design.AppSettings.localLLMEndpointPlaceholder,
-                        text: $viewModel.localLLMEndpoint
-                    )
-
-                    HStack(spacing: Design.AppSettings.fieldSpacing) {
-                        Picker(
-                            Design.AppSettings.localLLMModelTitle,
-                            selection: $viewModel.localLLMModel
-                        ) {
-                            ForEach(viewModel.localLLMModelOptions) { model in
-                                Text(model.displayName).tag(model.id)
-                            }
-                        }
-
-                        Button(Design.AppSettings.refreshLocalLLMModelsButtonTitle) {
-                            viewModel.reloadLocalLLMModels()
-                        }
-                        .disabled(viewModel.isLoadingLocalLLMModels)
-                    }
-
-                    Text(viewModel.localLLMModelStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
 
                     Divider()
 

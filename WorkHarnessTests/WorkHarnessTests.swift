@@ -9,6 +9,7 @@ import Testing
 import Swinject
 import Foundation
 import AppKit
+import Observation
 @testable import WorkHarness
 
 struct WorkHarnessTests {
@@ -2847,8 +2848,6 @@ struct WorkHarnessTests {
 
         viewModel.selectedSafetyMode = .askBeforeShell
         viewModel.mcpServerBasePath = "/tmp/MCP_server"
-        viewModel.localLLMEndpoint = "http://127.0.0.1:3008/mcp"
-        viewModel.localLLMModel = "qwen-local"
         viewModel.defaultMaxInputTokens = 4_096
         viewModel.defaultMaxOutputTokens = 512
         viewModel.remoteControlEnabled = false
@@ -2870,8 +2869,6 @@ struct WorkHarnessTests {
 
         #expect(appSettings.defaultSafetyMode == .askBeforeShell)
         #expect(appSettings.mcpServerBasePath == "/tmp/MCP_server")
-        #expect(appSettings.localLLMEndpoint == "http://127.0.0.1:3008/mcp")
-        #expect(appSettings.localLLMModel == "qwen-local")
         #expect(appSettings.defaultMaxInputTokens == 4_096)
         #expect(appSettings.defaultMaxOutputTokens == 512)
         #expect(!appSettings.remoteControlEnabled)
@@ -2921,6 +2918,71 @@ struct WorkHarnessTests {
         #expect(mcpClient.requestedModelEndpoint == "http://127.0.0.1:3007/mcp")
         #expect(viewModel.localLLMModelOptions.map(\.id) == ["qwen2.5-coder:1.5b"])
         #expect(viewModel.localLLMModelStatus == "1 local models available")
+    }
+
+    @MainActor
+    @Test func settingsPageViewModelSavesAndRevertsLocalLLMSettingsIndependently() {
+        let appSettings = InMemoryAppSettingsService(
+            defaultSafetyMode: .askBeforeWrite,
+            localLLMEndpoint: "http://127.0.0.1:3007/mcp",
+            localLLMModel: "qwen2.5-coder:1.5b"
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings
+        )
+
+        #expect(!viewModel.hasUnsavedLocalLLMChanges)
+        #expect(viewModel.localLLMSettingsStatus == "Saved")
+
+        viewModel.localLLMEndpoint = "http://127.0.0.1:3017/mcp"
+        viewModel.localLLMModel = "phi3:latest"
+        viewModel.selectedSafetyMode = .askBeforeShell
+
+        #expect(viewModel.hasUnsavedLocalLLMChanges)
+        #expect(viewModel.hasUnsavedAppSettingsChanges)
+        #expect(viewModel.localLLMSettingsStatus == "Unsaved changes")
+
+        viewModel.saveLocalLLMSettings()
+
+        #expect(appSettings.localLLMEndpoint == "http://127.0.0.1:3017/mcp")
+        #expect(appSettings.localLLMModel == "phi3:latest")
+        #expect(appSettings.defaultSafetyMode == .askBeforeWrite)
+        #expect(!viewModel.hasUnsavedLocalLLMChanges)
+        #expect(viewModel.hasUnsavedAppSettingsChanges)
+
+        viewModel.localLLMModel = "llama3:latest"
+        viewModel.revertLocalLLMSettings()
+
+        #expect(viewModel.localLLMModel == "phi3:latest")
+        #expect(!viewModel.hasUnsavedLocalLLMChanges)
+    }
+
+    @MainActor
+    @Test func savingLocalLLMSettingsInvalidatesObservedStatus() throws {
+        let defaults = try #require(
+            UserDefaults(suiteName: "WorkHarnessTests.LocalLLMStatus.\(UUID().uuidString)")
+        )
+        let appSettings = UserDefaultsAppSettingsService(defaults: defaults)
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings
+        )
+        viewModel.localLLMModel = "phi3:latest"
+
+        var didInvalidateStatus = false
+        withObservationTracking {
+            _ = viewModel.localLLMSettingsStatus
+        } onChange: {
+            didInvalidateStatus = true
+        }
+
+        viewModel.saveLocalLLMSettings()
+
+        #expect(didInvalidateStatus)
+        #expect(viewModel.localLLMSettingsStatus == "Saved")
+        #expect(!viewModel.hasUnsavedLocalLLMChanges)
+        #expect(appSettings.localLLMModel == "phi3:latest")
     }
 
     @MainActor

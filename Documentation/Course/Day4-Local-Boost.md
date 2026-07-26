@@ -50,7 +50,8 @@ code continuation with nearby-file context.
 Acceptance:
 
 - installed generation models are returned by `local_llm_list_models`;
-- Settings displays a picker and explicit refresh action;
+- the Local LLM provider page displays its endpoint, model picker, explicit
+  refresh action and dedicated Save/Revert controls;
 - selection participates in draft/dirty/save/revert behavior;
 - no View/ViewModel-to-provider dependency is introduced;
 - build and focused tests pass.
