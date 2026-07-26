@@ -65,7 +65,7 @@ struct MCPProviderDescriptor: Equatable {
             costModel: "local",
             supportsApprovals: false,
             supportsMCP: true,
-            supportedModels: ["local-private"]
+            supportedModels: [AppSettingsDefaults.localLLMModel]
         ),
         mcpServerPath: MCPProviderConfiguration.defaultServerBasePath,
         mcpEndpointURL: "http://127.0.0.1:3007/mcp"
@@ -107,19 +107,32 @@ enum MCPProviderEvent: Equatable {
     case failed(String)
 }
 
+@MainActor
 protocol MCPProviderClientProtocol: AnyObject {
     func streamEvents(for request: MCPProviderRequest) async throws -> AsyncThrowingStream<MCPProviderEvent, Error>
+    func listLocalLLMModels(endpointURL: String?) async throws -> [LocalLLMModelOption]
 }
 
+extension MCPProviderClientProtocol {
+    func listLocalLLMModels(endpointURL: String?) async throws -> [LocalLLMModelOption] {
+        throw MCPProviderClientError.modelDiscoveryUnavailable
+    }
+}
+
+@MainActor
 final class MCPProviderClient: MCPProviderClientProtocol {
-    private let configuration: MCPProviderConfiguration
+    private let configurationProvider: () -> MCPProviderConfiguration
 
     convenience init() {
         self.init(configuration: MCPProviderConfiguration())
     }
 
     init(configuration: MCPProviderConfiguration) {
-        self.configuration = configuration
+        self.configurationProvider = { configuration }
+    }
+
+    init(configurationProvider: @escaping () -> MCPProviderConfiguration) {
+        self.configurationProvider = configurationProvider
     }
 
     func streamEvents(for request: MCPProviderRequest) async throws -> AsyncThrowingStream<MCPProviderEvent, Error> {
@@ -128,9 +141,18 @@ final class MCPProviderClient: MCPProviderClientProtocol {
         }
 
         return AsyncThrowingStream<MCPProviderEvent, Error> { continuation in
-            continuation.yield(.failed("MCP provider transport is not connected. Expected MCP server base: \(configuration.serverBasePath)"))
+            continuation.yield(.failed("MCP provider transport is not connected. Expected MCP server base: \(currentConfiguration.serverBasePath)"))
             continuation.finish()
         }
+    }
+
+    func listLocalLLMModels(endpointURL: String?) async throws -> [LocalLLMModelOption] {
+        let text = try await callLocalLLMTool(
+            named: "local_llm_list_models",
+            arguments: EmptyMCPArguments(),
+            endpointURL: endpointURL
+        )
+        return try JSONDecoder().decode([LocalLLMModelOption].self, from: Data(text.utf8))
     }
 
     private func localLLMStream(for request: MCPProviderRequest) -> AsyncThrowingStream<MCPProviderEvent, Error> {
@@ -163,9 +185,28 @@ final class MCPProviderClient: MCPProviderClientProtocol {
     }
 
     private func callLocalLLMGenerate(_ request: AIRequest) async throws -> LocalLLMGenerateResult {
-        guard
-            let url = URL(string: configuration.localLLMEndpointURL)
-        else {
+        let messages = localLLMMessages(from: request)
+        let text = try await callLocalLLMTool(
+            named: "local_llm_generate",
+            arguments: LocalLLMGenerateArguments(
+                messages: messages,
+                model: request.model.isEmpty ? currentConfiguration.localLLMModel : request.model,
+                temperature: request.temperature ?? 0.1,
+                topP: 0.9,
+                maxTokens: request.budget?.maxOutputTokens
+            ),
+            endpointURL: nil
+        )
+        return try JSONDecoder().decode(LocalLLMGenerateResult.self, from: Data(text.utf8))
+    }
+
+    private func callLocalLLMTool<Arguments: Encodable>(
+        named name: String,
+        arguments: Arguments,
+        endpointURL: String?
+    ) async throws -> String {
+        let resolvedEndpointURL = endpointURL ?? currentConfiguration.localLLMEndpointURL
+        guard let url = URL(string: resolvedEndpointURL) else {
             throw MCPProviderClientError.missingEndpoint(MCPProviderDescriptor.localLLM.id)
         }
 
@@ -173,20 +214,10 @@ final class MCPProviderClient: MCPProviderClientProtocol {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("application/json, text/event-stream", forHTTPHeaderField: "Accept")
-
-        let messages = localLLMMessages(from: request)
         urlRequest.httpBody = try JSONEncoder().encode(MCPJSONRPCRequest(
             id: 1,
             method: "tools/call",
-            params: MCPToolCallParams(
-                name: "local_llm_generate",
-                arguments: LocalLLMGenerateArguments(
-                    messages: messages,
-                    model: request.model.isEmpty ? configuration.localLLMModel : request.model,
-                    temperature: request.temperature,
-                    maxTokens: request.budget?.maxOutputTokens
-                )
-            )
+            params: MCPToolCallParams(name: name, arguments: arguments)
         ))
 
         let (data, response) = try await URLSession.shared.data(for: urlRequest)
@@ -201,12 +232,15 @@ final class MCPProviderClient: MCPProviderClientProtocol {
         if let error = decoded.error {
             throw MCPProviderClientError.jsonRPCError(error.message)
         }
-
-        guard let text = decoded.result?.content.first(where: { $0.text != nil })?.text else {
+        guard decoded.result?.isError != true,
+              let text = decoded.result?.content.first(where: { $0.text != nil })?.text else {
             throw MCPProviderClientError.missingToolResult
         }
+        return text
+    }
 
-        return try JSONDecoder().decode(LocalLLMGenerateResult.self, from: Data(text.utf8))
+    var currentConfiguration: MCPProviderConfiguration {
+        configurationProvider()
     }
 
     private func localLLMMessages(from request: AIRequest) -> [LocalLLMMessage] {
@@ -227,12 +261,13 @@ final class MCPProviderClient: MCPProviderClientProtocol {
     }
 }
 
-private enum MCPProviderClientError: LocalizedError, Equatable {
+enum MCPProviderClientError: LocalizedError, Equatable {
     case missingEndpoint(String)
     case invalidResponse
     case httpStatus(Int)
     case jsonRPCError(String)
     case missingToolResult
+    case modelDiscoveryUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -246,9 +281,13 @@ private enum MCPProviderClientError: LocalizedError, Equatable {
             return "MCP provider request failed: \(message)"
         case .missingToolResult:
             return "MCP provider response did not include a text tool result."
+        case .modelDiscoveryUnavailable:
+            return "Local LLM model discovery is unavailable."
         }
     }
 }
+
+private struct EmptyMCPArguments: Encodable {}
 
 private struct MCPJSONRPCRequest<Params: Encodable>: Encodable {
     let jsonrpc = "2.0"
@@ -266,12 +305,14 @@ private struct LocalLLMGenerateArguments: Encodable {
     let messages: [LocalLLMMessage]
     let model: String
     let temperature: Double?
+    let topP: Double?
     let maxTokens: Int?
 
     enum CodingKeys: String, CodingKey {
         case messages
         case model
         case temperature
+        case topP = "top_p"
         case maxTokens = "max_tokens"
     }
 }

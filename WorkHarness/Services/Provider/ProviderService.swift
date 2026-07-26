@@ -9,10 +9,16 @@
 final class ProviderService: ProviderServiceProtocol {
     private let registry: ProviderRegistry
     private let appSettingsService: AppSettingsServiceProtocol
+    private let mcpClient: MCPProviderClientProtocol?
 
-    init(registry: ProviderRegistry, appSettingsService: AppSettingsServiceProtocol) {
+    init(
+        registry: ProviderRegistry,
+        appSettingsService: AppSettingsServiceProtocol,
+        mcpClient: MCPProviderClientProtocol? = nil
+    ) {
         self.registry = registry
         self.appSettingsService = appSettingsService
+        self.mcpClient = mcpClient
         restoreActiveProvider()
     }
 
@@ -39,6 +45,13 @@ final class ProviderService: ProviderServiceProtocol {
 
     func capabilities(for providerId: String) throws -> ProviderCapabilities {
         try registry.capabilities(for: providerId)
+    }
+
+    func loadLocalLLMModels(endpointURL: String) async throws -> [LocalLLMModelOption] {
+        guard let mcpClient else {
+            throw MCPProviderClientError.modelDiscoveryUnavailable
+        }
+        return try await mcpClient.listLocalLLMModels(endpointURL: endpointURL)
     }
 
     private func restoreActiveProvider() {

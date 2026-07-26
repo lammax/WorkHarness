@@ -36,7 +36,8 @@ extension Container {
         register(ProviderServiceProtocol.self) { resolver in
             ProviderService(
                 registry: resolver.resolve(ProviderRegistry.self)!,
-                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                mcpClient: resolver.resolve(MCPProviderClientProtocol.self)!
             )
         }.inObjectScope(.container)
 

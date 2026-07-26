@@ -2889,6 +2889,60 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func settingsPageViewModelLoadsAndSelectsInstalledLocalLLMModel() async throws {
+        let appSettings = InMemoryAppSettingsService()
+        let mcpClient = FakeMCPProviderClient(
+            events: [],
+            localLLMModels: [
+                LocalLLMModelOption(
+                    id: "qwen2.5-coder:1.5b",
+                    displayName: "qwen2.5-coder:1.5b",
+                    provider: "openai-compatible-local",
+                    contextWindowTokens: 16_384,
+                    maxOutputTokens: 2_048,
+                    supportsStreaming: false
+                )
+            ]
+        )
+        let providerService = ProviderService(
+            registry: ProviderRegistry(providers: [TestAIProvider()]),
+            appSettingsService: appSettings,
+            mcpClient: mcpClient
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: providerService,
+            appSettingsService: appSettings
+        )
+
+        viewModel.localLLMEndpoint = "http://127.0.0.1:3007/mcp"
+        viewModel.reloadLocalLLMModels()
+        await Task.yield()
+
+        #expect(mcpClient.requestedModelEndpoint == "http://127.0.0.1:3007/mcp")
+        #expect(viewModel.localLLMModelOptions.map(\.id) == ["qwen2.5-coder:1.5b"])
+        #expect(viewModel.localLLMModelStatus == "1 local models available")
+    }
+
+    @MainActor
+    @Test func mcpProviderClientReadsSavedLocalLLMConfigurationWithoutRestart() {
+        var configuration = MCPProviderConfiguration(
+            localLLMEndpointURL: "http://127.0.0.1:3007/mcp",
+            localLLMModel: "qwen2.5-coder:1.5b"
+        )
+        let client = MCPProviderClient {
+            configuration
+        }
+
+        #expect(client.currentConfiguration.localLLMModel == "qwen2.5-coder:1.5b")
+
+        configuration.localLLMEndpointURL = "http://127.0.0.1:3017/mcp"
+        configuration.localLLMModel = "phi3:latest"
+
+        #expect(client.currentConfiguration.localLLMEndpointURL == "http://127.0.0.1:3017/mcp")
+        #expect(client.currentConfiguration.localLLMModel == "phi3:latest")
+    }
+
+    @MainActor
     @Test func settingsPageViewModelSavesAndRevertsAutoApprovalDraft() async throws {
         let appSettings = InMemoryAppSettingsService(
             defaultSafetyMode: .askBeforeWrite
@@ -3303,12 +3357,19 @@ private final class RecordingAIProvider: AIProvider {
     }
 }
 
+@MainActor
 private final class FakeMCPProviderClient: MCPProviderClientProtocol {
     private let events: [MCPProviderEvent]
+    private let localLLMModels: [LocalLLMModelOption]
     private(set) var requests: [MCPProviderRequest] = []
+    private(set) var requestedModelEndpoint: String?
 
-    init(events: [MCPProviderEvent]) {
+    init(
+        events: [MCPProviderEvent],
+        localLLMModels: [LocalLLMModelOption] = []
+    ) {
         self.events = events
+        self.localLLMModels = localLLMModels
     }
 
     func streamEvents(for request: MCPProviderRequest) async throws -> AsyncThrowingStream<MCPProviderEvent, Error> {
@@ -3321,6 +3382,11 @@ private final class FakeMCPProviderClient: MCPProviderClientProtocol {
             }
             continuation.finish()
         }
+    }
+
+    func listLocalLLMModels(endpointURL: String?) async throws -> [LocalLLMModelOption] {
+        requestedModelEndpoint = endpointURL
+        return localLLMModels
     }
 }
 

@@ -221,6 +221,8 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 17 - RAG v1.
 - Step 18 - ACP Agent Runtime v1.
 - Step 19 - Multi-Agent v1.
+- Step 20 - Remote Control v1.
+- Step 21 - Claude Code CLI Agent Runtime v1.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -968,7 +970,7 @@ Claude Code can be selected as an AgentRuntime, execute a coding Run with stream
 
 ## Step 22 - Mobile Remote Client v1
 
-Status: Planned. The WorkHarness API is ready for a separate mobile client; no mobile target is introduced into the macOS application until the API contract is stable.
+Status: In progress in the separate `WorkHarnessMobile` repository. The fixture-backed mobile UI and automated test coverage exist, but the production `URLSessionRemoteControlClient`, pairing/token flow, live SSE stream, reject action, Keychain token storage, reconnect/auth expiry handling, and a real mobile-to-WorkHarness integration run are not complete.
 
 Goal:
 Provide a focused mobile control surface for monitoring Runs and handling approvals.
@@ -985,6 +987,127 @@ Scope:
 
 Done when:
 A mobile client can pair with WorkHarness, observe a Run and complete an approval flow without direct ACP or MCP access.
+
+## Step 23 - Course Day 4: Local Boost v1
+
+Status: MVP implemented and technically verified. Submission evidence is still
+in progress: Claude Haiku is blocked by the current account session limit, the
+Cursor Feature/Bug Fix comparison runs and final IDE screenshots remain.
+
+Goal:
+Deliver a minimal, reproducible local coding assistant configuration for the
+course while preserving the existing MCP-backed provider architecture.
+
+Hardware baseline:
+
+- MacBook Pro with Apple M3 Pro.
+- 18 GB unified memory.
+- Ollama as the local inference runtime.
+- Cursor with Continue for IDE Chat, Edit and Autocomplete.
+- WorkHarness uses the existing `LocalLLMMCPServer`.
+
+### Submission MVP
+
+1. Install Continue in Cursor.
+2. Install `qwen2.5-coder:1.5b` as the smallest practical baseline model.
+3. Configure Continue roles:
+   - Chat.
+   - Autocomplete.
+   - Edit.
+   - Apply.
+4. Use:
+   - context window: 16,384 tokens.
+   - maximum generated output: 2,048 tokens.
+   - temperature: 0.1.
+   - top_p: 0.9.
+   - autocomplete prompt budget: 2,048 tokens.
+5. Add a project Continue rule derived from `AGENTS.md` / `CLAUDE.md`.
+6. Keep Cursor and Claude cloud baselines intentionally minimal:
+   - Cursor: `gpt-5.4-nano-none`.
+   - Claude Code: `haiku` (Fable remains available but requires separate usage
+     credits on the current account).
+7. Add native Claude project agents for:
+   - Bug Fix.
+   - Research.
+8. Use `LocalLLMMCPServer` as the WorkHarness local provider boundary.
+9. Discover installed local models through the MCP tool and expose them as a
+   Settings picker.
+10. Apply a newly saved Local LLM endpoint/model without restarting WorkHarness.
+11. Run one Day 1 feature task and the Day 2 Bug Fix / Research tasks against
+    the same baseline and acceptance criteria.
+12. Record first-pass outcome, build/tests, speed, rule compliance, context
+    understanding, offline behavior and manual corrections.
+13. Produce a course report with a Cursor vs Claude vs Local table and a
+    recommendation for tasks that fit the local model.
+
+MVP benchmark tasks:
+
+- Day 1 feature: add installed Ollama model discovery and a Settings picker
+  through the existing service and MCP boundaries.
+- Day 2 Bug Fix: diagnose and fix Local LLM settings being captured at app
+  startup instead of applied after Save.
+- Day 2 Research: explain the Local LLM flow from Settings through MCP,
+  ContextBuilder and RunEvents without changing files.
+
+Done when:
+
+- local Chat and Autocomplete work in Cursor;
+- WorkHarness can select an installed Ollama model returned by
+  `LocalLLMMCPServer`;
+- the selected model is used without an app restart;
+- the fixed benchmark prompts and raw results are preserved;
+- the comparison report contains evidence-backed verdicts and limitations.
+
+### Post-course Local LLM enhancements
+
+These items are explicitly outside the submission MVP:
+
+1. Compare at least three local models on identical repository revisions:
+   - `qwen2.5-coder:1.5b`;
+   - `qwen2.5-coder:7b`;
+   - one of `deepseek-coder:6.7b`, `starcoder2:7b` or a newer model that fits
+     comfortably in 18 GB unified memory.
+2. Split model roles:
+   - 1.5B–3B Fill-in-the-Middle model for low-latency autocomplete;
+   - 7B–14B instruction model for Chat/Edit;
+   - tool-capable local model for agent workflows.
+3. Benchmark 8K, 16K and 32K context sizes and measure:
+   - time to first token;
+   - generated tokens per second;
+   - peak unified memory;
+   - first-pass build/test success;
+   - rule and architecture compliance.
+4. Add typed Local LLM generation settings to WorkHarness:
+   - temperature;
+   - top_p;
+   - context size;
+   - output token limit;
+   - optional system prompt/rules source.
+5. Expand `LocalLLMMCPServer`:
+   - upstream token streaming;
+   - cancellation;
+   - per-model capability and context metadata;
+   - Ollama-native metadata where OpenAI-compatible `/models` is insufficient;
+   - structured health and loaded-model diagnostics;
+   - stable error classification and retry policy.
+6. Add a local coding `AgentRuntime` only behind the agent boundary:
+   - prefer ACP;
+   - alternatively use a compatible isolated agent host;
+   - route file/shell/git actions through WorkHarness MCP tools;
+   - reuse approvals and RunEvents;
+   - never turn `MCPBackedAIProvider` into a hidden coding agent.
+7. Add repeatable benchmark support:
+   - immutable task catalog;
+   - isolated Git worktrees;
+   - per-run timing and hardware metrics;
+   - automatic diff/build/test capture;
+   - Markdown/CSV comparison reports.
+8. Add an offline certification run with network disabled after all required
+   models and dependencies are cached.
+9. Add UI smoke coverage for model refresh, selection, Save/Revert and backend
+   unavailability.
+10. Revisit the recommended default after measurements; do not promote the
+    smallest model to production agent workflows without evidence.
 
 # Architectural Direction
 

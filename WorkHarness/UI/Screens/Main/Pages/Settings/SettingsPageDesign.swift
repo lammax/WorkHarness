@@ -166,6 +166,13 @@ extension MainScreen {
             static let mcpBasePathTitle = "MCP server base path"
             static let localLLMEndpointTitle = "Local LLM endpoint"
             static let localLLMModelTitle = "Local LLM model"
+            static let refreshLocalLLMModelsButtonTitle = "Refresh Models"
+            static let localLLMModelsNotLoaded = "Refresh to load installed models from LocalLLMMCPServer."
+            static let localLLMModelsLoading = "Loading installed local models…"
+            static let localLLMModelsEmpty = "No local generation models were returned."
+            static let localLLMModelsFailed = "Could not load local models."
+            static let localLLMModelsLoadedSuffix = "local models available"
+            static let configuredModelProvider = "configured"
             static let remoteControlTitle = "Remote Control"
             static let remoteControlEnabledTitle = "Enable localhost API"
             static let remoteControlAllowLANTitle = "Allow local network access"
@@ -181,7 +188,6 @@ extension MainScreen {
             static let unsavedStatus = "Unsaved changes"
             static let mcpBasePathPlaceholder = "/Users/me/MCP_server"
             static let localLLMEndpointPlaceholder = "http://127.0.0.1:3007/mcp"
-            static let localLLMModelPlaceholder = "local-private"
             static let spacing: CGFloat = 12
             static let rowSpacing: CGFloat = 10
             static let fieldSpacing: CGFloat = 18

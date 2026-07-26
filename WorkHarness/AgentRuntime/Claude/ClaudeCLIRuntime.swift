@@ -40,11 +40,12 @@ final class ClaudeCLIRuntime: AgentRuntime {
         transport: .cli,
         authentication: .runtimeManaged,
         modelOptions: [
+            AgentRuntimeModelOption(id: "haiku", title: "Haiku"),
             AgentRuntimeModelOption(id: "sonnet", title: "Sonnet"),
             AgentRuntimeModelOption(id: "opus", title: "Opus"),
             AgentRuntimeModelOption(id: "fable", title: "Fable")
         ],
-        defaultModelId: "sonnet",
+        defaultModelId: "haiku",
         capabilities: AgentCapabilities([
             .canEditFiles,
             .canSearch,

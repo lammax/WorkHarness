@@ -48,6 +48,9 @@ extension MainScreen {
         var mcpServerBasePath: String
         var localLLMEndpoint: String
         var localLLMModel: String
+        private(set) var localLLMModels: [LocalLLMModelOption] = []
+        private(set) var isLoadingLocalLLMModels = false
+        private(set) var localLLMModelStatus = SettingsPageDesign.AppSettings.localLLMModelsNotLoaded
         var defaultMaxInputTokens: Int
         var defaultMaxOutputTokens: Int
         var remoteControlEnabled: Bool
@@ -152,6 +155,22 @@ extension MainScreen {
 
         var activeAgentRuntime: AgentRuntimeItem? {
             selectedRuntime
+        }
+
+        var localLLMModelOptions: [LocalLLMModelOption] {
+            if localLLMModels.contains(where: { $0.id == localLLMModel }) {
+                return localLLMModels
+            }
+            return [
+                LocalLLMModelOption(
+                    id: localLLMModel,
+                    displayName: localLLMModel,
+                    provider: SettingsPageDesign.AppSettings.configuredModelProvider,
+                    contextWindowTokens: defaultMaxInputTokens,
+                    maxOutputTokens: defaultMaxOutputTokens,
+                    supportsStreaming: false
+                )
+            ] + localLLMModels
         }
 
         var hasUnsavedAppSettingsChanges: Bool {
@@ -481,6 +500,32 @@ extension MainScreen {
                 reloadAgentRuntimes()
             } catch {
                 errorMessage = error.localizedDescription
+            }
+        }
+
+        func reloadLocalLLMModels() {
+            guard !isLoadingLocalLLMModels else { return }
+            isLoadingLocalLLMModels = true
+            localLLMModelStatus = SettingsPageDesign.AppSettings.localLLMModelsLoading
+            errorMessage = nil
+
+            Task {
+                do {
+                    let models = try await providerService.loadLocalLLMModels(
+                        endpointURL: localLLMEndpoint
+                    )
+                    localLLMModels = models.sorted {
+                        $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+                    }
+                    localLLMModelStatus = localLLMModels.isEmpty
+                        ? SettingsPageDesign.AppSettings.localLLMModelsEmpty
+                        : "\(localLLMModels.count) \(SettingsPageDesign.AppSettings.localLLMModelsLoadedSuffix)"
+                } catch {
+                    localLLMModels = []
+                    localLLMModelStatus = SettingsPageDesign.AppSettings.localLLMModelsFailed
+                    errorMessage = error.localizedDescription
+                }
+                isLoadingLocalLLMModels = false
             }
         }
 

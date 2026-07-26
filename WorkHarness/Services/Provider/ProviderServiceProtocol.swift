@@ -14,6 +14,7 @@ protocol ProviderServiceProtocol: BaseServiceProtocol {
     func activeProvider() throws -> any AIProvider
     func selectProvider(id providerId: String) throws
     func capabilities(for providerId: String) throws -> ProviderCapabilities
+    func loadLocalLLMModels(endpointURL: String) async throws -> [LocalLLMModelOption]
 }
 
 extension ProviderServiceProtocol {

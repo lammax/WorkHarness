@@ -463,11 +463,25 @@ extension MainScreen {
                         text: $viewModel.localLLMEndpoint
                     )
 
-                    SettingsTextField(
-                        title: Design.AppSettings.localLLMModelTitle,
-                        placeholder: Design.AppSettings.localLLMModelPlaceholder,
-                        text: $viewModel.localLLMModel
-                    )
+                    HStack(spacing: Design.AppSettings.fieldSpacing) {
+                        Picker(
+                            Design.AppSettings.localLLMModelTitle,
+                            selection: $viewModel.localLLMModel
+                        ) {
+                            ForEach(viewModel.localLLMModelOptions) { model in
+                                Text(model.displayName).tag(model.id)
+                            }
+                        }
+
+                        Button(Design.AppSettings.refreshLocalLLMModelsButtonTitle) {
+                            viewModel.reloadLocalLLMModels()
+                        }
+                        .disabled(viewModel.isLoadingLocalLLMModels)
+                    }
+
+                    Text(viewModel.localLLMModelStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     Divider()
 

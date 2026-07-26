@@ -11,11 +11,13 @@ extension Container {
     func registerProviders() {
         register(MCPProviderClientProtocol.self) { resolver in
             let appSettings = resolver.resolve(AppSettingsServiceProtocol.self)!
-            return MCPProviderClient(configuration: MCPProviderConfiguration(
-                serverBasePath: appSettings.mcpServerBasePath,
-                localLLMEndpointURL: appSettings.localLLMEndpoint,
-                localLLMModel: appSettings.localLLMModel
-            ))
+            return MCPProviderClient {
+                MCPProviderConfiguration(
+                    serverBasePath: appSettings.mcpServerBasePath,
+                    localLLMEndpointURL: appSettings.localLLMEndpoint,
+                    localLLMModel: appSettings.localLLMModel
+                )
+            }
         }.inObjectScope(.container)
 
         register(ProviderRegistry.self) { resolver in

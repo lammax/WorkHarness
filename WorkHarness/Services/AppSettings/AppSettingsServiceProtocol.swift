@@ -33,10 +33,10 @@ extension AppSettingsServiceProtocol {
 
 enum AppSettingsDefaults {
     nonisolated static let defaultSafetyMode: SafetyMode = .askBeforeWrite
-    nonisolated static let defaultAgentModelId = "composer-2.5[fast=true]"
+    nonisolated static let defaultAgentModelId = "gpt-5.4-nano-none"
     nonisolated static let mcpServerBasePath = "/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server"
     nonisolated static let localLLMEndpoint = "http://127.0.0.1:3007/mcp"
-    nonisolated static let localLLMModel = "local-private"
+    nonisolated static let localLLMModel = "qwen2.5-coder:1.5b"
     nonisolated static let defaultMaxInputTokens = 16_000
     nonisolated static let defaultMaxOutputTokens = 2_000
     nonisolated static let remoteControlEnabled = true

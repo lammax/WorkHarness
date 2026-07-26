@@ -1,0 +1,19 @@
+---
+description: WorkHarness architecture and coding rules
+alwaysApply: true
+---
+
+Read and follow `AGENTS.md` before planning or editing. WorkHarness is a
+Run-centric local AI Agent Harness, not a chat application.
+
+- Preserve `View -> ViewModel -> Service -> HarnessEngine` dependency flow.
+- Keep providers and real tools behind MCP boundaries.
+- Keep full coding agents behind `AgentRuntime`, preferably ACP.
+- Use the existing Screen/Page/View/ViewModel/Design structure.
+- Append important actions as immutable `RunEvent` values.
+- Keep bug fixes minimal and add deterministic focused tests.
+- Run the macOS build and relevant tests after Swift changes.
+- Never commit or push without an explicit request.
+
+Use `CLAUDE.md` for concrete project examples, anti-patterns, and the typical
+Swift file template.
