@@ -97,6 +97,12 @@ final class MCPToolClient: MCPToolClientProtocol {
                 toolName: "workharness_health",
                 arguments: [:]
             )
+        case "mobile.wda":
+            return Route(
+                endpoint: Self.mobileAutomationEndpoint,
+                toolName: "workharness_wda",
+                arguments: arguments
+            )
         case let toolId where toolId.hasPrefix(Self.mobileToolPrefix):
             let toolName = String(toolId.dropFirst(Self.mobileToolPrefix.count))
             guard !toolName.isEmpty else {

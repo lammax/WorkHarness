@@ -153,7 +153,8 @@ struct TestingConfigurationTests {
         #expect(configuration.roles[4].instructions.contains(#"{"target":"ios"}"#))
         #expect(configuration.roles[4].instructions.contains(#"{"package":"<bundle identifier>"}"#))
         #expect(configuration.roles[4].instructions.contains(#""artifactName":"<scenario>-step-<NN>-<slug>""#))
-        #expect(configuration.roles[4].instructions.contains("WebDriverAgent cold start"))
+        #expect(configuration.roles[4].instructions.contains("mobile.wda"))
+        #expect(configuration.roles[4].instructions.contains("ensure_running"))
         #expect(configuration.roles[5].instructions.contains("Final Verdict"))
     }
 

@@ -605,6 +605,31 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func mcpToolClientRoutesWebDriverAgentLifecycleThroughDedicatedGateway() async throws {
+        let transport = RecordingMCPToolTransport(response: MCPToolTransportResponse(
+            output: #"{"isRunning":true}"#,
+            isError: false
+        ))
+        let client = MCPToolClient(transport: transport)
+
+        let result = try await client.invoke(MCPToolInvocation(
+            toolId: "mobile.wda",
+            arguments: [
+                "action": "ensure_running",
+                "simulator_id": "fixture-simulator"
+            ],
+            projectRootPath: "/tmp/project"
+        ))
+        let call = try #require(transport.calls.first)
+
+        #expect(result.status == .succeeded)
+        #expect(call.endpoint == URL(string: "http://127.0.0.1:3009/mcp"))
+        #expect(call.name == "workharness_wda")
+        #expect(call.arguments["action"] as? String == "ensure_running")
+        #expect(call.arguments["simulator_id"] as? String == "fixture-simulator")
+    }
+
+    @MainActor
     @Test func toolServiceRecordsMobileScreenshotAsRunArtifact() async throws {
         let repository = InMemoryRunRepository()
         let run = Run(goal: "Capture a smoke-test screenshot")
