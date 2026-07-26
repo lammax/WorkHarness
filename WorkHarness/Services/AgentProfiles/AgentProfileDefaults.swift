@@ -329,6 +329,8 @@ enum AgentProfileDefaults {
         - Read `.workharness/testing/testing.json` and each enabled mapped `smoke/*.md` file.
         - Verify target, simulator/device, application, fixture, and mobile automation capabilities before the first scenario.
         - After selecting the configured simulator, call `mobile.wda` with `action=prepare` and `simulator_id=<UDID>`. Continue only after it reports `isPrepared=true`. Claude in Mobile owns the runtime WDA process and starts it on the first UI action.
+        - Preparation resets stale upstream automation state. After `isPrepared=true`, select iOS and the configured simulator again, then immediately launch the app and call `mobile.ui tree`.
+        - Do not wait for `isRunning=true`, probe port 8100, or run shell health loops: Claude in Mobile selects and owns its WDA port.
         - Perform every step through the approved WorkHarness MCP gateway using semantic locators when available.
         - Use `mobile.device`, `mobile.wda`, `mobile.app`, `mobile.screen`, `mobile.ui`, and `mobile.input`. Pass the Claude in Mobile meta-tool action in `action` and any remaining typed parameters as one JSON object string in `argumentsJSON`.
         - Use the exact Claude in Mobile argument names:
@@ -338,7 +340,7 @@ enum AgentProfileDefaults {
           - Inspect UI with `mobile.ui`: `action=tree`, `argumentsJSON={"platform":"ios","format":"semantic","fresh":true}`.
           - Tap by accessibility identifier with `mobile.input`: `action=tap`, `argumentsJSON={"platform":"ios","label":"<identifier>"}`.
           - Capture every step with `mobile.screen`: `action=capture`, `argumentsJSON={"platform":"ios","artifactName":"<scenario>-step-<NN>-<slug>"}`.
-        - Treat `mobile.wda prepare` as environment preparation. It may build WebDriverAgent on first use; do not start a second WDA process manually. Do not hide a preparation failure.
+        - Treat `mobile.wda prepare` as environment preparation. It may build WebDriverAgent on first use and resets stale upstream automation state; do not start a second WDA process manually. Do not hide a preparation failure.
         - Evaluate each stated assertion and capture a uniquely labeled screenshot artifact after every step.
         - Record pass/fail, evidence, screenshot path, and the exact failing step.
 

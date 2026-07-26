@@ -156,6 +156,9 @@ struct TestingConfigurationTests {
         #expect(configuration.roles[4].instructions.contains("mobile.wda"))
         #expect(configuration.roles[4].instructions.contains("action=prepare"))
         #expect(configuration.roles[4].instructions.contains("Claude in Mobile owns"))
+        #expect(configuration.roles[4].instructions.contains("select iOS and the configured simulator again"))
+        #expect(configuration.roles[4].instructions.contains("Do not wait for `isRunning=true`"))
+        #expect(configuration.roles[4].instructions.contains("probe port 8100"))
         #expect(configuration.roles[5].instructions.contains("Final Verdict"))
     }
 
