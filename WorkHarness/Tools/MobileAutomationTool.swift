@@ -26,12 +26,12 @@ struct MobileAutomationTool: ToolProtocol {
         MobileAutomationTool(
             id: "mobile.wda",
             displayName: "WebDriverAgent",
-            description: "Start, inspect, or stop WebDriverAgent for the selected iOS Simulator.",
+            description: "Boot the selected simulator and build-prepare WebDriverAgent for Claude in Mobile.",
             permission: .shell,
             inputSchema: [
                 ToolInputField(
                     name: "action",
-                    description: "Supported actions: ensure_running, status, stop.",
+                    description: "Supported actions: prepare, status.",
                     required: true
                 ),
                 ToolInputField(

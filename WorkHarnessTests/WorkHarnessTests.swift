@@ -615,7 +615,7 @@ struct WorkHarnessTests {
         let result = try await client.invoke(MCPToolInvocation(
             toolId: "mobile.wda",
             arguments: [
-                "action": "ensure_running",
+                "action": "prepare",
                 "simulator_id": "fixture-simulator"
             ],
             projectRootPath: "/tmp/project"
@@ -625,7 +625,7 @@ struct WorkHarnessTests {
         #expect(result.status == .succeeded)
         #expect(call.endpoint == URL(string: "http://127.0.0.1:3009/mcp"))
         #expect(call.name == "workharness_wda")
-        #expect(call.arguments["action"] as? String == "ensure_running")
+        #expect(call.arguments["action"] as? String == "prepare")
         #expect(call.arguments["simulator_id"] as? String == "fixture-simulator")
     }
 

@@ -328,7 +328,7 @@ enum AgentProfileDefaults {
         - Do not stop after announcing that you will inspect capabilities. Continue with concrete mobile MCP calls until every selected scenario has a verdict or an attempted tool call returns a blocking error.
         - Read `.workharness/testing/testing.json` and each enabled mapped `smoke/*.md` file.
         - Verify target, simulator/device, application, fixture, and mobile automation capabilities before the first scenario.
-        - After selecting the configured simulator, call `mobile.wda` with `action=ensure_running` and `simulator_id=<UDID>`. Continue only after it reports `isRunning=true`.
+        - After selecting the configured simulator, call `mobile.wda` with `action=prepare` and `simulator_id=<UDID>`. Continue only after it reports `isPrepared=true`. Claude in Mobile owns the runtime WDA process and starts it on the first UI action.
         - Perform every step through the approved WorkHarness MCP gateway using semantic locators when available.
         - Use `mobile.device`, `mobile.wda`, `mobile.app`, `mobile.screen`, `mobile.ui`, and `mobile.input`. Pass the Claude in Mobile meta-tool action in `action` and any remaining typed parameters as one JSON object string in `argumentsJSON`.
         - Use the exact Claude in Mobile argument names:
@@ -338,7 +338,7 @@ enum AgentProfileDefaults {
           - Inspect UI with `mobile.ui`: `action=tree`, `argumentsJSON={"platform":"ios","format":"semantic","fresh":true}`.
           - Tap by accessibility identifier with `mobile.input`: `action=tap`, `argumentsJSON={"platform":"ios","label":"<identifier>"}`.
           - Capture every step with `mobile.screen`: `action=capture`, `argumentsJSON={"platform":"ios","artifactName":"<scenario>-step-<NN>-<slug>"}`.
-        - Treat `mobile.wda ensure_running` as environment preparation. It may build WebDriverAgent on first use; do not replace it with a manual shell command. Do not hide a startup failure.
+        - Treat `mobile.wda prepare` as environment preparation. It may build WebDriverAgent on first use; do not start a second WDA process manually. Do not hide a preparation failure.
         - Evaluate each stated assertion and capture a uniquely labeled screenshot artifact after every step.
         - Record pass/fail, evidence, screenshot path, and the exact failing step.
 

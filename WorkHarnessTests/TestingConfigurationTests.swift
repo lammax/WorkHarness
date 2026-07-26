@@ -154,7 +154,8 @@ struct TestingConfigurationTests {
         #expect(configuration.roles[4].instructions.contains(#"{"package":"<bundle identifier>"}"#))
         #expect(configuration.roles[4].instructions.contains(#""artifactName":"<scenario>-step-<NN>-<slug>""#))
         #expect(configuration.roles[4].instructions.contains("mobile.wda"))
-        #expect(configuration.roles[4].instructions.contains("ensure_running"))
+        #expect(configuration.roles[4].instructions.contains("action=prepare"))
+        #expect(configuration.roles[4].instructions.contains("Claude in Mobile owns"))
         #expect(configuration.roles[5].instructions.contains("Final Verdict"))
     }
 
@@ -277,6 +278,17 @@ struct TestingConfigurationTests {
 
         #expect(result == diagnostics)
         #expect(result.canStartSmokeTests)
+    }
+
+    @Test func smokePreflightAllowsWebDriverAgentToBootConfiguredSimulator() throws {
+        var diagnostics = makeDiagnostics()
+        let simulatorIndex = try #require(diagnostics.checks.firstIndex {
+            $0.id == "simulator"
+        })
+        diagnostics.checks[simulatorIndex].status = .warning
+        diagnostics.checks[simulatorIndex].message = "No booted simulator."
+
+        #expect(diagnostics.canStartSmokeTests)
     }
 
     @MainActor

@@ -28,6 +28,5 @@ struct TestingEnvironmentDiagnostics: Codable, Equatable {
     var canStartSmokeTests: Bool {
         checks.first(where: { $0.id == "claudeInMobile" })?.status == .ready
             && checks.first(where: { $0.id == "xcode" })?.status == .ready
-            && checks.first(where: { $0.id == "simulator" })?.status == .ready
     }
 }
