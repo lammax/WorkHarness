@@ -50,6 +50,62 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func runRecorderMirrorsOnlyMeaningfulProgressEvents() throws {
+        let repository = InMemoryRunRepository()
+        let sourceRun = Run(goal: "Child task")
+        let controllerRun = Run(goal: "Execution loop")
+        repository.insert(sourceRun)
+        repository.insert(controllerRun)
+        let recorder = RunRecorder(repository: repository)
+        recorder.beginMirroringProgress(
+            from: sourceRun.id,
+            to: controllerRun.id,
+            messagePrefix: "[WHM-003] ",
+            metadata: [
+                "taskId": "WHM-003",
+                "executionLoopProgress": "true"
+            ]
+        )
+
+        recorder.record(
+            runId: sourceRun.id,
+            type: .providerStreamDelta,
+            message: "token"
+        )
+        recorder.record(
+            runId: sourceRun.id,
+            type: .agentStarted,
+            message: "Coder session started.",
+            metadata: ["assistantName": "Coder"]
+        )
+        recorder.record(
+            runId: sourceRun.id,
+            type: .assistantMessage,
+            message: "Implemented domain tests.",
+            metadata: ["assistantName": "Coder"]
+        )
+        recorder.endMirroringProgress(from: sourceRun.id)
+        recorder.record(
+            runId: sourceRun.id,
+            type: .runCompleted,
+            message: "Too late to mirror."
+        )
+
+        let sourceEvents = try #require(repository.run(withId: sourceRun.id)?.events)
+        let mirroredEvents = try #require(repository.run(withId: controllerRun.id)?.events)
+        #expect(sourceEvents.count == 4)
+        #expect(mirroredEvents.map(\.type) == [.agentStarted, .assistantMessage])
+        #expect(mirroredEvents.map(\.message) == [
+            "[WHM-003] Coder session started.",
+            "[WHM-003] Implemented domain tests."
+        ])
+        #expect(mirroredEvents.allSatisfy {
+            $0.metadata["taskId"] == "WHM-003" &&
+            $0.metadata["sourceRunId"] == sourceRun.id.uuidString
+        })
+    }
+
+    @MainActor
     @Test func providerErrorLeavesRunFailed() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -187,6 +243,34 @@ struct WorkHarnessTests {
         #expect(viewModel.draftMessage.isEmpty)
         #expect(viewModel.selectedRun != nil)
         #expect(viewModel.runs.first?.events.contains { $0.type == .assistantMessage } == true)
+    }
+
+    @MainActor
+    @Test func chatPageViewModelReturnsEveryRecentRunNewestFirst() {
+        let repository = InMemoryRunRepository()
+        let baseDate = Date(timeIntervalSince1970: 1_000)
+        for index in [3, 7, 1, 5, 0, 6, 2, 4] {
+            repository.insert(Run(
+                goal: "Run \(index)",
+                createdAt: baseDate.addingTimeInterval(TimeInterval(index)),
+                updatedAt: baseDate.addingTimeInterval(TimeInterval(index))
+            ))
+        }
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: makeRunService(repository: repository)
+        )
+
+        #expect(viewModel.recentRuns.count == 8)
+        #expect(viewModel.recentRuns.map(\.goal) == [
+            "Run 7",
+            "Run 6",
+            "Run 5",
+            "Run 4",
+            "Run 3",
+            "Run 2",
+            "Run 1",
+            "Run 0"
+        ])
     }
 
     @MainActor
@@ -1692,6 +1776,9 @@ struct WorkHarnessTests {
 
         #expect(run.mode == .codingLoop)
         #expect(run.agents.first?.providerId == "agent-runtime:fake.acp")
+        #expect(run.executionBackend?.id == "fake.acp")
+        #expect(run.executionBackend?.displayName == "Fake ACP Agent")
+        #expect(run.executionBackend?.modelId == "fake-selected-model")
         #expect(run.status == .completed)
         #expect(client.configuredModelId == "fake-selected-model")
         #expect(client.tasks.first?.context?.summary.contains(
@@ -1699,6 +1786,45 @@ struct WorkHarnessTests {
         ) == true)
         #expect(run.events.contains { $0.type == .fileChanged && $0.message == "Sources/App.swift" })
         #expect(run.events.contains { $0.type == .runCompleted })
+
+        appSettings.setAgentModelId("next-run-model", for: "fake.acp")
+        #expect(repository.run(withId: runId)?.executionBackend?.modelId == "fake-selected-model")
+    }
+
+    @MainActor
+    @Test func harnessEngineFallsBackFromUnavailableSavedRuntimeModel() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Target", rootPath: "/tmp/target-project")
+        let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "fake.acp")
+        appSettings.setAgentModelId("retired-model", for: "fake.acp")
+        let registry = AgentRuntimeRegistry()
+        let client = FakeACPClient()
+        let validModel = AgentRuntimeModelOption(id: "minimal-model", title: "Minimal")
+        registry.register(ACPClientRuntime(
+            client: client,
+            descriptor: AgentRuntimeDescriptor(
+                id: "fake.acp",
+                displayName: "Fake ACP Agent",
+                transport: .acp,
+                modelOptions: [validModel],
+                defaultModelId: validModel.id
+            )
+        ))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            projectService: projectService,
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        _ = await engine.startRun(goal: "Use an available model")
+
+        #expect(client.configuredModelId == validModel.id)
+        #expect(client.configuredWorkingDirectory == "/tmp/target-project")
     }
 
     @MainActor
@@ -2272,6 +2398,7 @@ struct WorkHarnessTests {
 
         #expect(result.steps.map(\.stepId) == [first.id, second.id])
         #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentStarted }.count == 2)
+        #expect(repository.run(withId: run.id)?.events.filter { $0.type == .assistantMessage }.count == 2)
         #expect(repository.run(withId: run.id)?.events.filter { $0.type == .agentFinished }.count == 2)
     }
 
@@ -2690,6 +2817,7 @@ struct WorkHarnessTests {
         #expect(viewModel.executionBackends.contains {
             $0.kind == .agentRuntime && $0.name == "Fake ACP Agent" && $0.isActive
         })
+        #expect(viewModel.executionBackendNotice == "Change applies to the next Run.")
 
         let providerBackendId = MainScreen.ExecutionBackendItem.providerId(TestAIProvider().id)
         viewModel.selectExecutionBackend(id: providerBackendId)
@@ -2744,10 +2872,13 @@ struct WorkHarnessTests {
 
         viewModel.selectAgentRuntime(id: firstRuntime.id)
         viewModel.selectedAgentModelId = "first-alternate"
-        viewModel.saveSettings()
+        #expect(viewModel.hasUnsavedAgentModelChanges)
+        viewModel.saveAgentModelSelection()
+        #expect(!viewModel.hasUnsavedAgentModelChanges)
+        #expect(viewModel.executionBackendNotice == "Change applies to the next Run.")
         viewModel.selectAgentRuntime(id: secondRuntime.id)
         viewModel.selectedAgentModelId = "second-alternate"
-        viewModel.saveSettings()
+        viewModel.saveAgentModelSelection()
         viewModel.selectAgentRuntime(id: firstRuntime.id)
 
         #expect(appSettings.agentModelId(for: firstRuntime.id) == "first-alternate")
@@ -3460,6 +3591,7 @@ private final class FakeACPClient: ACPClient {
     private let waitsForCancellation: Bool
     private var continuations: [AsyncThrowingStream<ACPEvent, Error>.Continuation] = []
     private(set) var configuredModelId: String?
+    private(set) var configuredWorkingDirectory: String?
     private(set) var tasks: [AgentTask] = []
     private(set) var cancelCount = 0
 
@@ -3475,6 +3607,11 @@ private final class FakeACPClient: ACPClient {
 
     func configure(modelId: String?) {
         configuredModelId = modelId
+    }
+
+    func configure(modelId: String?, runId: UUID?, workingDirectory: String?) {
+        configuredModelId = modelId
+        configuredWorkingDirectory = workingDirectory
     }
 
     func connect() async throws -> AgentSession {

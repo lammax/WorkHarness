@@ -12,7 +12,7 @@ struct CursorACPModelOption: Identifiable, Equatable, CaseIterable {
     let title: String
 
     static let allCases: [CursorACPModelOption] = [
-        .init(id: "gpt-5.4-nano-none", title: "GPT-5.4 Nano · Minimal"),
+        .init(id: "gpt-5.4-nano[reasoning=medium]", title: "GPT-5.4 Nano · Minimal"),
         .init(id: "composer-2.5[fast=true]", title: "Composer 2.5 · Fast"),
         .init(id: "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]", title: "Opus 4.8 · High"),
         .init(id: "gpt-5.6-sol[context=272k,reasoning=medium,fast=false]", title: "GPT-5.6 Sol · Medium"),

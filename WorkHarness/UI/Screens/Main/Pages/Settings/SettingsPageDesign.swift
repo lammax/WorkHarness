@@ -132,12 +132,17 @@ extension MainScreen {
         enum ExecutionBackend {
             static let title = "Execution Backend"
             static let nextRunLabel = "Used by new Runs"
+            static let nextRunNotice = "Change applies to the next Run."
+            static let noticeIcon = "info.circle.fill"
+            static let noticeColor = Color.accentColor
+            static let noticeSpacing: CGFloat = 10
             static let icon = "play.circle"
             static let noActiveBackend = "No backend"
         }
 
         enum AgentRuntime {
             static let modelPickerTitle = "Agent model"
+            static let saveModelButtonTitle = "Save for Next Run"
             static let availableStatus = "Installed"
         }
 

@@ -19,6 +19,11 @@ extension MainScreen {
         static let modeLabel = "Run mode"
         static let simpleModeLabel = "Chat"
         static let multiAgentModeLabel = "Multi-Agent"
+        static let taskLoopModeLabel = "Task Loop"
+        static let chooseTaskPoolTitle = "Choose Markdown"
+        static let taskPoolPlaceholder = "Select a Markdown task pool"
+        static let startLoopTitle = "Start Loop"
+        static let previewSpacing: CGFloat = 3
         static let newChatIcon = "plus"
         static let newChatHelp = "New chat"
         static let modeControlSpacing: CGFloat = 8

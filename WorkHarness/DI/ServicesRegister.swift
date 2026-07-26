@@ -94,6 +94,25 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(ExecutionTaskSourceProtocol.self) { _ in
+            MarkdownExecutionTaskSource()
+        }.inObjectScope(.container)
+
+        register(ExecutionLoopServiceProtocol.self) { resolver in
+            ExecutionLoopService(
+                taskSource: resolver.resolve(ExecutionTaskSourceProtocol.self)!,
+                profileSelector: ExecutionProfileSelector(),
+                runLauncher: resolver.resolve(RunServiceProtocol.self)!,
+                runRepository: resolver.resolve(RunRepository.self)!,
+                recorder: resolver.resolve(RunRecorder.self)!,
+                toolService: resolver.resolve(ToolServiceProtocol.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!,
+                agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                reportWriter: ExecutionLoopReportWriter()
+            )
+        }.inObjectScope(.container)
+
         register(RunContextAttachmentServiceProtocol.self) { _ in
             RunContextAttachmentService()
         }.inObjectScope(.container)

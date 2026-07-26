@@ -72,6 +72,7 @@ protocol ACPClient: AnyObject {
     var displayName: String { get }
     func connect() async throws -> AgentSession
     func configure(modelId: String?)
+    func configure(modelId: String?, runId: UUID?, workingDirectory: String?)
     func disconnect(sessionId: UUID) async
     func run(task: AgentTask, sessionId: UUID) async throws -> AsyncThrowingStream<ACPEvent, Error>
     func cancel(sessionId: UUID) async
@@ -82,5 +83,9 @@ protocol ACPClient: AnyObject {
 extension ACPClient {
     func configure(modelId: String?, runId: UUID?) {
         configure(modelId: modelId)
+    }
+
+    func configure(modelId: String?, runId: UUID?, workingDirectory: String?) {
+        configure(modelId: modelId, runId: runId)
     }
 }

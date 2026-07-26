@@ -277,10 +277,18 @@ extension MainScreen {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
-                        executionBackendList
-                        Divider()
-                        executionBackendDetails
+                    VStack(alignment: .leading, spacing: Design.ExecutionBackend.noticeSpacing) {
+                        if let notice = viewModel.executionBackendNotice {
+                            Label(notice, systemImage: Design.ExecutionBackend.noticeIcon)
+                                .font(.caption)
+                                .foregroundStyle(Design.ExecutionBackend.noticeColor)
+                        }
+
+                        HStack(alignment: .top, spacing: Design.Content.columnSpacing) {
+                            executionBackendList
+                            Divider()
+                            executionBackendDetails
+                        }
                     }
                 }
             }
@@ -348,15 +356,22 @@ extension MainScreen {
                         .foregroundStyle(.secondary)
 
                     if !activeRuntime.modelOptions.isEmpty {
-                        Picker(Design.AgentRuntime.modelPickerTitle, selection: Binding(
-                            get: { viewModel.validatedAgentModelId(for: activeRuntime) },
-                            set: { viewModel.selectedAgentModelId = $0 }
-                        )) {
-                            ForEach(activeRuntime.modelOptions) { model in
-                                Text(model.title).tag(model.id)
+                        HStack {
+                            Picker(Design.AgentRuntime.modelPickerTitle, selection: Binding(
+                                get: { viewModel.validatedAgentModelId(for: activeRuntime) },
+                                set: { viewModel.selectedAgentModelId = $0 }
+                            )) {
+                                ForEach(activeRuntime.modelOptions) { model in
+                                    Text(model.title).tag(model.id)
+                                }
                             }
+                            .pickerStyle(.menu)
+
+                            Button(Design.AgentRuntime.saveModelButtonTitle) {
+                                viewModel.saveAgentModelSelection()
+                            }
+                            .disabled(!viewModel.hasUnsavedAgentModelChanges)
                         }
-                        .pickerStyle(.menu)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

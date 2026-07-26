@@ -18,7 +18,7 @@ extension MainScreen {
             VStack(spacing: Design.Layout.spacing) {
                 ChatHeaderView(
                     run: viewModel.selectedRun,
-                    providerName: viewModel.providerName,
+                    nextBackendName: viewModel.nextExecutionBackendName,
                     isRecovering: viewModel.isSending,
                     onResume: viewModel.resumeInterruptedRun,
                     onRestart: viewModel.restartInterruptedRun,
@@ -27,7 +27,7 @@ extension MainScreen {
 
                 Divider()
 
-                if viewModel.draftRunMode == .multiAgent {
+                if viewModel.composerMode == .multiAgent {
                     MultiAgentPlanPreviewView(
                         configuration: $viewModel.multiAgentConfiguration,
                         modelOptions: viewModel.agentModelOptions,
@@ -67,12 +67,27 @@ extension MainScreen {
 
                 Divider()
 
+                if let attempt = viewModel.activeExecutionLoopAttempt,
+                   attempt.status == .running || attempt.status == .preparing || attempt.status == .paused {
+                    ExecutionLoopControlView(
+                        attempt: attempt,
+                        taskCount: viewModel.selectedTaskPool?.tasks.count,
+                        currentTaskTitle: viewModel.currentExecutionLoopTaskTitle,
+                        onPause: viewModel.pauseExecutionLoopAfterCurrentTask,
+                        onResume: viewModel.resumeExecutionLoop,
+                        onEnd: viewModel.endExecutionLoop
+                    )
+                }
+
                 ComposerView(
                     text: $viewModel.draftMessage,
-                    mode: $viewModel.draftRunMode,
+                    mode: $viewModel.composerMode,
                     contextAttachments: viewModel.draftContextAttachments,
                     isSending: viewModel.isSending,
+                    taskPool: viewModel.selectedTaskPool,
                     onAttach: viewModel.presentAttachmentImporter,
+                    onChooseTaskPool: viewModel.presentTaskPoolImporter,
+                    onStartLoop: viewModel.startSelectedTaskLoop,
                     onRemoveAttachment: viewModel.removeAttachment,
                     onNewChat: viewModel.startNewChat,
                     onSend: viewModel.submitDraft,
@@ -103,6 +118,20 @@ extension MainScreen {
                     viewModel.setAttachmentError(error.localizedDescription)
                 }
             }
+            .fileImporter(
+                isPresented: $viewModel.isTaskPoolImporterPresented,
+                allowedContentTypes: [.plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        viewModel.selectTaskPool(url)
+                    }
+                case .failure(let error):
+                    viewModel.setAttachmentError(error.localizedDescription)
+                }
+            }
             .onAppear {
                 viewModel.reloadAgentProfile()
             }
@@ -110,6 +139,53 @@ extension MainScreen {
 
         private func scrollToTimelineBottom(using proxy: ScrollViewProxy) {
             proxy.scrollTo(Design.Timeline.bottomAnchorID, anchor: .bottom)
+        }
+    }
+
+    private struct ExecutionLoopControlView: View {
+        typealias Design = ChatPageDesign.ExecutionLoop
+
+        let attempt: ExecutionLoopAttempt
+        let taskCount: Int?
+        let currentTaskTitle: String?
+        let onPause: () -> Void
+        let onResume: () -> Void
+        let onEnd: () -> Void
+
+        var body: some View {
+            HStack(spacing: Design.spacing) {
+                Image(systemName: attempt.status == .paused ? Design.pausedIcon : Design.runningIcon)
+                    .foregroundStyle(attempt.status == .paused ? .orange : .green)
+
+                VStack(alignment: .leading, spacing: Design.contentSpacing) {
+                    Text(attempt.status == .paused ? Design.pausedTitle : Design.runningTitle)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    Text(progressText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if attempt.status == .paused {
+                    Button(Design.resumeTitle, action: onResume)
+                        .buttonStyle(.borderedProminent)
+                    Button(Design.endTitle, role: .destructive, action: onEnd)
+                } else {
+                    Button(Design.pauseTitle, action: onPause)
+                        .buttonStyle(.bordered)
+                }
+            }
+            .padding(.horizontal, Design.horizontalPadding)
+            .padding(.vertical, Design.verticalPadding)
+            .background(.thinMaterial)
+        }
+
+        private var progressText: String {
+            let total = taskCount.map(String.init) ?? "?"
+            let task = currentTaskTitle.map { " · \($0)" } ?? ""
+            return "\(attempt.passedTaskCount)/\(total) completed\(task)"
         }
     }
 
@@ -181,7 +257,7 @@ extension MainScreen {
         typealias Design = ChatPageDesign.Header
 
         let run: Run?
-        let providerName: String
+        let nextBackendName: String
         let isRecovering: Bool
         let onResume: () -> Void
         let onRestart: () -> Void
@@ -193,7 +269,10 @@ extension MainScreen {
                     Text(run?.goal ?? Design.newRunTitle)
                         .font(.headline)
                         .lineLimit(1)
-                    Text("\(run?.mode.label ?? RunMode.simpleChat.label)\(Design.titleSeparator)\(providerName)")
+                    Text(
+                        "\(run?.mode.label ?? RunMode.simpleChat.label)"
+                            + "\(Design.titleSeparator)\(Design.nextRunsPrefix)\(nextBackendName)"
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -216,6 +295,11 @@ extension MainScreen {
                             Label(Design.cancelTitle, systemImage: Design.cancelIcon)
                         }
                         .disabled(isRecovering)
+                    }
+                    if let backendName = run.executionBackend?.displayName {
+                        Text("\(Design.currentRunPrefix)\(backendName)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     StatusBadge(status: run.status)
                 }
@@ -252,7 +336,7 @@ extension MainScreen {
 
                 VStack(alignment: .leading, spacing: Design.contentSpacing) {
                     HStack(spacing: Design.metadataSpacing) {
-                            Text(event.type == .providerStreamDelta && event.metadata["source"] == "acp" ? Design.assistantLabel : event.type.label)
+                        Text(RunEventDisplayFormatter.title(for: event))
                             .font(.caption)
                             .fontWeight(.semibold)
                         Text(event.createdAt, style: .time)

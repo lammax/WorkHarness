@@ -143,6 +143,8 @@ final class MCPToolClient: MCPToolClientProtocol {
 
 @MainActor
 final class MCPHTTPToolTransport: MCPToolTransportProtocol {
+    private nonisolated static let requestTimeout: TimeInterval = 15 * 60
+
     private let session: URLSession
     private let serverSupervisor: MCPServerProcessSupervisorProtocol?
     private var initializedEndpoints: Set<URL> = []
@@ -230,7 +232,7 @@ final class MCPHTTPToolTransport: MCPToolTransportProtocol {
     ) async throws -> [String: Any] {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 120
+        request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json, text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONSerialization.data(withJSONObject: [

@@ -108,7 +108,13 @@ final class HarnessEngine {
             projectId: projectService?.currentProject?.id,
             goal: trimmedGoal,
             agents: [agent],
-            contextAttachments: contextAttachments
+            contextAttachments: contextAttachments,
+            executionBackend: RunExecutionBackendSnapshot(
+                kind: .provider,
+                id: provider.id,
+                displayName: provider.displayName,
+                modelId: agent.model
+            )
         )
 
         repository.insert(run)
@@ -141,7 +147,9 @@ final class HarnessEngine {
         goal: String,
         mode: RunMode,
         configuration: MultiAgentRunConfiguration,
-        contextAttachments: [RunContextAttachment]
+        contextAttachments: [RunContextAttachment],
+        progressMirrorRunId: UUID? = nil,
+        progressMirrorMetadata: [String: String] = [:]
     ) async -> UUID? {
         guard mode == .multiAgent else {
             return await startRun(goal: goal, contextAttachments: contextAttachments)
@@ -149,14 +157,18 @@ final class HarnessEngine {
         return await startMultiAgentRun(
             goal: goal,
             configuration: configuration,
-            contextAttachments: contextAttachments
+            contextAttachments: contextAttachments,
+            progressMirrorRunId: progressMirrorRunId,
+            progressMirrorMetadata: progressMirrorMetadata
         )
     }
 
     private func startMultiAgentRun(
         goal: String,
         configuration: MultiAgentRunConfiguration,
-        contextAttachments: [RunContextAttachment]
+        contextAttachments: [RunContextAttachment],
+        progressMirrorRunId: UUID?,
+        progressMirrorMetadata: [String: String]
     ) async -> UUID? {
         guard let runtime = selectedAgentRuntime() else {
             return createFailedRun(
@@ -166,10 +178,11 @@ final class HarnessEngine {
             )
         }
 
+        let modelId = selectedModelId(for: runtime)
         let agent = Agent(
             role: .coder,
             providerId: "agent-runtime:\(runtime.id)",
-            model: selectedModelId(for: runtime) ?? runtime.displayName,
+            model: modelId ?? runtime.displayName,
             contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
         )
         let run = Run(
@@ -178,9 +191,27 @@ final class HarnessEngine {
             mode: .multiAgent,
             agents: [agent],
             contextAttachments: contextAttachments,
-            multiAgentConfiguration: configuration
+            multiAgentConfiguration: configuration,
+            executionBackend: RunExecutionBackendSnapshot(
+                kind: .agentRuntime,
+                id: runtime.id,
+                displayName: runtime.displayName,
+                modelId: modelId
+            )
         )
         repository.insert(run)
+        if let progressMirrorRunId {
+            let taskId = progressMirrorMetadata["taskId"]
+            recorder.beginMirroringProgress(
+                from: run.id,
+                to: progressMirrorRunId,
+                messagePrefix: taskId.map { "[\($0)] " } ?? "",
+                metadata: progressMirrorMetadata
+            )
+        }
+        defer {
+            recorder.endMirroringProgress(from: run.id)
+        }
         var runMetadata = ["mode": RunMode.multiAgent.rawValue]
         if let profileId = configuration.profileId {
             runMetadata["profileId"] = profileId
@@ -500,10 +531,11 @@ final class HarnessEngine {
         runtime: AgentRuntime,
         contextAttachments: [RunContextAttachment]
     ) async -> UUID {
+        let modelId = selectedModelId(for: runtime)
         let agent = Agent(
             role: .coder,
             providerId: "agent-runtime:\(runtime.id)",
-            model: selectedModelId(for: runtime) ?? runtime.displayName,
+            model: modelId ?? runtime.displayName,
             contextPolicy: ContextPolicy(includeRAG: appSettingsService?.ragAnswerMode == .enabled)
         )
         let run = Run(
@@ -511,7 +543,13 @@ final class HarnessEngine {
             goal: goal,
             mode: .codingLoop,
             agents: [agent],
-            contextAttachments: contextAttachments
+            contextAttachments: contextAttachments,
+            executionBackend: RunExecutionBackendSnapshot(
+                kind: .agentRuntime,
+                id: runtime.id,
+                displayName: runtime.displayName,
+                modelId: modelId
+            )
         )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal)
@@ -530,7 +568,11 @@ final class HarnessEngine {
                 providerId: runtime.id,
                 ragResults: ragResults
             )
-            runtime.configure(modelId: selectedModelId(for: runtime), runId: runId)
+            runtime.configure(
+                modelId: capturedModelId(for: agent, runtime: runtime, runId: runId),
+                runId: runId,
+                workingDirectory: projectService?.currentProject?.rootPath
+            )
             let session = try await runtime.connect()
             activeRuntimeSessions[runId] = (runtime, session.id)
             recorder.record(
@@ -603,7 +645,33 @@ final class HarnessEngine {
     }
 
     private func selectedModelId(for runtime: AgentRuntime) -> String? {
-        appSettingsService?.agentModelId(for: runtime.id) ?? runtime.descriptor.defaultModelId
+        let descriptor = runtime.descriptor
+        let savedModelId = appSettingsService?.agentModelId(for: runtime.id)
+        guard !descriptor.modelOptions.isEmpty else {
+            return savedModelId ?? descriptor.defaultModelId
+        }
+        if let savedModelId,
+           descriptor.modelOptions.contains(where: { $0.id == savedModelId }) {
+            return savedModelId
+        }
+        if let defaultModelId = descriptor.defaultModelId,
+           descriptor.modelOptions.contains(where: { $0.id == defaultModelId }) {
+            return defaultModelId
+        }
+        return descriptor.modelOptions.first?.id
+    }
+
+    private func capturedModelId(
+        for agent: Agent,
+        runtime: AgentRuntime,
+        runId: UUID
+    ) -> String? {
+        if let modelId = repository.run(withId: runId)?.executionBackend?.modelId {
+            return modelId
+        }
+        return runtime.descriptor.modelOptions.contains { $0.id == agent.model }
+            ? agent.model
+            : nil
     }
 
     private func selectedAgentRuntime() -> AgentRuntime? {

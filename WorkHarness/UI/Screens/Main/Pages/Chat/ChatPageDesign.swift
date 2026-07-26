@@ -30,6 +30,7 @@ extension MainScreen {
         enum Command {
             static let smokeUnavailable = "Smoke commands are unavailable for the selected project."
             static let testingUnavailable = "Testing commands are unavailable for the selected project."
+            static let executionLoopUnavailable = "Execution Loop is unavailable."
         }
 
         enum Header {
@@ -39,6 +40,8 @@ extension MainScreen {
             static let verticalPadding: CGFloat = 12
             static let newRunTitle = "New Run"
             static let titleSeparator = " · "
+            static let currentRunPrefix = "Current Run: "
+            static let nextRunsPrefix = "Next Runs: "
             static let resumeTitle = "Resume"
             static let resumeIcon = "play.fill"
             static let restartTitle = "Restart"
@@ -57,7 +60,6 @@ extension MainScreen {
         }
 
         enum EventRow {
-            static let assistantLabel = "Assistant"
             static let rowSpacing: CGFloat = 10
             static let iconSize: CGFloat = 22
             static let iconFontSize: CGFloat = 14
@@ -136,6 +138,20 @@ extension MainScreen {
             static let arrowIcon = "chevron.right"
             static let runtimeDefaultModelTitle = "Runtime default"
             static let modelPickerWidth: CGFloat = 150
+        }
+
+        enum ExecutionLoop {
+            static let spacing: CGFloat = 10
+            static let contentSpacing: CGFloat = 3
+            static let horizontalPadding: CGFloat = 16
+            static let verticalPadding: CGFloat = 8
+            static let runningTitle = "Task Loop running"
+            static let pausedTitle = "Task Loop paused"
+            static let pauseTitle = "Pause after Current Task"
+            static let resumeTitle = "Resume Loop"
+            static let endTitle = "End Loop"
+            static let runningIcon = "arrow.triangle.2.circlepath"
+            static let pausedIcon = "pause.circle.fill"
         }
     }
 }

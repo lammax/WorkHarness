@@ -190,6 +190,7 @@ protocol AgentRuntime: AnyObject {
     var displayName: String { get }
     var descriptor: AgentRuntimeDescriptor { get }
     func configure(modelId: String?)
+    func configure(modelId: String?, runId: UUID?, workingDirectory: String?)
     func connect() async throws -> AgentSession
     func disconnect(sessionId: UUID) async
     func capabilities(sessionId: UUID) -> AgentCapabilities?
@@ -210,6 +211,10 @@ extension AgentRuntime {
 
     func configure(modelId: String?, runId: UUID?) {
         configure(modelId: modelId)
+    }
+
+    func configure(modelId: String?, runId: UUID?, workingDirectory: String?) {
+        configure(modelId: modelId, runId: runId)
     }
 }
 

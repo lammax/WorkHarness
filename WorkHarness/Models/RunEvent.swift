@@ -32,7 +32,7 @@ struct RunEvent: Identifiable, Codable, Equatable {
     }
 }
 
-enum RunEventType: String, Codable, CaseIterable, Equatable {
+enum RunEventType: String, Codable, CaseIterable, Equatable, Hashable {
     case runCreated
     case userMessage
     case assistantMessage

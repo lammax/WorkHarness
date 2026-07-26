@@ -13,7 +13,7 @@ final class ACPSubprocessClient: ACPClient {
     let displayName: String
 
     private let transport: ACPTransport
-    private let workingDirectory: URL?
+    private var workingDirectory: URL?
     private let approvalService: ApprovalServiceProtocol?
     private var connection: ACPConnection?
     private var sessions: [UUID: AgentSession] = [:]
@@ -42,6 +42,14 @@ final class ACPSubprocessClient: ACPClient {
     func configure(modelId: String?, runId: UUID?) {
         self.modelId = modelId
         self.runId = runId
+    }
+
+    func configure(modelId: String?, runId: UUID?, workingDirectory: String?) {
+        self.modelId = modelId
+        self.runId = runId
+        self.workingDirectory = workingDirectory.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        }
     }
 
     func connect() async throws -> AgentSession {

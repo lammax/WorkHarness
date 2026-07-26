@@ -17,15 +17,28 @@ extension MainScreen {
         private let agentProfileService: AgentProfileServiceProtocol?
         private let smokeTestService: SmokeTestServiceProtocol?
         private let testingWorkflowService: TestingWorkflowServiceProtocol?
+        private let executionLoopService: ExecutionLoopServiceProtocol?
+        @ObservationIgnored private var taskPoolSecurityScopedURL: URL?
         private var submissionTask: Task<Void, Never>?
 
         var selectedRunId: UUID?
         var draftMessage = ""
         var draftContextAttachments: [RunContextAttachment] = []
         var draftRunMode: RunMode = .simpleChat
+        var composerMode: ComposerMode = .chat {
+            didSet {
+                switch composerMode {
+                case .chat: draftRunMode = .simpleChat
+                case .multiAgent: draftRunMode = .multiAgent
+                case .taskLoop: break
+                }
+            }
+        }
+        var selectedTaskPool: ExecutionTaskPool?
         var multiAgentConfiguration = MultiAgentRunConfiguration.default
         var isSending = false
         var isAttachmentImporterPresented = false
+        var isTaskPoolImporterPresented = false
         var errorMessage: String?
 
         init(
@@ -33,13 +46,15 @@ extension MainScreen {
             contextAttachmentService: RunContextAttachmentServiceProtocol,
             agentProfileService: AgentProfileServiceProtocol? = nil,
             smokeTestService: SmokeTestServiceProtocol? = nil,
-            testingWorkflowService: TestingWorkflowServiceProtocol? = nil
+            testingWorkflowService: TestingWorkflowServiceProtocol? = nil,
+            executionLoopService: ExecutionLoopServiceProtocol? = nil
         ) {
             self.runService = runService
             self.contextAttachmentService = contextAttachmentService
             self.agentProfileService = agentProfileService
             self.smokeTestService = smokeTestService
             self.testingWorkflowService = testingWorkflowService
+            self.executionLoopService = executionLoopService
             self.multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? .default
         }
 
@@ -53,6 +68,18 @@ extension MainScreen {
 
         var runs: [Run] {
             runService.runs
+        }
+
+        var recentRuns: [Run] {
+            runs.sorted { lhs, rhs in
+                if lhs.createdAt != rhs.createdAt {
+                    return lhs.createdAt > rhs.createdAt
+                }
+                if lhs.updatedAt != rhs.updatedAt {
+                    return lhs.updatedAt > rhs.updatedAt
+                }
+                return lhs.id.uuidString > rhs.id.uuidString
+            }
         }
 
         var selectedRun: Run? {
@@ -104,8 +131,22 @@ extension MainScreen {
             runService.providerName
         }
 
+        var nextExecutionBackendName: String {
+            runService.selectedAgentRuntimeDescriptor?.displayName ?? providerName
+        }
+
         var agentModelOptions: [AgentRuntimeModelOption] {
             runService.selectedAgentRuntimeDescriptor?.modelOptions ?? []
+        }
+
+        var activeExecutionLoopAttempt: ExecutionLoopAttempt? {
+            executionLoopService?.activeAttempt
+        }
+
+        var currentExecutionLoopTaskTitle: String? {
+            selectedRun?.events.last(where: {
+                $0.type == .agentStarted && $0.metadata["executionLoopProgress"] == "true"
+            })?.metadata["taskTitle"]
         }
 
         func selectRun(_ run: Run) {
@@ -118,6 +159,7 @@ extension MainScreen {
             draftMessage = ""
             draftContextAttachments = []
             draftRunMode = .simpleChat
+            composerMode = .chat
             errorMessage = nil
         }
 
@@ -140,6 +182,10 @@ extension MainScreen {
             }
             if let command = TestingWorkflowCommand.parse(trimmedMessage) {
                 await runTestingWorkflow(command)
+                return
+            }
+            if let command = ExecutionLoopCommand.parse(trimmedMessage) {
+                await runExecutionLoopCommand(command)
                 return
             }
             await send(trimmedMessage, contextAttachments: attachments)
@@ -181,6 +227,74 @@ extension MainScreen {
             isAttachmentImporterPresented = true
         }
 
+        func presentTaskPoolImporter() {
+            isTaskPoolImporterPresented = true
+        }
+
+        func selectTaskPool(_ url: URL) {
+            guard let executionLoopService else {
+                errorMessage = ChatPageDesign.Command.executionLoopUnavailable
+                return
+            }
+            if let taskPoolSecurityScopedURL {
+                taskPoolSecurityScopedURL.stopAccessingSecurityScopedResource()
+                self.taskPoolSecurityScopedURL = nil
+            }
+            let didAccessSecurityScopedResource = url.startAccessingSecurityScopedResource()
+            do {
+                selectedTaskPool = try executionLoopService.preview(sourcePath: url.path)
+                if didAccessSecurityScopedResource {
+                    taskPoolSecurityScopedURL = url
+                }
+                errorMessage = nil
+            } catch {
+                if didAccessSecurityScopedResource {
+                    url.stopAccessingSecurityScopedResource()
+                }
+                selectedTaskPool = nil
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        func startSelectedTaskLoop() {
+            guard let selectedTaskPool else { return }
+            submissionTask = Task { [weak self] in
+                await self?.startTaskLoop(sourcePath: selectedTaskPool.sourcePath)
+            }
+        }
+
+        func pauseExecutionLoopAfterCurrentTask() {
+            executionLoopService?.pauseAfterCurrentTask()
+        }
+
+        func resumeExecutionLoop() {
+            submissionTask = Task { [weak self] in
+                guard let self, let executionLoopService else { return }
+                do {
+                    selectedRunId = try await executionLoopService.resume()
+                    errorMessage = nil
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+
+        func endExecutionLoop() {
+            Task { [weak self] in
+                await self?.executionLoopService?.stop()
+            }
+        }
+
+        private func startTaskLoop(sourcePath: String) async {
+            guard let executionLoopService else { return }
+            do {
+                selectedRunId = try await executionLoopService.start(sourcePath: sourcePath)
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
         func attachFile(_ url: URL) {
             Task {
                 await attachFileAndWait(url)
@@ -213,7 +327,17 @@ extension MainScreen {
         }
 
         func stopRunAndWait() async {
-            guard let run = selectedRun,
+            if let executionLoopService,
+               let activeAttempt = executionLoopService.activeAttempt,
+               activeAttempt.controllerRunId == selectedRunId,
+               activeAttempt.finishedAt == nil {
+                await executionLoopService.stop()
+                submissionTask?.cancel()
+                submissionTask = nil
+                isSending = false
+                return
+            }
+            guard let run = await activeRunAwaitingStartup(),
                   run.status == .running ||
                   run.status == .waitingForApproval ||
                   run.status == .interrupted else { return }
@@ -222,6 +346,22 @@ extension MainScreen {
             submissionTask?.cancel()
             submissionTask = nil
             isSending = false
+        }
+
+        private func activeRunAwaitingStartup() async -> Run? {
+            if let selectedRun {
+                return selectedRun
+            }
+            guard isSending else { return nil }
+
+            for _ in 0..<50 {
+                await Task.yield()
+                if let selectedRun {
+                    return selectedRun
+                }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            return nil
         }
 
         func resumeInterruptedRun() {
@@ -326,6 +466,40 @@ extension MainScreen {
                 selectedRunId = try await testingWorkflowService.startFullRun(
                     request: command.request
                 )
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        private func runExecutionLoopCommand(_ command: ExecutionLoopCommand) async {
+            guard let executionLoopService else {
+                errorMessage = ChatPageDesign.Command.executionLoopUnavailable
+                return
+            }
+
+            isSending = true
+            errorMessage = nil
+            defer { isSending = false }
+
+            do {
+                switch command.action {
+                case .start(let sourcePath):
+                    selectedRunId = try await executionLoopService.start(sourcePath: sourcePath)
+                case .pause:
+                    executionLoopService.pauseAfterCurrentTask()
+                case .resume:
+                    selectedRunId = try await executionLoopService.resume()
+                case .stop:
+                    await executionLoopService.stop()
+                    if let controllerRunId = executionLoopService.activeAttempt?.controllerRunId {
+                        selectedRunId = controllerRunId
+                    }
+                case .status:
+                    guard let controllerRunId = executionLoopService.activeAttempt?.controllerRunId else {
+                        throw ExecutionLoopServiceError.noAttempt
+                    }
+                    selectedRunId = controllerRunId
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }

@@ -8,6 +8,18 @@
 import Foundation
 
 enum RunEventDisplayFormatter {
+    static func title(for event: RunEvent) -> String {
+        if event.metadata["executionLoopProgress"] == "true",
+           let taskId = event.metadata["taskId"] {
+            let detail = event.metadata["assistantName"] ?? event.type.label
+            return "\(taskId) · \(detail)"
+        }
+        if event.type == .providerStreamDelta, event.metadata["source"] == "acp" {
+            return "Assistant"
+        }
+        return event.type.label
+    }
+
     static func message(for event: RunEvent) -> String {
         guard event.type == .toolResult else {
             return event.message

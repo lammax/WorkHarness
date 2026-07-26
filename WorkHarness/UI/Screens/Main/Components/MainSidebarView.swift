@@ -50,22 +50,32 @@ extension MainScreen {
                     }
                 }
 
-                if !screenModel.chatPageViewModel.runs.isEmpty {
+                if !screenModel.chatPageViewModel.recentRuns.isEmpty {
                     Section(Design.recentRunsSectionTitle) {
-                        ForEach(screenModel.chatPageViewModel.runs.prefix(Design.recentRunsLimit)) { run in
-                            Button {
-                                screenModel.selectRun(run)
-                            } label: {
-                                VStack(alignment: .leading, spacing: Design.recentRunSpacing) {
-                                    Text(run.goal)
-                                        .lineLimit(1)
-                                    Text(run.status.label)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                        ScrollView(.vertical) {
+                            LazyVStack(alignment: .leading, spacing: Design.recentRunRowSpacing) {
+                                ForEach(screenModel.chatPageViewModel.recentRuns) { run in
+                                    Button {
+                                        screenModel.selectRun(run)
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: Design.recentRunSpacing) {
+                                            Text(run.goal)
+                                                .lineLimit(1)
+                                            Text(run.status.label)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .frame(
+                                            maxWidth: .infinity,
+                                            minHeight: Design.recentRunRowHeight,
+                                            alignment: .leading
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
-                            .buttonStyle(.plain)
                         }
+                        .frame(height: Design.recentRunsViewportHeight)
                     }
                 }
             }

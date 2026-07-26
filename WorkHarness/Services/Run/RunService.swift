@@ -63,6 +63,23 @@ final class RunService: RunServiceProtocol {
         goal: String,
         mode: RunMode,
         configuration: MultiAgentRunConfiguration,
+        progressMirrorRunId: UUID,
+        progressMirrorMetadata: [String: String]
+    ) async -> UUID? {
+        await harnessEngine.startRun(
+            goal: goal,
+            mode: mode,
+            configuration: configuration,
+            contextAttachments: [],
+            progressMirrorRunId: progressMirrorRunId,
+            progressMirrorMetadata: progressMirrorMetadata
+        )
+    }
+
+    func startRun(
+        goal: String,
+        mode: RunMode,
+        configuration: MultiAgentRunConfiguration,
         contextAttachments: [RunContextAttachment]
     ) async -> UUID? {
         await harnessEngine.startRun(

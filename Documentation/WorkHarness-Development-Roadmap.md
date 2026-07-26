@@ -972,6 +972,10 @@ Claude Code can be selected as an AgentRuntime, execute a coding Run with stream
 
 Status: In progress in the separate `WorkHarnessMobile` repository. The fixture-backed mobile UI and automated test coverage exist, but the production `URLSessionRemoteControlClient`, pairing/token flow, live SSE stream, reject action, Keychain token storage, reconnect/auth expiry handling, and a real mobile-to-WorkHarness integration run are not complete.
 
+Detailed product stages, WorkHarness development capabilities, release
+sequencing and the long-term RemoteSDK direction are maintained in
+`Documentation/WorkHarnessMobile-Development-Roadmap.md`.
+
 Goal:
 Provide a focused mobile control surface for monitoring Runs and handling approvals.
 
@@ -1023,7 +1027,7 @@ Hardware baseline:
    - autocomplete prompt budget: 2,048 tokens.
 5. Add a project Continue rule derived from `AGENTS.md` / `CLAUDE.md`.
 6. Keep Cursor and Claude cloud baselines intentionally minimal:
-   - Cursor: `gpt-5.4-nano-none`.
+   - Cursor: `gpt-5.4-nano[reasoning=medium]`.
    - Claude Code: `haiku` (Fable remains available but requires separate usage
      credits on the current account).
 7. Add native Claude project agents for:
@@ -1108,6 +1112,193 @@ These items are explicitly outside the submission MVP:
    unavailability.
 10. Revisit the recommended default after measurements; do not promote the
     smallest model to production agent workflows without evidence.
+
+## Step 24 - Course Day 5: Execution Loop v1
+
+Status: MVP implemented; execution evidence pending. The ordered
+WorkHarnessMobile task pool is defined in
+`Documentation/Course/Day5-WorkHarnessMobile-Task-Pool.md`. WorkHarness now has
+a Markdown task source, deterministic profile selection, autonomous serial
+Runs, validation gates, Auto-approve-gated commit/push and a Markdown metrics
+report. Two cloud attempts and the local-model comparison still need to be
+executed and captured.
+
+Goal:
+Execute an ordered task pool for any explicitly configured project
+autonomously, committing every validated task and producing reproducible
+evidence for two cloud runs and one local-model run. WorkHarnessMobile is the
+Day 5 reference project and evidence source, not a dependency of the execution
+loop.
+
+### General-purpose readiness requirement
+
+Day 5 is not complete if the loop works only for WorkHarnessMobile. The
+production execution path must:
+
+- read the target repository, build command, test command and task definitions
+  from the selected task source;
+- keep repository-specific names, paths, schemes and validation commands out of
+  `ExecutionLoopService`, `HarnessEngine` and the Chat UI;
+- operate on the target repository pinned by the loop even when another project
+  is currently selected in WorkHarness;
+- preserve the target repository's current branch and never require creating a
+  task branch;
+- use the same profile selection, agent-runtime switching, approvals,
+  validation, commit/push, RunEvents and reporting flow for every project;
+- allow a new project to be automated by adding/selecting the project and
+  supplying a conforming task pool, without changing or rebuilding WorkHarness.
+
+### Submission MVP
+
+1. Add an `ExecutionTask` domain model with immutable prompt and acceptance
+   criteria plus mutable execution status.
+2. Add `ExecutionTaskSourceProtocol` and a Markdown implementation for the Day 5
+   task-pool format.
+3. Add a deterministic profile selector that chooses Bug Fix, Research,
+   Feature or the nearest available workflow from task content and records the
+   choice.
+4. Add a serial `ExecutionLoopService` above the existing Run service/engine:
+   - claim the next pending task;
+   - create one Run for that task;
+   - execute with the selected agent runtime/profile;
+   - mirror meaningful role results and task transitions into the controller
+     Run in real time, excluding token deltas and repetitive read/search calls;
+   - validate the result;
+   - create one local commit after validation succeeds;
+   - update the task/log and continue.
+   - resolve and snapshot the currently saved agent runtime and model separately
+     for every new task, so Settings changes can take effect between tasks
+     without mutating an already running child Run.
+5. Preserve the existing boundaries:
+   - agents edit and validate only through approved WorkHarness MCP tools;
+   - the loop coordinates Runs but does not become a provider or tool;
+   - every task transition and stop reason produces an append-only RunEvent or
+     execution-loop event.
+6. Add course safety limits:
+   - require a clean target repository and keep all work on its current branch;
+   - pin the base commit and task-pool revision for each attempt;
+   - execute one task at a time;
+   - allow ordinary commit and push when the saved Application setting
+     `Auto-approve actions inside the current project` is enabled;
+   - apply that permission to the target repository pinned by the loop rather
+     than requiring it to be the project selected before the loop starts;
+   - never allow force-push, destructive history rewriting, tags or remote
+     branch deletion through that automatic path;
+   - stop on failure, blocked approval, clarification request, dirty-worktree
+     mismatch, task/time budget or cancellation.
+7. Persist a Markdown execution log containing:
+   - task ID and selected profile/runtime/model;
+   - separate human-readable agent name, runtime ID and model columns for every
+     attempted task;
+   - timestamps and duration;
+   - first-pass outcome;
+   - build/test result;
+   - commit SHA for passed tasks;
+   - failure/blocked reason and consecutive-pass count.
+8. Expose a visible Task Loop mode in the Chat composer:
+   - select a Markdown pool with a file picker and preview source, target,
+     branch and task count;
+   - start the loop without remembering a slash command;
+   - display active task progress;
+   - safely pause after the current task, resume the remaining pool or end a
+     paused loop.
+   Slash commands remain keyboard shortcuts for the same service operations.
+9. Add deterministic tests for parsing, profile selection, state transitions,
+   stop conditions, commit gating and metric calculation.
+10. Run the same immutable task pool from the same base revision:
+    - cloud run 1 with one fixed minimal Cursor or Claude runtime;
+    - cloud run 2 with the same runtime after one documented rules/profile
+      improvement based on the first failure;
+    - local run through a WorkHarness agent runtime backed by Ollama, not through
+      a chat-only provider.
+11. Produce the final comparison report:
+    - completed consecutively without intervention;
+    - first failure and reason;
+    - average time per attempted and passed task;
+    - first-pass success percentage;
+    - cloud run 1 vs cloud run 2;
+    - cloud vs local-model result and honest limitations.
+
+Course run policy:
+
+- No human messages, prompt edits or manual fixes after a run starts.
+- A human response to an approval or clarification ends the uninterrupted
+  sequence, even if execution later resumes.
+- Reusing the same Run after a failed first attempt does not count as a
+  first-pass success.
+- A passed task requires its stated validation and a local commit.
+- A model/runtime crash, invalid tool call or exhausted context is recorded as a
+  failure rather than hidden by changing the task.
+
+Local comparison note:
+
+`MCPBackedAIProvider` is chat/provider inference and is not by itself a coding
+agent. To satisfy the local execution-loop comparison, WorkHarness needs a
+tool-capable local `AgentRuntime` behind the existing runtime boundary. The
+smallest acceptable implementation is a configured agent host that uses Ollama
+for inference while retaining WorkHarness MCP tools, approvals and RunEvents.
+If the selected small model fails before completing a task, a measured result of
+zero consecutive tasks is valid and must be reported honestly.
+
+Done when:
+
+- the Markdown pool contains 15–20 unambiguous mixed tasks;
+- no execution-loop production type contains a WorkHarnessMobile-specific path,
+  project name, Xcode scheme or validation command;
+- a second arbitrary repository/task-pool fixture proves that target selection,
+  validation and commit/push routing do not depend on the project currently
+  selected in the UI;
+- a user can start work on another real project by supplying its task-pool path,
+  without changing WorkHarness source code;
+- Chat distinguishes the immutable `Current Run` backend from the `Next Runs`
+  backend selected in Settings, and Settings explicitly says that a backend or
+  model change applies to the next Run;
+- an active Run never silently changes agent runtime or model, while an
+  execution loop may use a newly saved runtime/model when it starts the next
+  task;
+- each attempt can run without human input until a recorded stop condition;
+- passed tasks are validated and committed one per task;
+- both cloud attempts use the same pool, base commit and runtime/model;
+- the second cloud attempt has exactly one documented rules/profile iteration;
+- the local attempt uses the same pool and base commit;
+- the final log and comparison report provide every metric required by Day 5.
+
+### Post-course Execution Loop enhancements
+
+These items are explicitly outside the submission MVP:
+
+1. Add Notion as an `ExecutionTaskSourceProtocol` implementation through MCP,
+   including task claim, status, result and report synchronization.
+2. Connect the Notion MCP server to Claude's isolated per-Run MCP configuration
+   with explicit allowlisting and the same approval/security policy. Cursor's
+   existing personal Notion connection is not assumed to be available inside a
+   WorkHarness Run.
+3. Add GitHub Issues and Linear task-source adapters without leaking tracker
+   specifics into the loop engine.
+4. Add resumable loops after app relaunch, crash recovery and idempotent task
+   claims.
+5. Add isolated Git worktrees per attempt and automatic branch/result cleanup.
+6. Add dependency graphs, priorities, retries, skip policy and configurable
+   failure budgets.
+7. Add cost, token, wall-clock and context budgets at loop and task levels.
+8. Add parallel workers only after serial execution, repository isolation and
+   merge-conflict policy are proven.
+9. Add automatic pull-request preparation and remote push as an explicit,
+   separately approved mode.
+10. Add a full execution dashboard with queue editing, live task timeline,
+    intervention markers, failure classification and report export.
+11. Benchmark several cloud and local models with immutable prompts, worktrees
+    and hardware telemetry.
+12. Persist the selected task-pool path and paused attempt across application
+    relaunch, then add crash recovery and explicit reconciliation when the
+    repository changed while WorkHarness was offline.
+13. Move the remaining WorkHarnessMobile stages into later pools:
+    - Pair Code and QR provisioning;
+    - Chat, Projects and Providers;
+    - advanced Approvals and notifications;
+    - Agent Monitor, statistics and search;
+    - settings, widgets, Siri/Shortcuts and Apple Watch;
+    - extraction of a shared `RemoteSDK`.
 
 # Architectural Direction
 

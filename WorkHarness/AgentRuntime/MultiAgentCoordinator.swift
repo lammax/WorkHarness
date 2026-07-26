@@ -165,7 +165,11 @@ final class MultiAgentCoordinator {
             }
 
             let roleConfiguration = configuration.configuration(for: step)
-            runtime.configure(modelId: roleConfiguration?.modelOverride ?? candidate.agent.model, runId: runId)
+            runtime.configure(
+                modelId: roleConfiguration?.modelOverride ?? candidate.agent.model,
+                runId: runId,
+                workingDirectory: workingDirectory
+            )
             let session = try await runtime.connect()
             do {
                 try ensureRunIsActive(runId)
@@ -203,6 +207,7 @@ final class MultiAgentCoordinator {
             )
 
             var output = ""
+            var didRecordCompletedMessage = false
             do {
                 let execution = try await runtime.run(
                     task: AgentTask(
@@ -228,6 +233,7 @@ final class MultiAgentCoordinator {
                         recorder.record(runId: runId, type: .providerStreamDelta, message: delta, metadata: metadata)
                     case .messageCompleted(let message):
                         output = message
+                        didRecordCompletedMessage = true
                         recorder.record(runId: runId, type: .assistantMessage, message: message, metadata: metadata)
                     case .toolCallRequested(let name, let input):
                         recorder.record(runId: runId, type: .toolCallRequested, message: name, metadata: metadata.merging(["input": input]) { _, new in new })
@@ -253,6 +259,15 @@ final class MultiAgentCoordinator {
                 }
 
                 try ensureRunIsActive(runId)
+                let completedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !didRecordCompletedMessage, !completedOutput.isEmpty {
+                    recorder.record(
+                        runId: runId,
+                        type: .assistantMessage,
+                        message: completedOutput,
+                        metadata: metadata
+                    )
+                }
                 recorder.record(
                     runId: runId,
                     type: .agentFinished,

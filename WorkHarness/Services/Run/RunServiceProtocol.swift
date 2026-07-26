@@ -13,7 +13,7 @@ protocol RunLaunchingProtocol: AnyObject {
 }
 
 @MainActor
-protocol RunServiceProtocol: BaseServiceProtocol, RunLaunchingProtocol {
+protocol RunServiceProtocol: BaseServiceProtocol, RunLaunchingProtocol, ExecutionLoopRunLaunchingProtocol {
     var runs: [Run] { get }
     var providerName: String { get }
     var selectedAgentRuntimeDescriptor: AgentRuntimeDescriptor? { get }

@@ -23,7 +23,12 @@ extension MainScreen {
             static let recentRunsSectionTitle = "Recent Runs"
             static let appTitle = "WorkHarness"
             static let recentRunSpacing: CGFloat = 3
-            static let recentRunsLimit = 6
+            static let recentRunRowSpacing: CGFloat = 4
+            static let recentRunRowHeight: CGFloat = 38
+            static let recentRunsVisibleCount = 6
+            static let recentRunsViewportHeight =
+                recentRunRowHeight * CGFloat(recentRunsVisibleCount) +
+                recentRunRowSpacing * CGFloat(recentRunsVisibleCount - 1)
             static let minWidth: CGFloat = Window.sidebarMinWidth
             static let idealWidth: CGFloat = Window.sidebarIdealWidth
 

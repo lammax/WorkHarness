@@ -44,6 +44,7 @@ extension MainScreen {
         var testingCodeTestCommand = ""
         var selectedAgentModelId: String
         private(set) var errorMessage: String?
+        private(set) var executionBackendNotice: String?
         var selectedSafetyMode: SafetyMode
         var mcpServerBasePath: String
         var localLLMEndpoint: String
@@ -180,6 +181,10 @@ extension MainScreen {
 
         var hasUnsavedAppSettingsChanges: Bool {
             currentAppSettingsSnapshot != persistedAppSettingsSnapshot
+        }
+
+        var hasUnsavedAgentModelChanges: Bool {
+            selectedAgentModelId != persistedAgentModelId
         }
 
         var appSettingsStatus: String {
@@ -494,18 +499,26 @@ extension MainScreen {
         }
 
         func selectAgentRuntime(id runtimeId: String?) {
+            let previousRuntimeId = activeAgentRuntimeId
             guard let runtimeId, agentRuntimeRegistry.runtime(id: runtimeId) != nil else {
                 appSettingsService.defaultAgentRuntimeId = nil
                 activeAgentRuntimeId = nil
                 reloadAgentRuntimes()
+                if previousRuntimeId != nil {
+                    executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
+                }
                 return
             }
             appSettingsService.defaultAgentRuntimeId = runtimeId
             activeAgentRuntimeId = runtimeId
             reloadAgentRuntimes()
+            if previousRuntimeId != runtimeId {
+                executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
+            }
         }
 
         func selectProvider(id providerId: String) {
+            let previousBackendId = activeExecutionBackend?.id
             do {
                 try providerService.selectProvider(id: providerId)
                 appSettingsService.defaultAgentRuntimeId = nil
@@ -513,6 +526,9 @@ extension MainScreen {
                 errorMessage = nil
                 reloadProviders()
                 reloadAgentRuntimes()
+                if previousBackendId != ExecutionBackendItem.providerId(providerId) {
+                    executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -560,7 +576,18 @@ extension MainScreen {
             normalizedAgentModelId(selectedAgentModelId, for: runtime)
         }
 
+        func saveAgentModelSelection() {
+            guard let activeAgentRuntimeId, hasUnsavedAgentModelChanges else { return }
+            appSettingsService.setAgentModelId(
+                selectedAgentModelId.isEmpty ? nil : selectedAgentModelId,
+                for: activeAgentRuntimeId
+            )
+            loadSelectedAgentModel()
+            executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
+        }
+
         func saveSettings() {
+            let agentModelChanged = hasUnsavedAgentModelChanges
             appSettingsService.defaultSafetyMode = selectedSafetyMode
             appSettingsService.mcpServerBasePath = mcpServerBasePath
             appSettingsService.defaultMaxInputTokens = defaultMaxInputTokens
@@ -587,6 +614,9 @@ extension MainScreen {
             remoteControlToken = appSettingsService.remoteControlToken
             loadSelectedAgentModel()
             loadRAGSettingsFromService()
+            if agentModelChanged {
+                executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
+            }
             errorMessage = nil
             do {
                 try remoteControlService?.reload()

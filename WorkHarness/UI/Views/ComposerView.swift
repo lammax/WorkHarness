@@ -8,14 +8,23 @@
 import SwiftUI
 
 extension MainScreen {
+    enum ComposerMode: String, CaseIterable {
+        case chat
+        case multiAgent
+        case taskLoop
+    }
+
     struct ComposerView: View {
         typealias Design = ComposerViewDesign
 
         @Binding var text: String
-        @Binding var mode: RunMode
+        @Binding var mode: ComposerMode
         let contextAttachments: [RunContextAttachment]
         let isSending: Bool
+        let taskPool: ExecutionTaskPool?
         let onAttach: () -> Void
+        let onChooseTaskPool: () -> Void
+        let onStartLoop: () -> Void
         let onRemoveAttachment: (RunContextAttachment) -> Void
         let onNewChat: () -> Void
         let onSend: () -> Void
@@ -25,8 +34,9 @@ extension MainScreen {
             VStack(alignment: .trailing, spacing: Design.spacing) {
                 HStack(spacing: Design.modeControlSpacing) {
                     Picker(Design.modeLabel, selection: $mode) {
-                        Text(Design.simpleModeLabel).tag(RunMode.simpleChat)
-                        Text(Design.multiAgentModeLabel).tag(RunMode.multiAgent)
+                        Text(Design.simpleModeLabel).tag(ComposerMode.chat)
+                        Text(Design.multiAgentModeLabel).tag(ComposerMode.multiAgent)
+                        Text(Design.taskLoopModeLabel).tag(ComposerMode.taskLoop)
                     }
                     .pickerStyle(.segmented)
 
@@ -40,7 +50,7 @@ extension MainScreen {
                     .accessibilityLabel(Design.newChatHelp)
                 }
 
-                if !contextAttachments.isEmpty {
+                if mode != .taskLoop, !contextAttachments.isEmpty {
                     ScrollView(.horizontal) {
                         HStack(spacing: Design.Attachment.spacing) {
                             ForEach(contextAttachments) { attachment in
@@ -55,7 +65,44 @@ extension MainScreen {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                HStack(alignment: .bottom, spacing: Design.spacing) {
+                if mode == .taskLoop {
+                    taskLoopComposer
+                } else {
+                    chatComposer
+                }
+            }
+        }
+
+        private var taskLoopComposer: some View {
+            HStack(spacing: Design.spacing) {
+                Button(action: onChooseTaskPool) {
+                    Label(Design.chooseTaskPoolTitle, systemImage: Design.attachIcon)
+                }
+                .buttonStyle(.bordered)
+
+                if let taskPool {
+                    VStack(alignment: .leading, spacing: Design.previewSpacing) {
+                        Text(URL(fileURLWithPath: taskPool.sourcePath).lastPathComponent)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Text("\(URL(fileURLWithPath: taskPool.targetRepositoryPath).lastPathComponent) · \(taskPool.baseBranch) · \(taskPool.tasks.count) tasks")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(Design.startLoopTitle, action: onStartLoop)
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Text(Design.taskPoolPlaceholder)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+        }
+
+        private var chatComposer: some View {
+            HStack(alignment: .bottom, spacing: Design.spacing) {
                     Button(action: onAttach) {
                         Image(systemName: Design.attachIcon)
                             .frame(width: Design.buttonIconSize, height: Design.buttonIconSize)
@@ -90,7 +137,6 @@ extension MainScreen {
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .help(Design.sendHelp)
                     }
-                }
             }
         }
 

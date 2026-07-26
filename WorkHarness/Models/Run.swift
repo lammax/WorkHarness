@@ -18,6 +18,7 @@ struct Run: Identifiable, Codable, Equatable {
     var artifacts: [RunArtifact]
     var contextAttachments: [RunContextAttachment]
     var multiAgentConfiguration: MultiAgentRunConfiguration?
+    var executionBackend: RunExecutionBackendSnapshot?
     var tokenUsage: TokenUsage
     var costUsage: CostUsage
     let createdAt: Date
@@ -34,6 +35,7 @@ struct Run: Identifiable, Codable, Equatable {
         artifacts: [RunArtifact] = [],
         contextAttachments: [RunContextAttachment] = [],
         multiAgentConfiguration: MultiAgentRunConfiguration? = nil,
+        executionBackend: RunExecutionBackendSnapshot? = nil,
         tokenUsage: TokenUsage = TokenUsage(),
         costUsage: CostUsage = CostUsage(),
         createdAt: Date = Date(),
@@ -49,6 +51,7 @@ struct Run: Identifiable, Codable, Equatable {
         self.artifacts = artifacts
         self.contextAttachments = contextAttachments
         self.multiAgentConfiguration = multiAgentConfiguration
+        self.executionBackend = executionBackend
         self.tokenUsage = tokenUsage
         self.costUsage = costUsage
         self.createdAt = createdAt
@@ -73,11 +76,27 @@ struct Run: Identifiable, Codable, Equatable {
             MultiAgentRunConfiguration.self,
             forKey: .multiAgentConfiguration
         )
+        executionBackend = try container.decodeIfPresent(
+            RunExecutionBackendSnapshot.self,
+            forKey: .executionBackend
+        )
         tokenUsage = try container.decode(TokenUsage.self, forKey: .tokenUsage)
         costUsage = try container.decode(CostUsage.self, forKey: .costUsage)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
+}
+
+struct RunExecutionBackendSnapshot: Codable, Equatable {
+    enum Kind: String, Codable, Equatable {
+        case agentRuntime
+        case provider
+    }
+
+    var kind: Kind
+    var id: String
+    var displayName: String
+    var modelId: String?
 }
 
 enum RunMode: String, Codable, CaseIterable, Equatable {

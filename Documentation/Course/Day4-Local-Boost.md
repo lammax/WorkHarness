@@ -15,7 +15,7 @@ blocked by the current account limit and must be repeated before submission.
 
 | Surface | Model | Purpose |
 |---|---|---|
-| Cursor Agent | `gpt-5.4-nano-none` | Minimal cloud baseline |
+| Cursor Agent | `gpt-5.4-nano[reasoning=medium]` | Minimal model advertised by the installed Cursor ACP runtime |
 | Claude Code | `haiku` | Minimal Claude baseline |
 | Continue + Ollama | `qwen2.5-coder:1.5b` | Local Chat, Edit and Autocomplete |
 | WorkHarness | `qwen2.5-coder:1.5b` via MCP | Local provider baseline |

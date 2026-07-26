@@ -10,6 +10,21 @@ import Testing
 @testable import WorkHarness
 
 struct RunEventDisplayFormatterTests {
+    @Test func executionLoopProgressTitleIncludesTaskAndAssistant() {
+        let event = RunEvent(
+            runId: UUID(),
+            type: .assistantMessage,
+            message: "Implemented tests.",
+            metadata: [
+                "executionLoopProgress": "true",
+                "taskId": "WHM-003",
+                "assistantName": "Coder"
+            ]
+        )
+
+        #expect(RunEventDisplayFormatter.title(for: event) == "WHM-003 · Coder")
+    }
+
     @Test
     func formatsFileResultAsReadableText() {
         let event = makeEvent(
