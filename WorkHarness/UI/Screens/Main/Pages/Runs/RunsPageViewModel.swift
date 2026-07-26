@@ -160,7 +160,7 @@ extension MainScreen {
             RunEventState(
                 id: event.id,
                 title: event.type.label,
-                message: event.message,
+                message: RunEventDisplayFormatter.message(for: event),
                 type: event.type,
                 createdAt: event.createdAt,
                 metadata: event.metadata
@@ -171,7 +171,7 @@ extension MainScreen {
             EventInspectorState(
                 id: event.id,
                 title: event.type.label,
-                message: event.message,
+                message: RunEventDisplayFormatter.message(for: event),
                 createdAt: event.createdAt,
                 metadata: event.metadata.sorted { $0.key < $1.key }.map { key, value in
                     MetadataState(key: key, value: value)

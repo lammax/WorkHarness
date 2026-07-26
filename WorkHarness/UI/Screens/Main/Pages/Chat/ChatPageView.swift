@@ -260,7 +260,7 @@ extension MainScreen {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text(event.message)
+                    Text(RunEventDisplayFormatter.message(for: event))
                         .font(.body)
                         .textSelection(.enabled)
                 }
