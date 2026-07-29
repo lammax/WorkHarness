@@ -91,7 +91,64 @@ Implementation is done: the real-data review is confirmed, the validator
 passes, and both baseline output files contain ten real API responses and
 summary metrics.
 
-## Days 7–10
+## Day 7 — Inference Confidence and Quality Control
+
+Status: code and live API evaluation complete; video is pending.
+
+Scope:
+
+- reuse the Day 6 task classifier without fine-tuning;
+- constraint-based input and response validation;
+- two redundant calls for every API-eligible case;
+- third tie-breaker on disagreement or invalid output;
+- explicit `ACCEPTED`, `UNSURE`, and `REJECTED` decisions;
+- agreement-based confidence;
+- correct, boundary, and noisy test groups;
+- rejection, retry, latency, token, cost, and accuracy metrics.
+
+Minimum implementation:
+
+- 12 frozen cases: four per test group;
+- automatic acceptance only for two valid matching responses;
+- conservative manual-review status for a `2/3` majority;
+- deterministic offline tests;
+- real `gpt-4o-mini` result JSONL and summary;
+- result validator;
+- 2–3 minute code-and-result video script.
+
+Recorded live result on 29.07.2026:
+
+- 12 cases: 11 accepted and one precheck rejection;
+- all 11 API-eligible cases used two redundant calls;
+- zero third tie-breakers;
+- 22 total API calls and 2,018 tokens;
+- single and controlled accuracy: 10/11 (90.91%);
+- latency: 8,585.097 ms → 16,977.879 ms (`1.9776×`);
+- estimated cost: `$0.00017655` → `$0.00035310` (`2.0×`);
+- one correlated `research` → `documentation` error was accepted with two
+  matching votes, demonstrating that agreement is not calibrated correctness.
+
+User-only actions:
+
+1. record the video after result validation passes.
+
+Done when offline tests pass, 12 real results and their summary are saved,
+result validation passes, and the video is recorded.
+
+Deferred beyond Day 7:
+
+1. add an independent self-check or judge model;
+2. calibrate confidence on a larger held-out set;
+3. measure Brier score and Expected Calibration Error;
+4. compare ensembles across different model families;
+5. run redundant requests concurrently to reduce latency;
+6. add adaptive sampling and retry budgets;
+7. expand prompt-injection and adversarial evaluation;
+8. integrate confidence policy through an MCP-backed WorkHarness service;
+9. emit confidence and rejection as RunEvents;
+10. add confidence, manual-review, and policy controls to WorkHarness UI.
+
+## Days 8–10
 
 Status: requirements not received.
 
