@@ -1,6 +1,6 @@
 # WorkHarness Development Roadmap
 
-Updated: 09.07.2026
+Updated: 29.07.2026
 
 WorkHarness is a local-first macOS SwiftUI AI Agent Harness. It must stay Run-centric, provider-agnostic, agent-agnostic and safety-aware. Do not treat it as a generic chat app.
 
@@ -155,6 +155,26 @@ WorkHarness already has:
 - Durable RAG settings with Settings UI controls for enablement, chunking, retrieval, filtering, Top-K and threshold.
 - Cursor ACP permission requests routed through the shared `ApprovalService` and Approval UI.
 - ACP permission decisions returned to Cursor over JSON-RPC with `allow-once` / `reject-once` mapping.
+- Claude Code CLI Agent Runtime v1 with isolated per-Run MCP configuration,
+  streamed provider-agnostic events, continuation, cancellation and model
+  selection.
+- General-purpose Execution Loop MVP with:
+  - Markdown task-source abstraction;
+  - deterministic workflow-profile selection;
+  - one Run per task;
+  - significant child-Run progress mirrored into the controller Run;
+  - validation and Auto-approve-gated commit/push;
+  - current-branch execution without forced task branches;
+  - task-level runtime and model snapshots;
+  - visible start, pause-after-current-task, resume and stop controls;
+  - Markdown execution metrics and comparison-report output.
+- Claude direct-Run model routing MVP with:
+  - routing disabled by default;
+  - configurable Haiku fast path and Sonnet fallback;
+  - a configurable 240-character threshold;
+  - critical-keyword and multi-requirement heuristics;
+  - immutable per-Run model selection;
+  - observable routing decisions in the Run timeline.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
 
@@ -166,6 +186,7 @@ Existing MCP server base contains these ready server targets:
 - `FileOperationsMCPServer`
 - `GitHubMCPServer`
 - `LocalLLMMCPServer`
+- `MobileAutomationMCPServer`
 - `RAGMCPServer`
 - `SupportMCPServer`
 - `UtilityMCPServer`
@@ -190,7 +211,7 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Direction rule: MCP means `Agent -> Harness tools/resources/provider capabilities`; ACP means `Harness -> Agent`.
 - Build an embedded ACP Host / ACP Client Runtime inside WorkHarness first; do not introduce a standalone ACP server or daemon until Remote Control requires it.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server` as the existing local MCP server base for MCP-backed providers/tools unless a task explicitly chooses another server.
-- Before adding a new MCP capability, check the existing server targets: `DeveloperToolsMCPServer`, `FileOperationsMCPServer`, `GitHubMCPServer`, `LocalLLMMCPServer`, `RAGMCPServer`, `SupportMCPServer`, `UtilityMCPServer`, `VisionBackendServer` and `Shared`.
+- Before adding a new MCP capability, check the existing server targets: `DeveloperToolsMCPServer`, `FileOperationsMCPServer`, `GitHubMCPServer`, `LocalLLMMCPServer`, `MobileAutomationMCPServer`, `RAGMCPServer`, `SupportMCPServer`, `UtilityMCPServer`, `VisionBackendServer` and `Shared`.
 - Do not duplicate an existing MCP server capability inside WorkHarness as a local tool.
 - Route local LLM model providers, such as Ollama, Qwen and llama.cpp-style backends, through the same MCP-backed provider path.
 - Use `/Users/lammax/Documents/ThisIsMy/Programming/AI/LlamaLocalServer` as the existing source implementation for local LLM logic; migrate the reusable parts into the MCP server base instead of duplicating that logic inside WorkHarness.
@@ -223,6 +244,22 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Step 19 - Multi-Agent v1.
 - Step 20 - Remote Control v1.
 - Step 21 - Claude Code CLI Agent Runtime v1.
+
+## Active Steps
+
+- Step 22 - Mobile Remote Client v1: WorkHarness Remote Control v1 is complete;
+  the production mobile client and end-to-end integration remain.
+- Step 23 - Course Day 4: Local Boost v1: technical MVP is complete; submission
+  evidence remains.
+- Step 24 - Course Day 5: Execution Loop v1: product MVP is complete; two cloud
+  attempts, one tool-capable local-model attempt and the comparison report
+  remain.
+- Step 25 - Course Fine-Tuning: Days 6–10:
+  - Day 6 implementation is complete;
+  - Day 7 code and live evaluation are complete; video remains;
+  - Day 8 code and deterministic evaluation are complete; real routing video
+    evidence remains;
+  - Days 9–10 requirements have not been received.
 
 ## Step 1 - Project Selector UI v1 (Done)
 
@@ -1302,8 +1339,11 @@ These items are explicitly outside the submission MVP:
 
 ## Step 25 - Course Fine-Tuning: Days 6–10
 
-Status: active. The unified course plan and evidence index live in
-`Documentation/Course/Fine-Tuning-Days-6-10-Roadmap.md`.
+Status: active. Day 6 is complete. Day 7 code and live API evaluation are
+complete with only the video pending. Day 8 routing code and deterministic
+evaluation are complete with real Haiku/Sonnet video evidence pending. Days
+9–10 requirements have not been received. The unified course plan and evidence
+index live in `Documentation/Course/Fine-Tuning-Days-6-10-Roadmap.md`.
 
 Day 6 prepares a versioned task-classification dataset, validation pipeline,
 frozen baseline and a safe fine-tuning client. Days 7–10 will extend the same

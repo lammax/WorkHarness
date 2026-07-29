@@ -1,5 +1,7 @@
 # WorkHarness → WorkHarnessMobile Development Roadmap
 
+Updated: 29.07.2026
+
 ## Purpose
 
 WorkHarnessMobile is a lightweight remote client for WorkHarness.
@@ -56,14 +58,24 @@ Already available:
 - authenticated Remote Control API;
 - health, capabilities, project, Runs, RunEvents, approvals and SSE routes.
 
-Still required for autonomous mobile development:
+Now available for autonomous mobile development:
 
-- durable task-source abstraction;
+- provider-independent Markdown task-source abstraction;
 - serial execution loop across multiple Runs;
 - automatic profile selection per task;
-- validation and commit gating;
-- per-attempt metrics and comparison reports;
-- a tool-capable local-model AgentRuntime for the Day 5 local comparison.
+- validation and Auto-approve-gated commit/push;
+- current-branch execution without forced task branches;
+- runtime and model snapshots for every task;
+- visible start, pause-after-current-task, resume and stop controls;
+- per-attempt metrics and Markdown comparison-report output.
+
+Still required:
+
+- tighten the mobile workspace contract before the first evidence run;
+- execute and preserve two cloud attempts against the immutable Day 5 pool;
+- add a tool-capable local-model AgentRuntime and execute the local comparison;
+- add durable resume after relaunch/crash and idempotent task reconciliation;
+- expand validation artifacts and integrated mobile/API contract testing.
 
 ### WorkHarnessMobile
 
@@ -107,7 +119,7 @@ Still required for the first production-capable client:
 
 ### WH-A0. Mobile workspace contract
 
-Status: Baseline exists; tighten before the first autonomous loop.
+Status: Baseline exists; tighten before the first autonomous evidence run.
 
 Scope:
 
