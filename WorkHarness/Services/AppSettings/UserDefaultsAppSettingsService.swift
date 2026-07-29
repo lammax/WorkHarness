@@ -14,6 +14,7 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         static let defaultAgentRuntimeId = "appSettings.defaultAgentRuntimeId"
         static let defaultAgentModelId = "appSettings.defaultAgentModelId"
         static let agentModelIds = "appSettings.agentModelIds"
+        static let agentModelRoutingSettings = "appSettings.agentModelRoutingSettings"
         static let defaultSafetyMode = "appSettings.defaultSafetyMode"
         static let mcpServerBasePath = "appSettings.mcpServerBasePath"
         static let localLLMEndpoint = "appSettings.localLLMEndpoint"
@@ -184,6 +185,19 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         }
     }
 
+    func agentModelRoutingSettings(for runtimeId: String) -> AgentModelRoutingSettings? {
+        agentModelRoutingSettingsByRuntimeId[runtimeId]
+    }
+
+    func setAgentModelRoutingSettings(
+        _ settings: AgentModelRoutingSettings?,
+        for runtimeId: String
+    ) {
+        var values = agentModelRoutingSettingsByRuntimeId
+        values[runtimeId] = settings
+        agentModelRoutingSettingsByRuntimeId = values
+    }
+
     private var agentModelIds: [String: String] {
         get {
             guard let data = defaults.data(forKey: Key.agentModelIds),
@@ -195,6 +209,23 @@ final class UserDefaultsAppSettingsService: AppSettingsServiceProtocol {
         set {
             guard let data = try? JSONEncoder().encode(newValue) else { return }
             defaults.set(data, forKey: Key.agentModelIds)
+        }
+    }
+
+    private var agentModelRoutingSettingsByRuntimeId: [String: AgentModelRoutingSettings] {
+        get {
+            guard let data = defaults.data(forKey: Key.agentModelRoutingSettings),
+                  let values = try? JSONDecoder().decode(
+                    [String: AgentModelRoutingSettings].self,
+                    from: data
+                  ) else {
+                return [:]
+            }
+            return values
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: Key.agentModelRoutingSettings)
         }
     }
 

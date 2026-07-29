@@ -92,6 +92,7 @@ extension MainScreen {
                 case .approvalRejected: "xmark.shield"
                 case .contextBuilt: "text.viewfinder"
                 case .contextCompacted: "rectangle.compress.vertical"
+                case .modelRoutingDecision: "arrow.triangle.branch"
                 case .memorySaved: "brain"
                 case .validationStarted: "checklist"
                 case .validationFinished: "checkmark.square"

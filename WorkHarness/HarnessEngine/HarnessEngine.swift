@@ -18,6 +18,7 @@ final class HarnessEngine {
     private let memoryService: MemoryServiceProtocol?
     private let ragService: RAGServiceProtocol?
     private let appSettingsService: AppSettingsServiceProtocol?
+    private let agentModelRoutingService: AgentModelRoutingServiceProtocol?
     private let agentRuntimeRegistry: AgentRuntimeRegistry
     private let multiAgentCoordinator: MultiAgentCoordinator
     private var activeRuntimeSessions: [UUID: (runtime: AgentRuntime, sessionId: UUID)] = [:]
@@ -32,6 +33,7 @@ final class HarnessEngine {
         memoryService: MemoryServiceProtocol? = nil,
         ragService: RAGServiceProtocol? = nil,
         appSettingsService: AppSettingsServiceProtocol? = nil,
+        agentModelRoutingService: AgentModelRoutingServiceProtocol? = nil,
         agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
         multiAgentCoordinator: MultiAgentCoordinator? = nil
     ) {
@@ -44,6 +46,7 @@ final class HarnessEngine {
         self.memoryService = memoryService
         self.ragService = ragService
         self.appSettingsService = appSettingsService
+        self.agentModelRoutingService = agentModelRoutingService
         self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
         self.multiAgentCoordinator = multiAgentCoordinator ?? MultiAgentCoordinator(repository: repository, recorder: recorder)
     }
@@ -531,7 +534,20 @@ final class HarnessEngine {
         runtime: AgentRuntime,
         contextAttachments: [RunContextAttachment]
     ) async -> UUID {
-        let modelId = selectedModelId(for: runtime)
+        let manualModelId = selectedModelId(for: runtime)
+        let routingDecision = agentModelRoutingService?.decision(
+            for: goal,
+            runtime: runtime.descriptor,
+            manualModelId: manualModelId
+        ) ?? AgentModelRoutingDecision(
+            selectedModelId: manualModelId,
+            route: .manual,
+            reason: "routing_unavailable",
+            promptLength: goal.count,
+            promptLengthThreshold: nil,
+            matchedKeyword: nil
+        )
+        let modelId = routingDecision.selectedModelId
         let agent = Agent(
             role: .coder,
             providerId: "agent-runtime:\(runtime.id)",
@@ -553,9 +569,37 @@ final class HarnessEngine {
         )
         repository.insert(run)
         recorder.record(runId: run.id, type: .runCreated, message: goal)
+        recordModelRoutingDecision(routingDecision, runId: run.id, runtime: runtime)
         recordUserMessage(runId: run.id, message: goal, contextAttachments: contextAttachments)
         await runAgentRuntimeTask(runId: run.id, prompt: goal, agent: agent, runtime: runtime)
         return run.id
+    }
+
+    private func recordModelRoutingDecision(
+        _ decision: AgentModelRoutingDecision,
+        runId: UUID,
+        runtime: AgentRuntime
+    ) {
+        guard decision.usesAutomaticRouting else { return }
+        var metadata = [
+            "runtimeId": runtime.id,
+            "selectedModelId": decision.selectedModelId ?? "",
+            "route": decision.route.rawValue,
+            "reason": decision.reason,
+            "promptLength": "\(decision.promptLength)"
+        ]
+        if let threshold = decision.promptLengthThreshold {
+            metadata["promptLengthThreshold"] = "\(threshold)"
+        }
+        if let matchedKeyword = decision.matchedKeyword {
+            metadata["matchedKeyword"] = matchedKeyword
+        }
+        recorder.record(
+            runId: runId,
+            type: .modelRoutingDecision,
+            message: "Automatic routing selected \(decision.selectedModelId ?? runtime.displayName).",
+            metadata: metadata
+        )
     }
 
     private func runAgentRuntimeTask(runId: UUID, prompt: String, agent: Agent, runtime: AgentRuntime) async {

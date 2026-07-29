@@ -143,7 +143,19 @@ extension MainScreen {
         enum AgentRuntime {
             static let modelPickerTitle = "Agent model"
             static let saveModelButtonTitle = "Save for Next Run"
+            static let routingToggleTitle = "Automatic model routing"
+            static let routingDescription = "New direct Runs use the fast model for short, simple prompts and the fallback model for long or critical prompts."
+            static let fastModelPickerTitle = "Fast model"
+            static let fallbackModelPickerTitle = "Strong fallback model"
+            static let thresholdTitle = "Prompt length threshold"
+            static let revertButtonTitle = "Revert"
+            static let restoreDefaultsButtonTitle = "Restore Defaults"
+            static let savedStatus = "Saved"
+            static let unsavedStatus = "Unsaved changes"
             static let availableStatus = "Installed"
+            static let spacing: CGFloat = 10
+            static let thresholdRange = 40...4_000
+            static let thresholdStep = 20
         }
 
         enum BackendList {

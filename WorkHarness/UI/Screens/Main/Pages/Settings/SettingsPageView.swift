@@ -356,7 +356,7 @@ extension MainScreen {
                         .foregroundStyle(.secondary)
 
                     if !activeRuntime.modelOptions.isEmpty {
-                        HStack {
+                        VStack(alignment: .leading, spacing: Design.AgentRuntime.spacing) {
                             Picker(Design.AgentRuntime.modelPickerTitle, selection: Binding(
                                 get: { viewModel.validatedAgentModelId(for: activeRuntime) },
                                 set: { viewModel.selectedAgentModelId = $0 }
@@ -367,10 +367,81 @@ extension MainScreen {
                             }
                             .pickerStyle(.menu)
 
-                            Button(Design.AgentRuntime.saveModelButtonTitle) {
-                                viewModel.saveAgentModelSelection()
+                            if activeRuntime.modelRouting != nil {
+                                Divider()
+
+                                Toggle(
+                                    Design.AgentRuntime.routingToggleTitle,
+                                    isOn: $viewModel.agentModelRoutingEnabled
+                                )
+
+                                Text(Design.AgentRuntime.routingDescription)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                Picker(
+                                    Design.AgentRuntime.fastModelPickerTitle,
+                                    selection: $viewModel.agentModelRoutingFastModelId
+                                ) {
+                                    ForEach(activeRuntime.modelOptions) { model in
+                                        Text(model.title).tag(model.id)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .disabled(!viewModel.agentModelRoutingEnabled)
+
+                                Picker(
+                                    Design.AgentRuntime.fallbackModelPickerTitle,
+                                    selection: $viewModel.agentModelRoutingFallbackModelId
+                                ) {
+                                    ForEach(activeRuntime.modelOptions) { model in
+                                        Text(model.title).tag(model.id)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .disabled(!viewModel.agentModelRoutingEnabled)
+
+                                Stepper(
+                                    value: $viewModel.agentModelRoutingPromptLengthThreshold,
+                                    in: Design.AgentRuntime.thresholdRange,
+                                    step: Design.AgentRuntime.thresholdStep
+                                ) {
+                                    LabeledContent(
+                                        Design.AgentRuntime.thresholdTitle,
+                                        value: "\(viewModel.agentModelRoutingPromptLengthThreshold)"
+                                    )
+                                }
+                                .disabled(!viewModel.agentModelRoutingEnabled)
                             }
-                            .disabled(!viewModel.hasUnsavedAgentModelChanges)
+
+                            HStack {
+                                Text(
+                                    viewModel.hasUnsavedAgentModelChanges
+                                        ? Design.AgentRuntime.unsavedStatus
+                                        : Design.AgentRuntime.savedStatus
+                                )
+                                .font(.caption)
+                                .foregroundStyle(
+                                    viewModel.hasUnsavedAgentModelChanges ? .orange : .secondary
+                                )
+
+                                Spacer()
+
+                                Button(Design.AgentRuntime.revertButtonTitle) {
+                                    viewModel.revertAgentModelSelection()
+                                }
+                                .disabled(!viewModel.hasUnsavedAgentModelChanges)
+
+                                Button(Design.AgentRuntime.restoreDefaultsButtonTitle) {
+                                    viewModel.restoreAgentModelDefaults()
+                                }
+
+                                Button(Design.AgentRuntime.saveModelButtonTitle) {
+                                    viewModel.saveAgentModelSelection()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(!viewModel.hasUnsavedAgentModelChanges)
+                            }
                         }
                     }
                 }

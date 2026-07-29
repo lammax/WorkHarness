@@ -55,6 +55,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable, Hashable {
     case approvalRejected
     case contextBuilt
     case contextCompacted
+    case modelRoutingDecision
     case memorySaved
     case validationStarted
     case validationFinished
@@ -91,6 +92,7 @@ enum RunEventType: String, Codable, CaseIterable, Equatable, Hashable {
         case .approvalRejected: "Approval Rejected"
         case .contextBuilt: "Context Built"
         case .contextCompacted: "Context Compacted"
+        case .modelRoutingDecision: "Model Routing"
         case .memorySaved: "Memory Saved"
         case .validationStarted: "Validation Started"
         case .validationFinished: "Validation Finished"

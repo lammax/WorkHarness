@@ -13,6 +13,12 @@ extension Container {
             UserDefaultsAppSettingsService()
         }.inObjectScope(.container)
 
+        register(AgentModelRoutingServiceProtocol.self) { resolver in
+            AgentModelRoutingService(
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(ApprovalServiceProtocol.self) { resolver in
             ApprovalService(
                 repository: resolver.resolve(ApprovalRepositoryProtocol.self)!,

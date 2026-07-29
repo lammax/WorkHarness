@@ -25,6 +25,11 @@ protocol AppSettingsServiceProtocol: BaseServiceProtocol {
 
     func agentModelId(for runtimeId: String) -> String?
     func setAgentModelId(_ modelId: String?, for runtimeId: String)
+    func agentModelRoutingSettings(for runtimeId: String) -> AgentModelRoutingSettings?
+    func setAgentModelRoutingSettings(
+        _ settings: AgentModelRoutingSettings?,
+        for runtimeId: String
+    )
 }
 
 extension AppSettingsServiceProtocol {
@@ -34,6 +39,8 @@ extension AppSettingsServiceProtocol {
 enum AppSettingsDefaults {
     nonisolated static let defaultSafetyMode: SafetyMode = .askBeforeWrite
     nonisolated static let defaultAgentModelId = "gpt-5.4-nano[reasoning=medium]"
+    nonisolated static let agentModelRoutingEnabled = false
+    nonisolated static let agentModelRoutingPromptLengthThreshold = 240
     nonisolated static let mcpServerBasePath = "/Users/lammax/Documents/ThisIsMy/Programming/AI/MCP_server"
     nonisolated static let localLLMEndpoint = "http://127.0.0.1:3007/mcp"
     nonisolated static let localLLMModel = "qwen2.5-coder:1.5b"

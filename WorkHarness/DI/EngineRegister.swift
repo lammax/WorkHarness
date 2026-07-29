@@ -39,6 +39,7 @@ extension Container {
                 memoryService: resolver.resolve(MemoryServiceProtocol.self)!,
                 ragService: resolver.resolve(RAGServiceProtocol.self)!,
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                agentModelRoutingService: resolver.resolve(AgentModelRoutingServiceProtocol.self)!,
                 agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!,
                 multiAgentCoordinator: resolver.resolve(MultiAgentCoordinator.self)!
             )

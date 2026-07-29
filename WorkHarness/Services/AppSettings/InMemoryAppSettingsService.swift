@@ -23,6 +23,7 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
     var ragAnswerMode: RAGAnswerMode
     var ragRetrievalSettings: RAGRetrievalSettings
     private var agentModelIds: [String: String]
+    private var agentModelRoutingSettingsByRuntimeId: [String: AgentModelRoutingSettings]
 
     init(
         defaultProviderId: String? = nil,
@@ -45,6 +46,7 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
         self.defaultAgentRuntimeId = defaultAgentRuntimeId
         self.defaultAgentModelId = defaultAgentModelId
         self.agentModelIds = ["cursor.acp": defaultAgentModelId]
+        self.agentModelRoutingSettingsByRuntimeId = [:]
         self.defaultSafetyMode = defaultSafetyMode
         self.mcpServerBasePath = mcpServerBasePath
         self.localLLMEndpoint = localLLMEndpoint
@@ -68,5 +70,16 @@ final class InMemoryAppSettingsService: AppSettingsServiceProtocol {
         if runtimeId == "cursor.acp", let modelId {
             defaultAgentModelId = modelId
         }
+    }
+
+    func agentModelRoutingSettings(for runtimeId: String) -> AgentModelRoutingSettings? {
+        agentModelRoutingSettingsByRuntimeId[runtimeId]
+    }
+
+    func setAgentModelRoutingSettings(
+        _ settings: AgentModelRoutingSettings?,
+        for runtimeId: String
+    ) {
+        agentModelRoutingSettingsByRuntimeId[runtimeId] = settings
     }
 }

@@ -43,6 +43,11 @@ extension MainScreen {
         var testingBuildCommand = ""
         var testingCodeTestCommand = ""
         var selectedAgentModelId: String
+        var agentModelRoutingEnabled = AppSettingsDefaults.agentModelRoutingEnabled
+        var agentModelRoutingFastModelId = ""
+        var agentModelRoutingFallbackModelId = ""
+        var agentModelRoutingPromptLengthThreshold =
+            AppSettingsDefaults.agentModelRoutingPromptLengthThreshold
         private(set) var errorMessage: String?
         private(set) var executionBackendNotice: String?
         var selectedSafetyMode: SafetyMode
@@ -184,7 +189,7 @@ extension MainScreen {
         }
 
         var hasUnsavedAgentModelChanges: Bool {
-            selectedAgentModelId != persistedAgentModelId
+            currentAgentModelSettingsSnapshot != persistedAgentModelSettingsSnapshot
         }
 
         var appSettingsStatus: String {
@@ -492,6 +497,7 @@ extension MainScreen {
                     authentication: runtime.descriptor.authentication.label,
                     modelOptions: runtime.descriptor.modelOptions,
                     defaultModelId: runtime.descriptor.defaultModelId,
+                    modelRouting: runtime.descriptor.modelRouting,
                     capabilities: runtime.descriptor.capabilities
                 )
             }
@@ -582,8 +588,32 @@ extension MainScreen {
                 selectedAgentModelId.isEmpty ? nil : selectedAgentModelId,
                 for: activeAgentRuntimeId
             )
+            if selectedRuntime?.modelRouting != nil {
+                appSettingsService.setAgentModelRoutingSettings(
+                    currentAgentModelRoutingSettings,
+                    for: activeAgentRuntimeId
+                )
+            }
             loadSelectedAgentModel()
             executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
+        }
+
+        func revertAgentModelSelection() {
+            loadSelectedAgentModel()
+            errorMessage = nil
+        }
+
+        func restoreAgentModelDefaults() {
+            guard let selectedRuntime else { return }
+            selectedAgentModelId = normalizedAgentModelId(
+                selectedRuntime.defaultModelId ?? "",
+                for: selectedRuntime
+            )
+            guard let routing = selectedRuntime.modelRouting else { return }
+            agentModelRoutingEnabled = AppSettingsDefaults.agentModelRoutingEnabled
+            agentModelRoutingFastModelId = routing.defaultFastModelId
+            agentModelRoutingFallbackModelId = routing.defaultFallbackModelId
+            agentModelRoutingPromptLengthThreshold = routing.defaultPromptLengthThreshold
         }
 
         func saveSettings() {
@@ -601,6 +631,12 @@ extension MainScreen {
                     selectedAgentModelId.isEmpty ? nil : selectedAgentModelId,
                     for: activeAgentRuntimeId
                 )
+                if selectedRuntime?.modelRouting != nil {
+                    appSettingsService.setAgentModelRoutingSettings(
+                        currentAgentModelRoutingSettings,
+                        for: activeAgentRuntimeId
+                    )
+                }
             }
             appSettingsService.ragAnswerMode = ragAnswerMode
             appSettingsService.ragRetrievalSettings = currentRAGRetrievalSettings
@@ -783,6 +819,31 @@ extension MainScreen {
             )
         }
 
+        private var currentAgentModelRoutingSettings: AgentModelRoutingSettings {
+            AgentModelRoutingSettings(
+                isEnabled: agentModelRoutingEnabled,
+                fastModelId: agentModelRoutingFastModelId,
+                fallbackModelId: agentModelRoutingFallbackModelId,
+                promptLengthThreshold: max(1, agentModelRoutingPromptLengthThreshold)
+            )
+        }
+
+        private var currentAgentModelSettingsSnapshot: AgentModelSettingsSnapshot {
+            AgentModelSettingsSnapshot(
+                modelId: selectedAgentModelId,
+                routing: selectedRuntime?.modelRouting == nil
+                    ? nil
+                    : currentAgentModelRoutingSettings
+            )
+        }
+
+        private var persistedAgentModelSettingsSnapshot: AgentModelSettingsSnapshot {
+            AgentModelSettingsSnapshot(
+                modelId: persistedAgentModelId,
+                routing: persistedAgentModelRoutingSettings
+            )
+        }
+
         private var selectedRuntime: AgentRuntimeItem? {
             guard let activeAgentRuntimeId else { return nil }
             return agentRuntimes.first { $0.id == activeAgentRuntimeId }
@@ -809,9 +870,64 @@ extension MainScreen {
         private func loadSelectedAgentModel() {
             guard let selectedRuntime else {
                 selectedAgentModelId = ""
+                agentModelRoutingEnabled = AppSettingsDefaults.agentModelRoutingEnabled
+                agentModelRoutingFastModelId = ""
+                agentModelRoutingFallbackModelId = ""
+                agentModelRoutingPromptLengthThreshold =
+                    AppSettingsDefaults.agentModelRoutingPromptLengthThreshold
                 return
             }
             selectedAgentModelId = normalizedAgentModelId(persistedAgentModelId, for: selectedRuntime)
+            if let settings = persistedAgentModelRoutingSettings {
+                agentModelRoutingEnabled = settings.isEnabled
+                agentModelRoutingFastModelId = settings.fastModelId
+                agentModelRoutingFallbackModelId = settings.fallbackModelId
+                agentModelRoutingPromptLengthThreshold = settings.promptLengthThreshold
+            } else {
+                agentModelRoutingEnabled = AppSettingsDefaults.agentModelRoutingEnabled
+                agentModelRoutingFastModelId = ""
+                agentModelRoutingFallbackModelId = ""
+                agentModelRoutingPromptLengthThreshold =
+                    AppSettingsDefaults.agentModelRoutingPromptLengthThreshold
+            }
+        }
+
+        private var persistedAgentModelRoutingSettings: AgentModelRoutingSettings? {
+            guard let activeAgentRuntimeId,
+                  let routing = selectedRuntime?.modelRouting else {
+                return nil
+            }
+            let saved = appSettingsService.agentModelRoutingSettings(for: activeAgentRuntimeId)
+            return AgentModelRoutingSettings(
+                isEnabled: saved?.isEnabled ?? AppSettingsDefaults.agentModelRoutingEnabled,
+                fastModelId: normalizedRoutingModelId(
+                    saved?.fastModelId,
+                    fallback: routing.defaultFastModelId
+                ),
+                fallbackModelId: normalizedRoutingModelId(
+                    saved?.fallbackModelId,
+                    fallback: routing.defaultFallbackModelId
+                ),
+                promptLengthThreshold: max(
+                    1,
+                    saved?.promptLengthThreshold ?? routing.defaultPromptLengthThreshold
+                )
+            )
+        }
+
+        private func normalizedRoutingModelId(
+            _ candidate: String?,
+            fallback: String
+        ) -> String {
+            guard let selectedRuntime else { return fallback }
+            if let candidate,
+               selectedRuntime.modelOptions.contains(where: { $0.id == candidate }) {
+                return candidate
+            }
+            if selectedRuntime.modelOptions.contains(where: { $0.id == fallback }) {
+                return fallback
+            }
+            return selectedRuntime.modelOptions.first?.id ?? fallback
         }
 
         private func normalizedAgentModelId(
@@ -870,6 +986,11 @@ extension MainScreen {
         var model: String
     }
 
+    private struct AgentModelSettingsSnapshot: Equatable {
+        var modelId: String
+        var routing: AgentModelRoutingSettings?
+    }
+
     struct ProviderSettingsItem: Identifiable, Equatable {
         var id: String
         var name: String
@@ -888,6 +1009,7 @@ extension MainScreen {
         var authentication: String
         var modelOptions: [AgentRuntimeModelOption]
         var defaultModelId: String?
+        var modelRouting: AgentModelRoutingDescriptor?
         var capabilities: AgentCapabilities
     }
 

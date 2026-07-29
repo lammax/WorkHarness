@@ -148,7 +148,50 @@ Deferred beyond Day 7:
 9. emit confidence and rejection as RunEvents;
 10. add confidence, manual-review, and policy controls to WorkHarness UI.
 
-## Days 8–10
+## Day 8 — Routing Between Models
+
+Status: code and deterministic evaluation complete; video is pending.
+
+Implemented minimum:
+
+- configurable routing for new direct Claude Runs;
+- routing disabled by default;
+- Haiku as the fast model and Sonnet as fallback;
+- configurable 240-character threshold;
+- fallback for long prompts, critical keywords, and three or more
+  list-form requirements;
+- saved model choice in the Run snapshot;
+- observable routing decision in the Run timeline;
+- frozen eight-request evaluation series;
+- focused policy, persistence, Settings, and HarnessEngine tests;
+- code-and-result video script.
+
+Artifacts:
+
+- `Documentation/Course/Day8-Claude-Model-Routing/`;
+- `WorkHarness/Services/AgentModelRouting/`;
+- routing settings in the Claude runtime Settings surface.
+
+User-only action:
+
+1. record the video using one real Haiku Run and one real Sonnet Run.
+
+Deferred beyond Day 8:
+
+1. fallback after an actual runtime failure or low-confidence model response;
+2. calibrated confidence-based routing;
+3. three or more routing tiers;
+4. budget, latency, and cost-aware policies;
+5. routing for execution-loop and multi-agent tasks with per-task reports;
+6. provider-independent routing configuration for additional runtimes;
+7. aggregate routing and savings statistics;
+8. WorkHarnessMobile controls and routing visibility;
+9. learned routing and shadow evaluation;
+10. detect plain-text pseudo-tool transcripts, reject incomplete final answers,
+    and move oversized provider output into bounded artifacts instead of the
+    Run timeline.
+
+## Days 9–10
 
 Status: requirements not received.
 

@@ -1828,6 +1828,116 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func agentModelRoutingUsesManualModelWhileDisabled() {
+        let settings = InMemoryAppSettingsService()
+        let service = AgentModelRoutingService(appSettingsService: settings)
+
+        let decision = service.decision(
+            for: String(repeating: "complex ", count: 100),
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            manualModelId: "opus"
+        )
+
+        #expect(decision.route == .manual)
+        #expect(decision.selectedModelId == "opus")
+        #expect(decision.reason == "routing_disabled")
+    }
+
+    @MainActor
+    @Test func agentModelRoutingEscalatesLongCriticalAndMultiRequirementPrompts() {
+        let settings = InMemoryAppSettingsService()
+        settings.setAgentModelRoutingSettings(
+            AgentModelRoutingSettings(
+                isEnabled: true,
+                fastModelId: "haiku",
+                fallbackModelId: "sonnet",
+                promptLengthThreshold: 240
+            ),
+            for: ClaudeCLIRuntime.runtimeId
+        )
+        let service = AgentModelRoutingService(appSettingsService: settings)
+
+        let short = service.decision(
+            for: "Add a title to the empty state.",
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            manualModelId: "opus"
+        )
+        let long = service.decision(
+            for: String(repeating: "Implement this detailed change. ", count: 12),
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            manualModelId: "opus"
+        )
+        let critical = service.decision(
+            for: "Review token storage.",
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            manualModelId: "opus"
+        )
+        let multiRequirement = service.decision(
+            for: "- Add a model\n- Add tests\n- Update documentation",
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            manualModelId: "opus"
+        )
+
+        #expect(short.route == .fast)
+        #expect(short.selectedModelId == "haiku")
+        #expect(long.route == .fallback)
+        #expect(long.reason == "prompt_length")
+        #expect(critical.selectedModelId == "sonnet")
+        #expect(critical.reason == "critical_keyword")
+        #expect(multiRequirement.selectedModelId == "sonnet")
+        #expect(multiRequirement.reason == "multiple_requirements")
+    }
+
+    @MainActor
+    @Test func harnessEngineRecordsAutomaticModelRoutingDecision() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let appSettings = InMemoryAppSettingsService(
+            defaultAgentRuntimeId: ClaudeCLIRuntime.runtimeId
+        )
+        appSettings.setAgentModelRoutingSettings(
+            AgentModelRoutingSettings(
+                isEnabled: true,
+                fastModelId: "haiku",
+                fallbackModelId: "sonnet",
+                promptLengthThreshold: 240
+            ),
+            for: ClaudeCLIRuntime.runtimeId
+        )
+        let client = FakeACPClient(
+            id: ClaudeCLIRuntime.runtimeId,
+            displayName: "Claude Code CLI"
+        )
+        let registry = AgentRuntimeRegistry()
+        registry.register(ACPClientRuntime(
+            client: client,
+            descriptor: ClaudeCLIRuntime.runtimeDescriptor
+        ))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings,
+            agentModelRoutingService: AgentModelRoutingService(
+                appSettingsService: appSettings
+            ),
+            agentRuntimeRegistry: registry
+        )
+
+        let runId = try #require(await engine.startRun(goal: "Review security boundaries."))
+        let run = try #require(repository.run(withId: runId))
+        let routingEvent = try #require(
+            run.events.first { $0.type == .modelRoutingDecision }
+        )
+
+        #expect(run.executionBackend?.modelId == "sonnet")
+        #expect(client.configuredModelId == "sonnet")
+        #expect(routingEvent.metadata["route"] == "fallback")
+        #expect(routingEvent.metadata["reason"] == "critical_keyword")
+        #expect(routingEvent.metadata["selectedModelId"] == "sonnet")
+    }
+
+    @MainActor
     @Test func harnessEnginePassesAttachmentContentToSelectedAgentRuntime() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -2887,6 +2997,53 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func settingsPageViewModelSavesAndRevertsAgentModelRouting() {
+        let appSettings = InMemoryAppSettingsService(
+            defaultAgentRuntimeId: ClaudeCLIRuntime.runtimeId
+        )
+        let registry = AgentRuntimeRegistry()
+        registry.register(ACPClientRuntime(
+            client: FakeACPClient(
+                id: ClaudeCLIRuntime.runtimeId,
+                displayName: "Claude"
+            ),
+            descriptor: ClaudeCLIRuntime.runtimeDescriptor
+        ))
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: appSettings,
+            agentRuntimeRegistry: registry
+        )
+
+        #expect(!viewModel.agentModelRoutingEnabled)
+        #expect(viewModel.agentModelRoutingFastModelId == "haiku")
+        #expect(viewModel.agentModelRoutingFallbackModelId == "sonnet")
+        #expect(viewModel.agentModelRoutingPromptLengthThreshold == 240)
+        #expect(!viewModel.hasUnsavedAgentModelChanges)
+
+        viewModel.agentModelRoutingEnabled = true
+        viewModel.agentModelRoutingPromptLengthThreshold = 320
+        #expect(viewModel.hasUnsavedAgentModelChanges)
+        viewModel.revertAgentModelSelection()
+        #expect(!viewModel.agentModelRoutingEnabled)
+        #expect(viewModel.agentModelRoutingPromptLengthThreshold == 240)
+
+        viewModel.agentModelRoutingEnabled = true
+        viewModel.saveAgentModelSelection()
+
+        #expect(!viewModel.hasUnsavedAgentModelChanges)
+        #expect(
+            appSettings.agentModelRoutingSettings(for: ClaudeCLIRuntime.runtimeId)
+                == AgentModelRoutingSettings(
+                    isEnabled: true,
+                    fastModelId: "haiku",
+                    fallbackModelId: "sonnet",
+                    promptLengthThreshold: 240
+                )
+        )
+    }
+
+    @MainActor
     @Test func settingsPageViewModelFallsBackFromUnavailableSavedAgentModel() {
         let appSettings = InMemoryAppSettingsService(defaultAgentRuntimeId: "claude.cli")
         appSettings.setAgentModelId("removed-model", for: "claude.cli")
@@ -3212,6 +3369,26 @@ struct WorkHarnessTests {
 
         #expect(second.agentModelId(for: "cursor.acp") == "cursor-model")
         #expect(second.agentModelId(for: "claude.cli") == "claude-model")
+    }
+
+    @MainActor
+    @Test func userDefaultsAppSettingsPersistsAgentModelRoutingPerRuntime() throws {
+        let defaults = try #require(
+            UserDefaults(suiteName: "WorkHarnessTests.AgentModelRouting.\(UUID().uuidString)")
+        )
+        let expected = AgentModelRoutingSettings(
+            isEnabled: true,
+            fastModelId: "haiku",
+            fallbackModelId: "sonnet",
+            promptLengthThreshold: 240
+        )
+        let first = UserDefaultsAppSettingsService(defaults: defaults)
+        first.setAgentModelRoutingSettings(expected, for: "claude.cli")
+
+        let second = UserDefaultsAppSettingsService(defaults: defaults)
+
+        #expect(second.agentModelRoutingSettings(for: "claude.cli") == expected)
+        #expect(second.agentModelRoutingSettings(for: "cursor.acp") == nil)
     }
 
     @MainActor

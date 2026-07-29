@@ -68,6 +68,14 @@ struct AgentRuntimeModelOption: Identifiable, Codable, Equatable {
     let title: String
 }
 
+struct AgentModelRoutingDescriptor: Equatable {
+    let defaultFastModelId: String
+    let defaultFallbackModelId: String
+    let defaultPromptLengthThreshold: Int
+    let fallbackKeywords: [String]
+    let multipleRequirementsThreshold: Int
+}
+
 struct AgentRuntimeDescriptor: Equatable {
     let id: String
     let displayName: String
@@ -75,6 +83,7 @@ struct AgentRuntimeDescriptor: Equatable {
     let authentication: AgentRuntimeAuthenticationKind
     let modelOptions: [AgentRuntimeModelOption]
     let defaultModelId: String?
+    let modelRouting: AgentModelRoutingDescriptor?
     let capabilities: AgentCapabilities
 
     init(
@@ -84,6 +93,7 @@ struct AgentRuntimeDescriptor: Equatable {
         authentication: AgentRuntimeAuthenticationKind = .notRequired,
         modelOptions: [AgentRuntimeModelOption] = [],
         defaultModelId: String? = nil,
+        modelRouting: AgentModelRoutingDescriptor? = nil,
         capabilities: AgentCapabilities = AgentCapabilities()
     ) {
         self.id = id
@@ -92,6 +102,7 @@ struct AgentRuntimeDescriptor: Equatable {
         self.authentication = authentication
         self.modelOptions = modelOptions
         self.defaultModelId = defaultModelId
+        self.modelRouting = modelRouting
         self.capabilities = capabilities
     }
 }

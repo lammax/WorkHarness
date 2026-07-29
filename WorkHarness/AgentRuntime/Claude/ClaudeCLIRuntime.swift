@@ -46,6 +46,28 @@ final class ClaudeCLIRuntime: AgentRuntime {
             AgentRuntimeModelOption(id: "fable", title: "Fable")
         ],
         defaultModelId: "haiku",
+        modelRouting: AgentModelRoutingDescriptor(
+            defaultFastModelId: "haiku",
+            defaultFallbackModelId: "sonnet",
+            defaultPromptLengthThreshold: 240,
+            fallbackKeywords: [
+                "architecture",
+                "authentication",
+                "authorization",
+                "concurrency",
+                "credential",
+                "migration",
+                "security",
+                "token",
+                "архитектур",
+                "аутентификац",
+                "авторизац",
+                "безопасност",
+                "миграц",
+                "токен"
+            ],
+            multipleRequirementsThreshold: 3
+        ),
         capabilities: AgentCapabilities([
             .canEditFiles,
             .canSearch,

@@ -19,4 +19,5 @@ enum AppService {
     case agentProfiles
     case testing
     case executionLoop
+    case modelRouting
 }
