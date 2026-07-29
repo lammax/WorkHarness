@@ -60,3 +60,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Python course tooling
+__pycache__/
+*.py[cod]
+.venv-day6/

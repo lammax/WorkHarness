@@ -1300,6 +1300,20 @@ These items are explicitly outside the submission MVP:
     - settings, widgets, Siri/Shortcuts and Apple Watch;
     - extraction of a shared `RemoteSDK`.
 
+## Step 25 - Course Fine-Tuning: Days 6–10
+
+Status: active. The unified course plan and evidence index live in
+`Documentation/Course/Fine-Tuning-Days-6-10-Roadmap.md`.
+
+Day 6 prepares a versioned task-classification dataset, validation pipeline,
+frozen baseline and a safe fine-tuning client. Days 7–10 will extend the same
+experiment only after their exact course requirements are provided.
+
+Production integration is deliberately deferred until the course evidence
+shows an improvement over the frozen baseline. Deferred product work includes
+an MCP-backed task-classification service, dataset/model registry, secure
+training-candidate collection, experiment UI and automated evaluation.
+
 # Architectural Direction
 
 This section does not change the implementation order.

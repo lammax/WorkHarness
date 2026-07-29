@@ -1,0 +1,8 @@
+{
+  "model": "gpt-4o-mini",
+  "examples": 10,
+  "category_accuracy": 0.9,
+  "valid_json_rate": 1.0,
+  "allowed_category_rate": 1.0,
+  "exact_format_rate": 0.9
+}

@@ -1,0 +1,623 @@
+{
+  "dataset_version": "1.0.0",
+  "task": "WorkHarness software-development task classification",
+  "counts": {
+    "total": 60,
+    "train": 48,
+    "eval": 12,
+    "baseline": 10,
+    "real": 15,
+    "synthetic": 45
+  },
+  "category_distribution": {
+    "bug": 10,
+    "documentation": 8,
+    "feature": 9,
+    "refactoring": 8,
+    "research": 8,
+    "security": 8,
+    "tests": 9
+  },
+  "examples": [
+    {
+      "id": "D6-001",
+      "origin": "real",
+      "source": "WorkHarness commit 797ea2f",
+      "group": "claude-mobile-smoke-reset",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "f1f3809d9506034a0f1348073c7cfa48a13e8390c264025d6e3ea4850d3d7208"
+    },
+    {
+      "id": "D6-002",
+      "origin": "real",
+      "source": "WorkHarness commit 4c9a4d8",
+      "group": "wda-managed-reset",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "8f458195bae5d81dfde23873921494c03afe00a099f2df8ef6629d2110b86eed"
+    },
+    {
+      "id": "D6-003",
+      "origin": "real",
+      "source": "WorkHarness commit 23c175f",
+      "group": "chat-auto-scroll",
+      "split": "eval",
+      "baseline": true,
+      "category": "bug",
+      "user_sha256": "bf6d5e4aeb23daa3233f82b1f868e62719f2d4fff5f19f47d66c36954475034a"
+    },
+    {
+      "id": "D6-004",
+      "origin": "real",
+      "source": "WorkHarness commit 4411744",
+      "group": "full-testing-command",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "72d08b685e91a2b2f95decbfe10f2857150c8c622d0104f2f81130adc25415a6"
+    },
+    {
+      "id": "D6-005",
+      "origin": "real",
+      "source": "WorkHarness commit d5f2d02",
+      "group": "screenshot-artifacts",
+      "split": "eval",
+      "baseline": true,
+      "category": "feature",
+      "user_sha256": "dabd370d113f67534b258a1bb4f650c5220c8815abbdaff42f8f4ff37c0b6080"
+    },
+    {
+      "id": "D6-006",
+      "origin": "real",
+      "source": "Day 5 task WHM-005",
+      "group": "approval-reject",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "c21314731097ce002dbed63087c39baa5f4025174eaa92ca93617b630d461510"
+    },
+    {
+      "id": "D6-007",
+      "origin": "real",
+      "source": "WorkHarnessMobile commit eb828ca",
+      "group": "remote-domain-split",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "1677e276ce9f8b172ab5eda29cc9ce9fa1830437e3d1597defef288bf5fc7092"
+    },
+    {
+      "id": "D6-008",
+      "origin": "real",
+      "source": "WorkHarness commit e96b46d",
+      "group": "mobile-mcp-routing",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "e8645365c162bc0e9ea33bac6321bfbcbedd8b0f7fbe18abdcc8d3a4970aa473"
+    },
+    {
+      "id": "D6-009",
+      "origin": "real",
+      "source": "WorkHarnessMobile commit 16f7f81",
+      "group": "domain-state-tests",
+      "split": "eval",
+      "baseline": true,
+      "category": "tests",
+      "user_sha256": "0c17a04e59ecf7c2567b0cca0caad2a5f632d48224f34296a8eb2a34d7928a6d"
+    },
+    {
+      "id": "D6-010",
+      "origin": "real",
+      "source": "WorkHarnessMobile commit c563a00",
+      "group": "mobile-deterministic-coverage",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "0cbda96c40320729b3a404175bc111920c491be893e3944caf8adc29e1f5fb19"
+    },
+    {
+      "id": "D6-011",
+      "origin": "real",
+      "source": "Course Day 2 Research profile task",
+      "group": "remote-auth-research",
+      "split": "eval",
+      "baseline": true,
+      "category": "research",
+      "user_sha256": "359a4d495db8687a4f0c5d2d564cd1265f33787d1c0dd1b66c28436ffafc2a72"
+    },
+    {
+      "id": "D6-012",
+      "origin": "real",
+      "source": "Course Day 3 coverage analysis task",
+      "group": "endpoint-coverage-research",
+      "split": "train",
+      "baseline": false,
+      "category": "research",
+      "user_sha256": "cca99ebc2e2a8773072eb22a7a0c3814b00b7e6eee0d71bdb6fd501d2ce8166b"
+    },
+    {
+      "id": "D6-013",
+      "origin": "real",
+      "source": "Day 5 task WHM-013",
+      "group": "keychain-session",
+      "split": "eval",
+      "baseline": true,
+      "category": "security",
+      "user_sha256": "93af09b430ee8f16cb7a16bf7a84d9a54edad2bacb618360ff7e1139f93c6f7c"
+    },
+    {
+      "id": "D6-014",
+      "origin": "real",
+      "source": "Day 5 task WHM-015",
+      "group": "auth-error-states",
+      "split": "train",
+      "baseline": false,
+      "category": "security",
+      "user_sha256": "83f25a6777c46d46fb0d06b86022d33b48b6e0d7d53fb3733e736c9ffcd072eb"
+    },
+    {
+      "id": "D6-015",
+      "origin": "real",
+      "source": "WorkHarnessMobile commit 663614e",
+      "group": "mobile-guidance",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "cdc109c7949e51f27e295de7b8e0a98b9d128e9025d5061df4b8d08a9fe20920"
+    },
+    {
+      "id": "D6-016",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "provider-registry-extraction",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "c0779694ca3ac1cead69c6bfde3c480509f72630888d6b9b232f00ec3feb115d"
+    },
+    {
+      "id": "D6-017",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "remote-api-runbook",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "d92400d1e0038c7971d39e0e7bcf385df7b5218e68f793f819410dc1a18f3aaa"
+    },
+    {
+      "id": "D6-018",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "context-builder-boundary",
+      "split": "eval",
+      "baseline": true,
+      "category": "refactoring",
+      "user_sha256": "64fb834153b7e3a493d9c49bdb55b76bf643f843a662f9e95c060cc4d07cc1fc"
+    },
+    {
+      "id": "D6-019",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "approval-badge-refresh",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "50881cebfb268fd3d5a762f4d6a06e5843a2f23666c1e10018d2d13aaf0479fe"
+    },
+    {
+      "id": "D6-020",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-cost-filter",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "cdedc68d23408c1bec258d38ae3ead5ba6514d9d14f781ca2a184513cf920e7f"
+    },
+    {
+      "id": "D6-021",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-cancellation-tests",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "75241462dc8920bfcbe48d17c2469a0ec6c46a48f117d55c381752a5f45a8755"
+    },
+    {
+      "id": "D6-022",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "secret-redaction",
+      "split": "train",
+      "baseline": false,
+      "category": "security",
+      "user_sha256": "7c35aeaca8f66d1edf7960f8f2da3775cc59ea8c42e69291321e5bb90a5dc842"
+    },
+    {
+      "id": "D6-023",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "memory-ownership-analysis",
+      "split": "train",
+      "baseline": false,
+      "category": "research",
+      "user_sha256": "d9fc21550f52a8e35d751cf77f91c3170c92300a70663cbd40b1b6499b8b4fef"
+    },
+    {
+      "id": "D6-024",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "mcp-troubleshooting-guide",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "2f044e70371cc30dba56d203a24842b10456f95c3f2e3a345e28a9a6de80e4f2"
+    },
+    {
+      "id": "D6-025",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-duration-format",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "cee97e0eaf564bafc0ea628e4acb7b84f9a88d2c50f4d45720d02d18e1f47fd4"
+    },
+    {
+      "id": "D6-026",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "artifact-search",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "2a96c8ceb338de5a0e66cf2e9aa7edfb874052e39298bc380e77e21df0ea6df5"
+    },
+    {
+      "id": "D6-027",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "settings-reference",
+      "split": "eval",
+      "baseline": true,
+      "category": "documentation",
+      "user_sha256": "ddaf9c984bfe19f0b07b5c3752ebab512dc48ad152af884a53fb17b9c6eb81dd"
+    },
+    {
+      "id": "D6-028",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "sse-parser-tests",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "bbdf3f6f64d31fd67e246188f7c8951784382924de0c9b91300b005462a7fabd"
+    },
+    {
+      "id": "D6-029",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "pair-code-bruteforce",
+      "split": "train",
+      "baseline": false,
+      "category": "security",
+      "user_sha256": "2570277f335efdacf4d66f55af6a3ec5e457eef2d3885ae9f8d54c15bb4cd1f1"
+    },
+    {
+      "id": "D6-030",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "provider-capability-audit",
+      "split": "train",
+      "baseline": false,
+      "category": "research",
+      "user_sha256": "e3e0073656c97c96caef176b46b868a2c3660f3289a3b6877d60a38868f6d67d"
+    },
+    {
+      "id": "D6-031",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-event-mapper",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "73d50ac668de7edb73d471f9d137463d0ddbca3782efa23864f5bccefd676ad7"
+    },
+    {
+      "id": "D6-032",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "model-picker-save-state",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "04e84dc9345180557f1f64af1d576dd3fdc4f84987df064b0cb0cdaee139e9fd"
+    },
+    {
+      "id": "D6-033",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-tagging",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "501fbd247d53c9638b527b0ab2112e2e6f8980fee93f4bd30c1a100615945017"
+    },
+    {
+      "id": "D6-034",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "settings-revert-tests",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "777442717c7a32ec5e570f4454355aa0941a7e3d3ed590792ec6efa9fefa29d8"
+    },
+    {
+      "id": "D6-035",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "approval-command-sanitization",
+      "split": "train",
+      "baseline": false,
+      "category": "security",
+      "user_sha256": "d746d90339db7a298d2f7653e0623f8ce7f486cc560da81a16bb8749fee98005"
+    },
+    {
+      "id": "D6-036",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-duplicate-action",
+      "split": "eval",
+      "baseline": true,
+      "category": "feature",
+      "user_sha256": "7fac0a62e1759c15e18517cea4e6c4d5bd5e67bcd70524841d313067fa11ea7d"
+    },
+    {
+      "id": "D6-037",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "execution-loop-failure-study",
+      "split": "train",
+      "baseline": false,
+      "category": "research",
+      "user_sha256": "98ad74fd67301047e0bca44080a291715504bc239b79d67e33a4cf703226de1b"
+    },
+    {
+      "id": "D6-038",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "dataset-readme",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "dab7277b61757916f44f31d3dfd03e63971d2cc2e0f47ede4bb2a8e96cda6a5f"
+    },
+    {
+      "id": "D6-039",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "remote-client-facade",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "8287e6600f20639b90addc2d676bd26eba066f87ea15da6d1883f38b72b41446"
+    },
+    {
+      "id": "D6-040",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "report-link-encoding",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "b2e8cd5a2aa901accf19280470e08ebc35c41699ce6ee5d5dfa399c8cef14a20"
+    },
+    {
+      "id": "D6-041",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "markdown-parser-tests",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "7a9c5854d898a3d2981a84194b287a18e144a04a3d846ab97aecff25da33e4d1"
+    },
+    {
+      "id": "D6-042",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "keychain-accessibility",
+      "split": "train",
+      "baseline": false,
+      "category": "security",
+      "user_sha256": "536daec1505202656f13897857d0237a609a92e9a3bc49739b47cedad8ef71b2"
+    },
+    {
+      "id": "D6-043",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "acp-session-lifecycle",
+      "split": "train",
+      "baseline": false,
+      "category": "research",
+      "user_sha256": "aa7ee37799d5d8f755e921cbefc4a87ad2dce7e43d23a3226385bc8686a2a8a6"
+    },
+    {
+      "id": "D6-044",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "run-event-catalog",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "de7673d4cdb5af3d1ae459898b719ad52f9fc9c530d535095ad7c127bb1b245e"
+    },
+    {
+      "id": "D6-045",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "token-accounting-investigation",
+      "split": "eval",
+      "baseline": true,
+      "category": "research",
+      "user_sha256": "ac4134a09fe22086123ed338c096c3057fed0ba3a57ed33d953f01c01f4eb9e0"
+    },
+    {
+      "id": "D6-046",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "testing-report-writer",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "29c43e752d838837ab4e9210087b633fb7faea823a873b8d853f4e197cf5be22"
+    },
+    {
+      "id": "D6-047",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "stale-current-run",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "fa0f6e53cbbd9377fb4a0961fe9a948dcaf9c25eec199c5374f6db72020edfda"
+    },
+    {
+      "id": "D6-048",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "provider-health-action",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "9d8ae760ef63b036bcb64b24391955a661464cdd33de30c22e9637cd011bb14e"
+    },
+    {
+      "id": "D6-049",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "profile-selection-tests",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "e1c007c395e6b6f21e155060e30bbf8b20f5eca730d0ddb1fc660ff8fa9a2d5f"
+    },
+    {
+      "id": "D6-050",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "workspace-path-validation",
+      "split": "train",
+      "baseline": false,
+      "category": "security",
+      "user_sha256": "1e44f63fa9e25949d522b29579dd6b5781aded78574bed2678eab74ac7e353f4"
+    },
+    {
+      "id": "D6-051",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "local-llm-setup-guide",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "2c0c32fd0876266a549f71655c2d502b602bb444764760c10afb7bb41d44d7e3"
+    },
+    {
+      "id": "D6-052",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "sqlite-migration-review",
+      "split": "train",
+      "baseline": false,
+      "category": "research",
+      "user_sha256": "3bd788e367da79ed8a6fa43873dc6ac260589bb4b27227e530e1ffacb6e4b824"
+    },
+    {
+      "id": "D6-053",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "settings-draft-model",
+      "split": "train",
+      "baseline": false,
+      "category": "refactoring",
+      "user_sha256": "28e66ec68b2f441273c006a154dc250d61803870b2dc8e2e11734a3662c2e1e6"
+    },
+    {
+      "id": "D6-054",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "approval-token-scope",
+      "split": "eval",
+      "baseline": true,
+      "category": "security",
+      "user_sha256": "9c1e84c8b52904a22b60870754c6d4e2f309a8eb6cbf5a8a84738da2312a148f"
+    },
+    {
+      "id": "D6-055",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "duplicate-stream-delta",
+      "split": "train",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "546f6d89e75df5385e7098098f61751aa67cfb12e843a601e65e7d458d8ce850"
+    },
+    {
+      "id": "D6-056",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "export-run-json",
+      "split": "train",
+      "baseline": false,
+      "category": "feature",
+      "user_sha256": "b9204e3da4f07c54786386eaeee2f1c3e9cda4319dbf33e90bdc0113f84e3dae"
+    },
+    {
+      "id": "D6-057",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "offline-retry-loop",
+      "split": "eval",
+      "baseline": false,
+      "category": "bug",
+      "user_sha256": "d2cd8f5ca5ce7755f8288077bbdc8a289818aeb81621008aa4f2e297fc0ce649"
+    },
+    {
+      "id": "D6-058",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "keychain-failure-tests",
+      "split": "train",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "a5e6c62d283a976ccc5cecc850cd6513c805242cebf14c10909e4deee57392d5"
+    },
+    {
+      "id": "D6-059",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "fine-tuning-evidence-guide",
+      "split": "train",
+      "baseline": false,
+      "category": "documentation",
+      "user_sha256": "dd9f4ee8d8ab9286ec260a8f9dad1d3c90fc16538a69f7127ef1666ff8496012"
+    },
+    {
+      "id": "D6-060",
+      "origin": "synthetic",
+      "source": "AI-generated Day 6 example",
+      "group": "fine-tuning-client-tests",
+      "split": "eval",
+      "baseline": false,
+      "category": "tests",
+      "user_sha256": "e990cbe61bc0c31aa954f88e004c687ffb2843a90e20a239f2ceb5d50c93e0c1"
+    }
+  ]
+}
