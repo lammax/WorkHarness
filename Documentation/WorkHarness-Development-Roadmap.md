@@ -261,6 +261,58 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
     evidence remains;
   - Days 9–10 requirements have not been received.
 
+## Agreed Next Implementation Sequence
+
+Agreed: 30.07.2026.
+
+Continue product development in this order:
+
+1. Agent output safety and bounded artifacts:
+   - detect plain-text pseudo-tool transcripts;
+   - reject incomplete final answers instead of reporting success;
+   - keep oversized tool results and diffs out of the Run timeline;
+   - store full output as artifacts and show a bounded human-readable summary;
+   - add regression coverage for oversized diffs and interrupted responses.
+2. Durable Execution Loop recovery:
+   - persist the selected task pool and attempt state;
+   - restore paused loops after application relaunch;
+   - reconcile branch, HEAD and working-tree state before resume;
+   - classify token exhaustion, runtime crash, validation failure and repository
+     mismatch separately;
+   - retry an interrupted task as an explicit new attempt without counting it
+     as first-pass success;
+   - continue an existing runtime session only when that runtime supports safe
+     continuation; otherwise restart the task with a recorded context snapshot.
+3. Remote Control API contract verification:
+   - maintain canonical request/response fixtures;
+   - test health, capabilities, Runs, RunEvents and Approvals;
+   - test authentication and error responses;
+   - test SSE framing, ordering and reconnect cursors;
+   - expose an API compatibility version through capabilities.
+4. WorkHarnessMobile validation pipeline:
+   - run focused checks during a task;
+   - require the full build/test gate before commit;
+   - add optional UI smoke validation for UI tasks;
+   - retain `.xcresult`, logs and screenshots as Run artifacts;
+   - distinguish code, simulator and infrastructure failures.
+5. Tool-capable Local LLM AgentRuntime:
+   - use Ollama behind an agent-runtime boundary;
+   - route file, shell and Git actions through WorkHarness MCP tools and
+     approvals;
+   - preserve RunEvents and execution-loop metrics;
+   - execute the Day 5 local-model comparison honestly even if the model
+     completes zero tasks.
+6. Model routing v2:
+   - add fallback after a real fast-model runtime failure;
+   - support execution-loop routing with immutable per-task model snapshots;
+   - record escalation reasons, latency and cost;
+   - defer calibrated confidence routing until the Days 9–10 requirements are
+     known.
+
+Do not start parallel execution, production fine-tuned-model integration,
+Notion task-source synchronization or a Dataset/Models UI before the preceding
+recovery, validation and course-evidence gates are stable.
+
 ## Step 1 - Project Selector UI v1 (Done)
 
 Goal:
