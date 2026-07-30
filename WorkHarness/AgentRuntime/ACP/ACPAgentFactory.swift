@@ -39,6 +39,7 @@ struct ACPAgentDefinition: Equatable {
             authentication: .runtimeManaged,
             modelOptions: modelOptions,
             defaultModelId: defaultModelId,
+            contextDeliveryMode: .renderedPrompt,
             capabilities: capabilities
         )
     }

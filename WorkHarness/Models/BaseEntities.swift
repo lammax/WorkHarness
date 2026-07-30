@@ -86,6 +86,13 @@ enum MemoryScope: String, Codable, CaseIterable, Equatable {
     case project
 }
 
+enum ContextDeliveryMode: String, Codable, CaseIterable, Equatable {
+    case structuredMessages
+    case renderedPrompt
+    case runtimeManaged
+    case unsupported
+}
+
 struct ContextSnapshot: Identifiable, Codable, Equatable {
     let id: UUID
     var runId: UUID
@@ -101,6 +108,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
     var includedMemories: [String]
     var includedRAGResults: [RAGCitation]
     var includedSummaries: [String]
+    var deliveryMode: ContextDeliveryMode
     var tokenCount: Int
     var createdAt: Date
 
@@ -119,6 +127,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
         includedMemories: [String] = [],
         includedRAGResults: [RAGCitation] = [],
         includedSummaries: [String] = [],
+        deliveryMode: ContextDeliveryMode = .unsupported,
         tokenCount: Int = 0,
         createdAt: Date = Date()
     ) {
@@ -136,6 +145,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
         self.includedMemories = includedMemories
         self.includedRAGResults = includedRAGResults
         self.includedSummaries = includedSummaries
+        self.deliveryMode = deliveryMode
         self.tokenCount = tokenCount
         self.createdAt = createdAt
     }

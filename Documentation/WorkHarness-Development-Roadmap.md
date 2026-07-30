@@ -318,8 +318,12 @@ Continue product development in this order:
    - defer calibrated confidence routing until the Day 10 requirements and
      course evidence are known.
 7. Measured context-engineering hardening:
-   - audit current `ContextBuilder`, folding, memory/RAG and tool-result traces
-     before changing their architecture;
+   - [x] audit current `ContextBuilder`, folding, memory/RAG and tool-result
+     traces before changing their architecture;
+   - [x] deliver the existing selected context exactly once through Cursor ACP,
+     Claude CLI, and the structured Local LLM boundary;
+   - [x] replace raw `contextBuilt` content with bounded metadata and record a
+     typed delivery mode;
    - classify selected context as required-now, retrievable, persistent or
      discardable;
    - add typed provenance, priority, freshness, estimated token cost and

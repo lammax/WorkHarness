@@ -242,7 +242,13 @@ final class HarnessEngine {
                 candidates: [candidate],
                 configuration: configuration
             )
-            let snapshot = context(for: run.id, prompt: goal, agent: agent, providerId: runtime.id)
+            let snapshot = context(
+                for: run.id,
+                prompt: goal,
+                agent: agent,
+                providerId: runtime.id,
+                deliveryMode: runtime.descriptor.contextDeliveryMode
+            )
             _ = try await multiAgentCoordinator.execute(
                 plan: plan,
                 candidates: [candidate],
@@ -450,7 +456,14 @@ final class HarnessEngine {
                 runId: runId,
                 agent: agent,
                 messages: [.init(role: .user, content: prompt)],
-                context: context(for: runId, prompt: prompt, agent: agent, providerId: provider.id, ragResults: ragResults).contextItems,
+                context: context(
+                    for: runId,
+                    prompt: prompt,
+                    agent: agent,
+                    providerId: provider.id,
+                    deliveryMode: .structuredMessages,
+                    ragResults: ragResults
+                ).contextItems,
                 tools: agent.tools,
                 budget: defaultTokenBudget(for: agent)
             )
@@ -494,9 +507,18 @@ final class HarnessEngine {
         }
     }
 
-    private func context(for runId: UUID, prompt: String, agent: Agent, providerId: String, ragResults: [RAGCitation] = []) -> ContextSnapshot {
+    private func context(
+        for runId: UUID,
+        prompt: String,
+        agent: Agent,
+        providerId: String,
+        deliveryMode: ContextDeliveryMode,
+        ragResults: [RAGCitation] = []
+    ) -> ContextSnapshot {
         let currentProject = projectService?.currentProject
         let safetyMode = appSettingsService?.defaultSafetyMode ?? AppSettingsDefaults.defaultSafetyMode
+        let contextAttachments = repository.run(withId: runId)?.contextAttachments ?? []
+        let memoryItems = currentProjectMemory(for: currentProject)
         let snapshot = contextBuilder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
@@ -505,23 +527,29 @@ final class HarnessEngine {
             currentProject: currentProject,
             rootPath: currentProject?.rootPath,
             contextFoldSummary: latestContextFoldSummary(for: runId),
-            contextAttachments: repository.run(withId: runId)?.contextAttachments ?? [],
-            memoryItems: currentProjectMemory(for: currentProject),
+            contextAttachments: contextAttachments,
+            memoryItems: memoryItems,
             ragResults: ragResults,
             tokenBudget: defaultTokenBudget(for: agent),
-            safetyMode: safetyMode
+            safetyMode: safetyMode,
+            deliveryMode: deliveryMode
         ))
 
         recorder.record(
             runId: runId,
             type: .contextBuilt,
-            message: snapshot.summary,
+            message: "Context prepared: \(snapshot.contextItems.count) item(s), estimated \(snapshot.tokenCount) tokens.",
             metadata: [
                 "contextSnapshotId": snapshot.id.uuidString,
                 "providerId": providerId,
                 "agentId": agent.id.uuidString,
                 "tokenEstimate": "\(snapshot.tokenCount)",
+                "contextItemCount": "\(snapshot.contextItems.count)",
+                "attachmentCount": "\(contextAttachments.count)",
+                "memoryItemCount": "\(memoryItems.count)",
                 "ragResultCount": "\(snapshot.includedRAGResults.count)",
+                "summaryCount": "\(snapshot.includedSummaries.count)",
+                "deliveryMode": snapshot.deliveryMode.rawValue,
                 "safetyMode": safetyMode.rawValue
             ]
         )
@@ -610,6 +638,7 @@ final class HarnessEngine {
                 prompt: prompt,
                 agent: agent,
                 providerId: runtime.id,
+                deliveryMode: runtime.descriptor.contextDeliveryMode,
                 ragResults: ragResults
             )
             runtime.configure(

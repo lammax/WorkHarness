@@ -243,7 +243,7 @@ final class MCPProviderClient: MCPProviderClientProtocol {
         configurationProvider()
     }
 
-    private func localLLMMessages(from request: AIRequest) -> [LocalLLMMessage] {
+    func localLLMMessages(from request: AIRequest) -> [LocalLLMMessage] {
         var messages: [LocalLLMMessage] = []
 
         if !request.context.isEmpty {
@@ -317,7 +317,7 @@ private struct LocalLLMGenerateArguments: Encodable {
     }
 }
 
-private struct LocalLLMMessage: Codable, Equatable {
+struct LocalLLMMessage: Codable, Equatable {
     let role: String
     let content: String
 }

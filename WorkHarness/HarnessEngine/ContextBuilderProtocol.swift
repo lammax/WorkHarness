@@ -27,6 +27,7 @@ struct ContextBuildInput: Equatable {
     var ragResults: [RAGCitation]
     var tokenBudget: TokenBudget?
     var safetyMode: SafetyMode
+    var deliveryMode: ContextDeliveryMode
 
     init(
         runId: UUID,
@@ -42,7 +43,8 @@ struct ContextBuildInput: Equatable {
         memoryItems: [String] = [],
         ragResults: [RAGCitation] = [],
         tokenBudget: TokenBudget? = nil,
-        safetyMode: SafetyMode = AppSettingsDefaults.defaultSafetyMode
+        safetyMode: SafetyMode = AppSettingsDefaults.defaultSafetyMode,
+        deliveryMode: ContextDeliveryMode = .unsupported
     ) {
         self.runId = runId
         self.agent = agent
@@ -58,5 +60,6 @@ struct ContextBuildInput: Equatable {
         self.ragResults = ragResults
         self.tokenBudget = tokenBudget
         self.safetyMode = safetyMode
+        self.deliveryMode = deliveryMode
     }
 }

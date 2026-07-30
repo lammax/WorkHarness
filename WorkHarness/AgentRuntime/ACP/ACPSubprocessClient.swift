@@ -132,7 +132,7 @@ final class ACPSubprocessClient: ACPClient {
                 do {
                     let result = try await connection.request(method: "session/prompt", params: [
                         "sessionId": remoteSessionID,
-                        "prompt": [["type": "text", "text": task.prompt]]
+                        "prompt": [["type": "text", "text": task.renderedPrompt]]
                     ])
                     let stopReason = result["stopReason"] as? String ?? "completed"
                     continuation.yield(.finished(AgentResponse(message: stopReason, tokenUsage: nil, artifacts: [])))

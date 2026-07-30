@@ -68,6 +68,7 @@ final class ClaudeCLIRuntime: AgentRuntime {
             ],
             multipleRequirementsThreshold: 3
         ),
+        contextDeliveryMode: .renderedPrompt,
         capabilities: AgentCapabilities([
             .canEditFiles,
             .canSearch,
@@ -266,16 +267,7 @@ final class ClaudeCLIRuntime: AgentRuntime {
     }
 
     private func prompt(for task: AgentTask) -> String {
-        guard let context = task.context else { return task.prompt }
-        var sections: [String] = []
-        if !context.summary.isEmpty {
-            sections.append("Run context:\n\(context.summary)")
-        }
-        if !context.contextItems.isEmpty {
-            sections.append("Additional context:\n\(context.contextItems.joined(separator: "\n"))")
-        }
-        sections.append("Task:\n\(task.prompt)")
-        return sections.joined(separator: "\n\n")
+        task.renderedPrompt
     }
 
     private func makeEventStream(

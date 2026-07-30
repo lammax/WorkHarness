@@ -84,6 +84,7 @@ struct AgentRuntimeDescriptor: Equatable {
     let modelOptions: [AgentRuntimeModelOption]
     let defaultModelId: String?
     let modelRouting: AgentModelRoutingDescriptor?
+    let contextDeliveryMode: ContextDeliveryMode
     let capabilities: AgentCapabilities
 
     init(
@@ -94,6 +95,7 @@ struct AgentRuntimeDescriptor: Equatable {
         modelOptions: [AgentRuntimeModelOption] = [],
         defaultModelId: String? = nil,
         modelRouting: AgentModelRoutingDescriptor? = nil,
+        contextDeliveryMode: ContextDeliveryMode = .unsupported,
         capabilities: AgentCapabilities = AgentCapabilities()
     ) {
         self.id = id
@@ -103,6 +105,7 @@ struct AgentRuntimeDescriptor: Equatable {
         self.modelOptions = modelOptions
         self.defaultModelId = defaultModelId
         self.modelRouting = modelRouting
+        self.contextDeliveryMode = contextDeliveryMode
         self.capabilities = capabilities
     }
 }
@@ -126,6 +129,21 @@ struct AgentTask: Identifiable, Codable, Equatable {
         self.prompt = prompt
         self.context = context
         self.workingDirectory = workingDirectory
+    }
+}
+
+extension AgentTask {
+    var renderedPrompt: String {
+        guard let context, !context.contextItems.isEmpty else {
+            return prompt
+        }
+        return """
+        Run context:
+        \(context.contextItems.joined(separator: "\n\n"))
+
+        Task:
+        \(prompt)
+        """
     }
 }
 

@@ -86,6 +86,7 @@ final class ContextBuilder: ContextBuilderProtocol {
             includedMemories: input.memoryItems,
             includedRAGResults: input.ragResults,
             includedSummaries: includedSummaries,
+            deliveryMode: input.deliveryMode,
             tokenCount: estimateTokenCount(for: contextItems)
         )
     }

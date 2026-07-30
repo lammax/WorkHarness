@@ -535,6 +535,41 @@ Deliberately unchanged in this slice:
 Budget enforcement and the typed context-plan contract should begin only after
 the adapters reliably deliver one canonical context representation.
 
+## Step 1 implementation result
+
+Completed on 31.07.2026:
+
+- Cursor ACP now receives the selected `ContextSnapshot.contextItems` once
+  through a canonical rendered prompt.
+- Claude CLI uses the same canonical rendering and no longer appends
+  `ContextSnapshot.summary` and `contextItems` as duplicate sections.
+- Local LLM retains structured-message delivery with one context system
+  message.
+- `ContextSnapshot` and runtime descriptors record a typed delivery mode:
+  `structuredMessages`, `renderedPrompt`, `runtimeManaged`, or `unsupported`.
+- `contextBuilt` now persists a bounded summary plus counts, snapshot/provider/
+  agent IDs, token estimate, delivery mode, and safety mode instead of raw
+  selected context.
+- Delivery-boundary characterization tests cover Cursor ACP, Claude CLI, Local
+  LLM, and safe `contextBuilt` metadata.
+
+Finding status after this slice:
+
+- P0.1 is resolved for the existing Cursor ACP path.
+- The `contextBuilt` portion of P0.2 is resolved. Full attachment, Run payload,
+  event-retention, redaction, and expiration policy remains deferred.
+- P1.1 is resolved for the existing Claude CLI path.
+- P1.2 through P1.6 remain deliberately unchanged.
+
+Verification:
+
+- 4 focused context-delivery tests passed.
+- The complete serial test plan passed: 176 passed and 1 opt-in live
+  Claude/MCP test remained skipped.
+- 4 UI test invocations passed when UI parallelization was disabled. The
+  default parallel UI run reproduced an existing macOS activation conflict
+  (`Running Background`) and is not caused by the context-delivery paths.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:
