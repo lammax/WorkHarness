@@ -147,27 +147,51 @@ extension MainScreen {
                     Picker(
                         Design.AgentProfiles.profilePickerTitle,
                         selection: Binding(
-                            get: { viewModel.selectedAgentProfileId },
-                            set: viewModel.selectAgentProfile(id:)
+                            get: { viewModel.selectedAgentProfileConfigurationId },
+                            set: { viewModel.selectAgentProfileConfiguration(id: $0) }
                         )
                     ) {
                         ForEach(viewModel.agentProfiles) { profile in
                             Text(profile.name).tag(profile.id)
                         }
+                        Text(StandardAgentDefaults.inferenceConfigurationName)
+                            .tag(StandardAgentDefaults.inferenceConfigurationId)
                     }
                     .pickerStyle(.segmented)
 
-                    if let profile = viewModel.selectedAgentProfile {
+                    if viewModel.isInferenceConfigurationSelected {
+                        Text(Design.InferenceAgents.description)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+
+                        VStack(spacing: Design.AgentProfiles.assistantSpacing) {
+                            ForEach(
+                                Array(viewModel.inferenceAssistants.enumerated()),
+                                id: \.element.id
+                            ) { index, assistant in
+                                assistantProfileRow(
+                                    assistant,
+                                    index: index,
+                                    assistantCount: viewModel.inferenceAssistants.count,
+                                    showsOrderControls: false
+                                )
+                            }
+                        }
+                    } else if let profile = viewModel.selectedAgentProfile {
                         Text(profile.summary)
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
                         VStack(spacing: Design.AgentProfiles.assistantSpacing) {
-                            ForEach(Array(profile.assistants.enumerated()), id: \.element.id) { index, assistant in
+                            ForEach(
+                                Array(viewModel.selectedWorkflowAssistants.enumerated()),
+                                id: \.element.id
+                            ) { index, assistant in
                                 assistantProfileRow(
                                     assistant,
                                     index: index,
-                                    assistantCount: profile.assistants.count
+                                    assistantCount: viewModel.selectedWorkflowAssistants.count,
+                                    showsOrderControls: true
                                 )
                             }
                         }
@@ -184,7 +208,8 @@ extension MainScreen {
         private func assistantProfileRow(
             _ assistant: AgentProfileAssistant,
             index: Int,
-            assistantCount: Int
+            assistantCount: Int,
+            showsOrderControls: Bool
         ) -> some View {
             HStack(alignment: .top, spacing: Design.AgentProfiles.rowSpacing) {
                 Text("\(index + 1)")
@@ -214,20 +239,22 @@ extension MainScreen {
                 Spacer()
 
                 VStack(spacing: Design.AgentProfiles.buttonSpacing) {
-                    HStack {
-                        Button {
-                            viewModel.moveAssistant(id: assistant.id, direction: .up)
-                        } label: {
-                            Image(systemName: Design.AgentProfiles.moveUpIcon)
-                        }
-                        .disabled(index == 0)
+                    if showsOrderControls {
+                        HStack {
+                            Button {
+                                viewModel.moveAssistant(id: assistant.id, direction: .up)
+                            } label: {
+                                Image(systemName: Design.AgentProfiles.moveUpIcon)
+                            }
+                            .disabled(index == 0)
 
-                        Button {
-                            viewModel.moveAssistant(id: assistant.id, direction: .down)
-                        } label: {
-                            Image(systemName: Design.AgentProfiles.moveDownIcon)
+                            Button {
+                                viewModel.moveAssistant(id: assistant.id, direction: .down)
+                            } label: {
+                                Image(systemName: Design.AgentProfiles.moveDownIcon)
+                            }
+                            .disabled(index == assistantCount - 1)
                         }
-                        .disabled(index == assistantCount - 1)
                     }
 
                     HStack {

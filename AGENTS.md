@@ -451,10 +451,13 @@ Pages/<PageName>/
   - каждый ассистент получает отдельный `.md` system prompt;
   - prompt-файлы являются source of truth для инструкций, а в Run передаётся загруженный snapshot.
 - Settings работает только через `AgentProfileServiceProtocol`: выбор профиля, импорт/открытие Markdown, reload и изменение порядка.
+- Chat Multi-Agent composer использует тот же выбранный `AgentWorkflowProfile`, что и Settings, и меняет выбор только через `AgentProfileServiceProtocol`.
+- Стандартные multi-stage inference роли отображаются как пункт `Inference` внутри общего выбора Agent Profiles в Settings и Chat, но не являются отдельным persisted workflow-профилем. При старте Run выбранный пункт является взаимоисключающей execution-конфигурацией: workflow Run не включает скрытые inference-роли, inference Run не включает скрытые workflow-роли.
 - Перед созданием нового multi-agent Run повторно читать prompt-файлы с диска, чтобы сохранённые пользователем правки применялись без перезапуска приложения. Обычный Chat профильные prompts не использует.
 - Toggle и model override в Chat composer являются draft-настройками следующего Run и не должны молча переписывать выбранный профиль на диске; постоянное редактирование профиля остаётся ответственностью Agent Profiles Settings/service.
 - Planner строит шаги в порядке, заданном активным профилем; UI не должен содержать фиксированный список ролей.
 - Если роль объявляет structured-output contract, `MultiAgentCoordinator` валидирует результат до запуска зависимого шага, пишет `validationStarted`/`validationFinished` и останавливает цепочку при невалидном формате или enum.
+- Тот же structured-output contract до inference сериализуется в provider prompt с точными required keys и allowed enum values; модель не должна получать ссылку на контракт, которого фактически нет в её контексте.
 - В `RunEvent.metadata` для multi-agent шагов сохранять `profileId`, `profileName`, `assistantName` и `promptFilePath` для audit/replay.
 - `Research` профиль не меняет файлы. `Bug Fix` обязан пройти diagnosis → focused fix → regression verification.
 - Для profile service и planner обязательны детерминированные тесты на seed/load, mapping assistant → prompt, persistence порядка и фактический execution order.

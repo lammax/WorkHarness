@@ -9,6 +9,11 @@ import Foundation
 import Observation
 
 extension MainScreen {
+    enum MultiAgentConfigurationSection: String, CaseIterable {
+        case workflowProfile
+        case inference
+    }
+
     @MainActor
     @Observable
     final class ChatPageViewModel {
@@ -36,6 +41,7 @@ extension MainScreen {
         }
         var selectedTaskPool: ExecutionTaskPool?
         var multiAgentConfiguration = MultiAgentRunConfiguration.default
+        var multiAgentConfigurationSection: MultiAgentConfigurationSection = .workflowProfile
         var isSending = false
         var isAttachmentImporterPresented = false
         var isTaskPoolImporterPresented = false
@@ -70,6 +76,37 @@ extension MainScreen {
 
         var runs: [Run] {
             runService.runs
+        }
+
+        var agentProfiles: [AgentWorkflowProfile] {
+            agentProfileService?.profiles ?? []
+        }
+
+        var selectedAgentProfileId: String {
+            agentProfileService?.selectedProfileId ?? multiAgentConfiguration.profileId ?? ""
+        }
+
+        var selectedAgentConfigurationId: String {
+            multiAgentConfigurationSection == .inference
+                ? StandardAgentDefaults.inferenceConfigurationId
+                : selectedAgentProfileId
+        }
+
+        var configurationForNextMultiAgentRun: MultiAgentRunConfiguration {
+            var configuration = multiAgentConfiguration
+            switch multiAgentConfigurationSection {
+            case .workflowProfile:
+                configuration.roles.removeAll {
+                    StandardAgentDefaults.isInferenceRole(id: $0.id)
+                }
+            case .inference:
+                configuration.profileId = nil
+                configuration.profileName = StandardAgentDefaults.inferenceConfigurationName
+                configuration.roles = configuration.roles.filter {
+                    StandardAgentDefaults.isInferenceRole(id: $0.id)
+                }
+            }
+            return configuration
         }
 
         var recentRuns: [Run] {
@@ -194,10 +231,34 @@ extension MainScreen {
         }
 
         func reloadAgentProfile() {
+            agentProfileService?.reload()
             multiAgentConfiguration = StandardAgentDefaults.addingInferenceRoles(
                 to: agentProfileService?.configuration(for: nil) ?? .default,
                 preserving: multiAgentConfiguration
             )
+        }
+
+        func selectAgentProfile(id: String) {
+            agentProfileService?.selectProfile(id: id)
+            multiAgentConfigurationSection = .workflowProfile
+            reloadAgentProfile()
+        }
+
+        func selectAgentConfiguration(id: String) {
+            if id == StandardAgentDefaults.inferenceConfigurationId {
+                selectMultiAgentConfigurationSection(.inference)
+            } else {
+                selectAgentProfile(id: id)
+            }
+        }
+
+        func selectMultiAgentConfigurationSection(_ section: MultiAgentConfigurationSection) {
+            multiAgentConfigurationSection = section
+            guard section == .inference else { return }
+            for index in multiAgentConfiguration.roles.indices where
+                StandardAgentDefaults.isInferenceRole(id: multiAgentConfiguration.roles[index].id) {
+                multiAgentConfiguration.roles[index].enabled = true
+            }
         }
 
         func setAssistantEnabled(id: UUID, enabled: Bool) {
@@ -417,7 +478,7 @@ extension MainScreen {
                 guard let runId = await runService.startRun(
                     goal: message,
                     mode: draftRunMode,
-                    configuration: multiAgentConfiguration,
+                    configuration: configurationForNextMultiAgentRun,
                     contextAttachments: contextAttachments
                 ) else { return }
                 selectedRunId = runId

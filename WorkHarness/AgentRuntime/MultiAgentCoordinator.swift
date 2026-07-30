@@ -219,7 +219,8 @@ final class MultiAgentCoordinator {
                             goal: plan.goal,
                             previousResults: previousResults,
                             assistantName: roleConfiguration?.assistantName ?? step.role.label,
-                            instructions: roleConfiguration?.instructions ?? ""
+                            instructions: roleConfiguration?.instructions ?? "",
+                            outputContract: roleConfiguration?.outputContract
                         ),
                         context: context,
                         workingDirectory: workingDirectory
@@ -349,10 +350,13 @@ final class MultiAgentCoordinator {
         goal: String,
         previousResults: [MultiAgentStepResult],
         assistantName: String,
-        instructions: String
+        instructions: String,
+        outputContract: AgentOutputContract?
     ) -> String {
         let priorOutput = previousResults.last?.output ?? "No previous agent output."
         let customInstructions = instructions.isEmpty ? "Use the role's standard responsibilities." : instructions
+        let contractInstructions = outputContract?.promptInstructions
+            ?? "No structured output contract."
         return """
         Assistant: \(assistantName)
         Role: \(step.role.label)
@@ -360,6 +364,8 @@ final class MultiAgentCoordinator {
 
         System instructions:
         \(customInstructions)
+
+        \(contractInstructions)
 
         Previous step output:
         \(priorOutput)

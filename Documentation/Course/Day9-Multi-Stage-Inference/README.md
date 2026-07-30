@@ -53,10 +53,10 @@ Expected output:
 ## Variant B — Multi-Agent
 
 1. Open a new Run and select `Multi-Agent`.
-2. In the execution-plan draft, disable the assistants from the currently
-   selected coding/research profile. This changes only the next Run draft and
-   does not rewrite the profile.
-3. Enable, in order:
+2. In the execution plan Agent Profiles picker, select `Inference`. WorkHarness
+   excludes the hidden workflow-profile assistants from this Run and enables
+   the three inference roles without rewriting the selected profile.
+3. Confirm the fixed order:
    - Input Normalizer;
    - Decision Maker;
    - Result Formatter.
@@ -105,9 +105,11 @@ observability and how much additional latency, token usage and cost it required.
 The automated suite covers:
 
 - the three roles being available without adding a workflow profile;
-- their disabled-by-default state;
+- their `Inference` item inside Agent Profiles in Settings and Chat;
+- mutually exclusive workflow-profile and inference Run configurations;
 - dependency ordering;
 - draft-only toggles that do not mutate the selected profile;
+- automatic injection of required keys and allowed enum values into every stage prompt;
 - strict JSON and enum validation;
 - output hand-off between stages;
 - stopping before the next stage after invalid output;

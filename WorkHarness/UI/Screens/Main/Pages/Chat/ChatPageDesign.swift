@@ -132,10 +132,12 @@ extension MainScreen {
 
         enum MultiAgentPlan {
             static let spacing: CGFloat = 8
+            static let sectionSpacing: CGFloat = 6
             static let contentSpacing: CGFloat = 2
             static let horizontalPadding: CGFloat = 16
             static let verticalPadding: CGFloat = 8
             static let title = "Execution plan"
+            static let profilePickerTitle = "Workflow profile"
             static let icon = "point.3.connected.trianglepath.dotted"
             static let arrowIcon = "chevron.right"
             static let runtimeDefaultModelTitle = "Runtime default"

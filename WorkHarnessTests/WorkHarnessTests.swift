@@ -2406,6 +2406,16 @@ struct WorkHarnessTests {
         )
         let validator = AgentOutputValidator()
 
+        #expect(contract.promptInstructions.contains(
+            "- Required keys: intent, scope, clarity, risk."
+        ))
+        #expect(contract.promptInstructions.contains(
+            "- intent: fix | add | refactor | test | document | research | secure | unknown"
+        ))
+        #expect(contract.promptInstructions.contains(
+            "- scope: code | documentation | tests | mixed | unknown"
+        ))
+
         try validator.validate(
             #"{"intent":"fix","scope":"code","clarity":"clear","risk":"high"}"#,
             against: contract
@@ -2514,6 +2524,87 @@ struct WorkHarnessTests {
         #expect(inferenceConfigurations[0].instructions.contains("Normalize the raw task"))
         #expect(inferenceConfigurations[1].instructions.contains("Make the task-intake decision"))
         #expect(inferenceConfigurations[2].instructions.contains("Validate and canonicalize"))
+    }
+
+    @MainActor
+    @Test func chatSelectsWorkflowProfilesAndIsolatesInferenceExecution() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Chat Profiles", rootPath: projectRoot.path)
+        let profileService = AgentProfileService(projectService: projectService)
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: makeRunService(repository: InMemoryRunRepository()),
+            contextAttachmentService: RunContextAttachmentService(),
+            agentProfileService: profileService
+        )
+
+        viewModel.selectAgentProfile(id: "bug-fix")
+
+        #expect(viewModel.selectedAgentProfileId == "bug-fix")
+        #expect(viewModel.multiAgentConfigurationSection == .workflowProfile)
+        #expect(viewModel.configurationForNextMultiAgentRun.profileId == "bug-fix")
+        #expect(viewModel.configurationForNextMultiAgentRun.roles.map(\.assistantName) == [
+            "Bug Investigator",
+            "Fix Implementer",
+            "Regression Verifier"
+        ])
+
+        viewModel.selectAgentConfiguration(
+            id: StandardAgentDefaults.inferenceConfigurationId
+        )
+
+        #expect(
+            viewModel.selectedAgentConfigurationId
+                == StandardAgentDefaults.inferenceConfigurationId
+        )
+        #expect(viewModel.configurationForNextMultiAgentRun.profileId == nil)
+        #expect(
+            viewModel.configurationForNextMultiAgentRun.profileName
+                == StandardAgentDefaults.inferenceConfigurationName
+        )
+        #expect(viewModel.configurationForNextMultiAgentRun.roles.map(\.role) == [
+            .inputNormalizer,
+            .decisionMaker,
+            .resultFormatter
+        ])
+        #expect(viewModel.configurationForNextMultiAgentRun.roles.allSatisfy { $0.enabled })
+    }
+
+    @MainActor
+    @Test func settingsSeparatesWorkflowAndInferenceAssistants() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Settings Profiles", rootPath: projectRoot.path)
+        let profileService = AgentProfileService(projectService: projectService)
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: InMemoryAppSettingsService(),
+            agentProfileService: profileService
+        )
+
+        #expect(viewModel.selectedAgentProfileId == "implementation")
+        #expect(viewModel.selectedWorkflowAssistants.map(\.name) == [
+            "Architect",
+            "Coder",
+            "Reviewer",
+            "Test Runner"
+        ])
+        #expect(viewModel.inferenceAssistants.map(\.name) == [
+            "Input Normalizer",
+            "Decision Maker",
+            "Result Formatter"
+        ])
+
+        viewModel.selectAgentProfileConfiguration(
+            id: StandardAgentDefaults.inferenceConfigurationId
+        )
+
+        #expect(viewModel.isInferenceConfigurationSelected)
+        #expect(
+            viewModel.selectedAgentProfileConfigurationId
+                == StandardAgentDefaults.inferenceConfigurationId
+        )
+        #expect(profileService.selectedProfileId == "implementation")
     }
 
     @MainActor
@@ -2754,6 +2845,16 @@ struct WorkHarnessTests {
 
         #expect(result.steps.map(\.output) == outputs)
         #expect(client.tasks.count == 3)
+        #expect(client.tasks[0].prompt.contains("Structured output contract (mandatory):"))
+        #expect(client.tasks[0].prompt.contains(
+            "intent: fix | add | refactor | test | document | research | secure | unknown"
+        ))
+        #expect(client.tasks[0].prompt.contains(
+            "scope: code | documentation | tests | mixed | unknown"
+        ))
+        #expect(client.tasks[1].prompt.contains(
+            "category: bug | feature | refactoring | tests | documentation | research | security"
+        ))
         #expect(client.tasks[1].prompt.contains(outputs[0]))
         #expect(client.tasks[2].prompt.contains(outputs[1]))
         let validationEvents = repository.run(withId: run.id)?.events.filter {

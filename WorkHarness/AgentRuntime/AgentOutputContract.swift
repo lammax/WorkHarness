@@ -21,6 +21,27 @@ struct AgentOutputContract: Codable, Equatable {
         self.allowedValues = allowedValues
         self.requiresExactKeys = requiresExactKeys
     }
+
+    var promptInstructions: String {
+        var lines = [
+            "Structured output contract (mandatory):",
+            "- Return exactly one compact JSON object without Markdown fences or surrounding text.",
+            "- Use non-empty string values only.",
+            "- Required keys: \(requiredKeys.joined(separator: ", "))."
+        ]
+        if requiresExactKeys {
+            lines.append("- Do not add any other keys.")
+        }
+        lines.append("- Allowed values:")
+        for key in requiredKeys {
+            if let values = allowedValues[key], !values.isEmpty {
+                lines.append("  - \(key): \(values.joined(separator: " | "))")
+            } else {
+                lines.append("  - \(key): any non-empty string")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
 }
 
 struct AgentOutputValidator {

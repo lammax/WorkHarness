@@ -70,6 +70,10 @@ extension MainScreen {
             static let promptLineLimit = 3
         }
 
+        enum InferenceAgents {
+            static let description = "A fixed three-stage chain for normalization, decision-making, and strict result formatting. It is selected independently in the Chat execution plan."
+        }
+
         enum Testing {
             static let title = "Testing"
             static let icon = "checkmark.circle.badge.questionmark"

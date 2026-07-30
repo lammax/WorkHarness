@@ -38,8 +38,8 @@ State whether the output is strict JSON and exactly matches the expected value.
 ## 4. Run the multi-stage variant
 
 1. Start a new Run and select Multi-Agent.
-2. Disable the current profile assistants in the Run draft.
-3. Enable Input Normalizer, Decision Maker and Result Formatter.
+2. Select Inference inside the execution plan Agent Profiles picker.
+3. Show Input Normalizer, Decision Maker and Result Formatter in their fixed order.
 4. Select the same model for all three.
 5. Paste only the raw primary request.
 6. Start the Run.

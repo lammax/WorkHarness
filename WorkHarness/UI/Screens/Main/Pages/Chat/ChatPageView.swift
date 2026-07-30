@@ -30,7 +30,11 @@ extension MainScreen {
                 if viewModel.composerMode == .multiAgent {
                     MultiAgentPlanPreviewView(
                         configuration: $viewModel.multiAgentConfiguration,
+                        section: viewModel.multiAgentConfigurationSection,
+                        profiles: viewModel.agentProfiles,
+                        selectedConfigurationId: viewModel.selectedAgentConfigurationId,
                         modelOptions: viewModel.agentModelOptions,
+                        onConfigurationChanged: viewModel.selectAgentConfiguration,
                         onEnabledChanged: viewModel.setAssistantEnabled,
                         onModelOverrideChanged: viewModel.setAssistantModelOverride
                     )
@@ -193,58 +197,45 @@ extension MainScreen {
         typealias Design = ChatPageDesign.MultiAgentPlan
 
         @Binding var configuration: MultiAgentRunConfiguration
+        let section: MainScreen.MultiAgentConfigurationSection
+        let profiles: [AgentWorkflowProfile]
+        let selectedConfigurationId: String
         let modelOptions: [AgentRuntimeModelOption]
+        let onConfigurationChanged: (String) -> Void
         let onEnabledChanged: (UUID, Bool) -> Void
         let onModelOverrideChanged: (UUID, String?) -> Void
 
         var body: some View {
-            HStack(spacing: Design.spacing) {
-                Image(systemName: Design.icon)
-                    .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: Design.sectionSpacing) {
+                HStack(spacing: Design.spacing) {
+                    Label(Design.title, systemImage: Design.icon)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.tint)
 
-                Text(Design.title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                    Picker(Design.profilePickerTitle, selection: Binding(
+                        get: { selectedConfigurationId },
+                        set: { onConfigurationChanged($0) }
+                    )) {
+                        ForEach(profiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                        Text(StandardAgentDefaults.inferenceConfigurationName)
+                            .tag(StandardAgentDefaults.inferenceConfigurationId)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Design.spacing) {
-                        ForEach(Array(configuration.roles.enumerated()), id: \.element.id) { index, roleConfiguration in
-                            if index > 0 {
-                                Image(systemName: Design.arrowIcon)
-                                    .foregroundStyle(.secondary)
-                            }
-                            VStack(alignment: .leading, spacing: Design.contentSpacing) {
-                                Toggle(roleConfiguration.assistantName, isOn: Binding(
-                                    get: { roleConfiguration.enabled },
-                                    set: { value in
-                                        configuration.roles[index].enabled = value
-                                        onEnabledChanged(roleConfiguration.id, value)
-                                    }
-                                ))
-                                .toggleStyle(.checkbox)
-                                .font(.caption)
-                                Picker(roleConfiguration.role.label, selection: Binding(
-                                    get: {
-                                        guard let modelOverride = roleConfiguration.modelOverride,
-                                              modelOptions.contains(where: { $0.id == modelOverride }) else {
-                                            return ""
-                                        }
-                                        return modelOverride
-                                    },
-                                    set: { value in
-                                        let modelOverride = value.isEmpty ? nil : value
-                                        configuration.roles[index].modelOverride = modelOverride
-                                        onModelOverrideChanged(roleConfiguration.id, modelOverride)
-                                    }
-                                )) {
-                                    Text(Design.runtimeDefaultModelTitle).tag("")
-                                    ForEach(modelOptions) { model in
-                                        Text(model.title).tag(model.id)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: Design.modelPickerWidth)
-                            }
+                        ForEach(Array(visibleRoleIndices.enumerated()), id: \.element) {
+                            visibleIndex,
+                            configurationIndex in
+                            roleControl(
+                                at: configurationIndex,
+                                showsLeadingArrow: visibleIndex > 0
+                            )
                         }
                     }
                 }
@@ -252,6 +243,60 @@ extension MainScreen {
             .padding(.horizontal, Design.horizontalPadding)
             .padding(.vertical, Design.verticalPadding)
             .background(.thinMaterial)
+        }
+
+        private var visibleRoleIndices: [Int] {
+            configuration.roles.indices.filter { index in
+                let isInference = StandardAgentDefaults.isInferenceRole(
+                    id: configuration.roles[index].id
+                )
+                return section == .inference ? isInference : !isInference
+            }
+        }
+
+        @ViewBuilder
+        private func roleControl(
+            at index: Int,
+            showsLeadingArrow: Bool
+        ) -> some View {
+            let roleConfiguration = configuration.roles[index]
+
+            if showsLeadingArrow {
+                Image(systemName: Design.arrowIcon)
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: Design.contentSpacing) {
+                Toggle(roleConfiguration.assistantName, isOn: Binding(
+                    get: { configuration.roles[index].enabled },
+                    set: { value in
+                        configuration.roles[index].enabled = value
+                        onEnabledChanged(roleConfiguration.id, value)
+                    }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                Picker(roleConfiguration.role.label, selection: Binding(
+                    get: {
+                        guard let modelOverride = configuration.roles[index].modelOverride,
+                              modelOptions.contains(where: { $0.id == modelOverride }) else {
+                            return ""
+                        }
+                        return modelOverride
+                    },
+                    set: { value in
+                        let modelOverride = value.isEmpty ? nil : value
+                        configuration.roles[index].modelOverride = modelOverride
+                        onModelOverrideChanged(roleConfiguration.id, modelOverride)
+                    }
+                )) {
+                    Text(Design.runtimeDefaultModelTitle).tag("")
+                    ForEach(modelOptions) { model in
+                        Text(model.title).tag(model.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: Design.modelPickerWidth)
+            }
         }
     }
 

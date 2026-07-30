@@ -204,6 +204,10 @@ Implemented minimum:
   - Input Normalizer;
   - Decision Maker;
   - Result Formatter;
+- matching Agent Profiles selection in Settings and the Chat Multi-Agent
+  composer, with Inference inside the same picker on both surfaces;
+- mutually exclusive workflow-profile and inference execution configurations,
+  so hidden roles cannot enter a Run;
 - dependency-ordered hand-off of compact stage output;
 - strict JSON object contracts with required keys and allowed enum values;
 - validation RunEvents and fail-fast behavior before the next stage;

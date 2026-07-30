@@ -28,6 +28,7 @@ extension MainScreen {
         private(set) var agentRuntimes: [AgentRuntimeItem] = []
         private(set) var agentProfiles: [AgentWorkflowProfile] = []
         var selectedAgentProfileId = ""
+        var isInferenceConfigurationSelected = false
         private(set) var agentProfileDirectoryPath = SettingsPageDesign.AgentProfiles.noProjectDirectory
         private(set) var smokeScenarios: [SmokeScenario] = []
         private(set) var testingConfigurationDirectoryPath = SettingsPageDesign.Testing.noProjectDirectory
@@ -219,6 +220,28 @@ extension MainScreen {
             agentProfiles.first { $0.id == selectedAgentProfileId }
         }
 
+        var selectedAgentProfileConfigurationId: String {
+            isInferenceConfigurationSelected
+                ? StandardAgentDefaults.inferenceConfigurationId
+                : selectedAgentProfileId
+        }
+
+        var selectedWorkflowAssistants: [AgentProfileAssistant] {
+            selectedAgentProfile?.assistants.filter {
+                !StandardAgentDefaults.isInferenceRole(id: $0.id)
+            } ?? []
+        }
+
+        var inferenceAssistants: [AgentProfileAssistant] {
+            var seenIds: Set<UUID> = []
+            return agentProfiles
+                .flatMap(\.assistants)
+                .filter { assistant in
+                    StandardAgentDefaults.isInferenceRole(id: assistant.id)
+                        && seenIds.insert(assistant.id).inserted
+                }
+        }
+
         var hasUnsavedTestingTargetChanges: Bool {
             guard let persistedTarget = testingConfigurationService?.catalog.target else {
                 return false
@@ -264,7 +287,17 @@ extension MainScreen {
         func selectAgentProfile(id: String) {
             agentProfileService?.selectProfile(id: id)
             selectedAgentProfileId = agentProfileService?.selectedProfileId ?? id
+            isInferenceConfigurationSelected = false
             errorMessage = nil
+        }
+
+        func selectAgentProfileConfiguration(id: String) {
+            if id == StandardAgentDefaults.inferenceConfigurationId {
+                isInferenceConfigurationSelected = true
+                errorMessage = nil
+            } else {
+                selectAgentProfile(id: id)
+            }
         }
 
         func reloadAgentProfiles() {

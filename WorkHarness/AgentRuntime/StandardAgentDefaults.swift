@@ -8,6 +8,8 @@
 import Foundation
 
 enum StandardAgentDefaults {
+    static let inferenceConfigurationId = "inference"
+    static let inferenceConfigurationName = "Inference"
     static let inferenceRoleIds: Set<UUID> = Set(inferenceRoles.map(\.id))
 
     static let inferenceRoles: [MultiAgentRoleConfiguration] = [
