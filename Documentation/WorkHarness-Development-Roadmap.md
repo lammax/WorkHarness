@@ -175,6 +175,9 @@ WorkHarness already has:
   - critical-keyword and multi-requirement heuristics;
   - immutable per-Run model selection;
   - observable routing decisions in the Run timeline.
+- Cross-agent WorkHarness context-engineering policy with one version-controlled
+  skill source, native Codex/Claude/Cursor discovery, mandatory project rules
+  and a context-impact completion note for relevant changes.
 
 All LLM/provider backends must go through MCP-backed provider adapters.
 
@@ -219,6 +222,10 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
 - Treat MCP-backed Codex CLI / Cursor CLI provider descriptors as interim compatibility surfaces; the final architecture for full coding agents is ACP-backed `AgentRuntime`.
 - Never branch on concrete agent names such as Codex, Cursor, Claude Code, Gemini CLI or OpenHands in `HarnessEngine`, planner, tools or UI.
 - Prefer small, buildable steps with tests where behavior crosses service, repository, engine, provider or ViewModel boundaries.
+- For changes affecting model context, apply
+  `.agent-skills/workharness-context-engineering/SKILL.md`: prefer the smallest
+  high-signal context, just-in-time retrieval, deterministic ordering, bounded
+  tool outputs, explicit budgets and observable omission/compaction.
 - Commit and push stable validated slices before starting broad new work.
 
 ## Completed Steps
@@ -310,6 +317,19 @@ Continue product development in this order:
    - record escalation reasons, latency and cost;
    - defer calibrated confidence routing until the Day 10 requirements and
      course evidence are known.
+7. Measured context-engineering hardening:
+   - audit current `ContextBuilder`, folding, memory/RAG and tool-result traces
+     before changing their architecture;
+   - classify selected context as required-now, retrievable, persistent or
+     discardable;
+   - add typed provenance, priority, freshness, estimated token cost and
+     retention metadata where the audit shows it is needed;
+   - make section budgets, overflow priority, omissions and truncation visible
+     through `ContextSnapshot` metadata and append-only RunEvents;
+   - replace consumed oversized tool results with bounded summaries plus
+     addressable artifact/event references;
+   - compare at least one realistic trace before and after each context-policy
+     change and record quality, latency, token and cost impact.
 
 Do not start parallel execution, production fine-tuned-model integration,
 Notion task-source synchronization or a Dataset/Models UI before the preceding

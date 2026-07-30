@@ -10,6 +10,10 @@
 
 - Перед планированием или изменениями в этом репозитории прочитать и применять глобальный skill `agent-harness`, установленный в:
   - `/Users/lammax/.codex/skills/agent-harness/SKILL.md`
+- Дополнительный skill `workharness-context-engineering` обязателен вместе с `agent-harness` для задач, затрагивающих agent loops, context/prompt construction, provider requests, tools/MCP/ACP, retrieval, memory, message history, compaction, subagents либо token/cost budgets:
+  - version-controlled source of truth: `.agent-skills/workharness-context-engineering/SKILL.md`;
+  - project discovery: `.codex/skills/`, `.claude/skills/`, `.cursor/skills/`;
+  - перед релевантным изменением прочитать skill полностью и включить context-impact note в итоговый отчёт.
 - Для задач по архитектуре, UI, engine, providers, tools, memory/RAG, testing или roadmap читать соответствующие reference-файлы из:
   - `/Users/lammax/.codex/skills/agent-harness/references/`
 - Если в репозитории появится проектная документация (`Documentation/`, `Docs/`, `.codex/`, локальные skills/rules), перед изменениями читать релевантные файлы.
@@ -502,4 +506,4 @@ Pages/<PageName>/
 
 ## 22. Итоговое правило
 
-Если правило из `agent-harness` skill и локальное правило из этого файла расходятся, применять более строгое правило, если пользователь явно не сказал иначе.
+Если правило из `agent-harness`, обязательного `workharness-context-engineering` skill и локальное правило из этого файла расходятся, применять более строгое правило, если пользователь явно не сказал иначе. Явные security/safety rules всегда имеют приоритет.

@@ -1,9 +1,17 @@
 # CLAUDE.md — WorkHarness
 
 Самодостаточные локальные правила Claude Code для WorkHarness. Они адаптированы
-из `AGENTS.md` и глобального `agent-harness` skill под Swift, SwiftUI и
-изолированный Claude runtime. Общение и отчёты — на русском; code identifiers и
-comments — на английском.
+из `AGENTS.md`, глобального `agent-harness` skill и обязательного
+`workharness-context-engineering` skill под Swift, SwiftUI и изолированный
+Claude runtime. Общение и отчёты — на русском; code identifiers и comments —
+на английском.
+
+Для задач, затрагивающих agent loops, context/prompts, provider requests,
+tools/MCP/ACP, retrieval, memory, history, compaction, subagents либо
+token/cost budgets, прочитать и применить
+`.claude/skills/workharness-context-engineering/SKILL.md`. Если Skill capability
+недоступен внутри isolated Run, этот файл всё равно является обязательным
+проектным правилом. В итог добавить требуемый skill-ом context-impact note.
 
 WorkHarness — local-first macOS AI Agent Harness / Orchestrator, не
 чат-приложение. Центральная сущность — `Run`; Chat является UI-поверхностью над
@@ -239,7 +247,10 @@ network/CLI/wall-clock delay в unit tests и unrelated mass refactoring.
 - При делегировании передать цель, scope, paths, ограничения, известные факты,
   ожидаемый output и запрет commit/push.
 - Skill использовать только если runtime публикует Skill capability и skill
-  доступен. Отсутствие skills/subagents в isolated WorkHarness Run ожидаемо.
+  доступен. Исключение: правила обязательного
+  `workharness-context-engineering` должны применяться из project rules даже
+  при отсутствии Skill capability. Отсутствие остальных skills/subagents в
+  isolated WorkHarness Run ожидаемо.
 
 ```text
 ~/.claude/CLAUDE.md             # global personal behavior
@@ -247,7 +258,7 @@ network/CLI/wall-clock delay в unit tests и unrelated mass refactoring.
 ./CLAUDE.local.md               # personal project behavior, gitignored
 .claude/settings.json           # shared enforceable settings
 .claude/settings.local.json     # personal settings, gitignored
-.claude/skills/                 # optional project skills
+.claude/skills/                 # project skills; context engineering mandatory
 .claude/agents/                 # optional project subagents
 ```
 

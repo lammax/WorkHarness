@@ -6,6 +6,11 @@ alwaysApply: true
 Read and follow `AGENTS.md` before planning or editing. WorkHarness is a
 Run-centric local AI Agent Harness, not a chat application.
 
+- For work affecting agent context, prompts, provider requests, tools, MCP/ACP,
+  retrieval, memory, history, compaction, subagents, or token/cost budgets,
+  read and apply
+  `.cursor/skills/workharness-context-engineering/SKILL.md` together with
+  `AGENTS.md`, then include its context-impact note in the final report.
 - Preserve `View -> ViewModel -> Service -> HarnessEngine` dependency flow.
 - Keep providers and real tools behind MCP boundaries.
 - Keep full coding agents behind `AgentRuntime`, preferably ACP.

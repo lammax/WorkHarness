@@ -1,0 +1,4 @@
+interface:
+  display_name: "WorkHarness Context Engineering"
+  short_description: "Curate minimal high-signal agent context"
+  default_prompt: "Use $workharness-context-engineering to review this WorkHarness change for context quality and budget impact."
