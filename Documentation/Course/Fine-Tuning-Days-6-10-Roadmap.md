@@ -191,14 +191,64 @@ Deferred beyond Day 8:
     and move oversized provider output into bounded artifacts instead of the
     Run timeline.
 
-## Days 9–10
+## Day 9 — Multi-Stage Inference
+
+Status: WorkHarness implementation and deterministic tests complete; live
+monolithic vs multi-agent comparison video is pending.
+
+Implemented minimum:
+
+- one monolithic inference through an ordinary WorkHarness Chat Run;
+- one multi-stage inference through a WorkHarness Multi-Agent Run;
+- three standard optional roles, without adding a workflow profile:
+  - Input Normalizer;
+  - Decision Maker;
+  - Result Formatter;
+- dependency-ordered hand-off of compact stage output;
+- strict JSON object contracts with required keys and allowed enum values;
+- validation RunEvents and fail-fast behavior before the next stage;
+- per-Run model selection, duration, token and cost evidence;
+- frozen safety-sensitive WorkHarnessMobile task-intake case;
+- deterministic tests and a 3–4 minute video script.
+
+Fair-comparison policy:
+
+- use the same runtime and model for both Runs;
+- keep model routing disabled;
+- use one uninterrupted attempt per variant;
+- do not correct either answer with follow-up messages;
+- compare strict final JSON, expected result, duration, tokens and cost.
+
+Artifacts:
+
+- `Documentation/Course/Day9-Multi-Stage-Inference/`;
+- `WorkHarness/AgentRuntime/AgentOutputContract.swift`;
+- `WorkHarness/AgentRuntime/StandardAgentDefaults.swift`;
+- the existing WorkHarness Run timeline and statistics surfaces.
+
+User-only actions:
+
+1. run the monolithic Chat case;
+2. run the same case through the three inference agents;
+3. fill the recorded comparison values;
+4. record the video.
+
+Deferred beyond Day 9:
+
+1. different models per stage;
+2. retries and fallback for a failed stage;
+3. normalization caching and batch execution;
+4. a larger held-out evaluation set;
+5. prompt-injection and adversarial cases;
+6. a dedicated visual stage inspector;
+7. an MCP-backed production Task Intake service;
+8. learned stage selection and dynamic execution graphs.
+
+## Day 10
 
 Status: requirements not received.
 
-Add each assignment here when its exact wording is available. Do not infer
-course requirements in advance.
-
-Every later day must state:
+When the exact assignment is available, it must state:
 
 - required input dataset version;
 - model and parameters;

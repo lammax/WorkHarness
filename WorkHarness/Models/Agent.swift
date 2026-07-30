@@ -52,6 +52,9 @@ enum AgentRole: String, Codable, CaseIterable, Equatable {
     case coder
     case reviewer
     case testRunner
+    case inputNormalizer
+    case decisionMaker
+    case resultFormatter
     case git
     case research
     case rag
@@ -62,6 +65,9 @@ enum AgentRole: String, Codable, CaseIterable, Equatable {
         case .coder: "Coder"
         case .reviewer: "Reviewer"
         case .testRunner: "Test Runner"
+        case .inputNormalizer: "Input Normalizer"
+        case .decisionMaker: "Decision Maker"
+        case .resultFormatter: "Result Formatter"
         case .git: "Git"
         case .research: "Research"
         case .rag: "RAG"

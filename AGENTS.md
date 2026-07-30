@@ -441,6 +441,10 @@ Pages/<PageName>/
 ## 18. Agent Profiles и prompt-файлы
 
 - `AgentRole` описывает специализацию ассистента, а `AgentWorkflowProfile` — конкретный workflow, состав ассистентов и порядок их вызова.
+- Переиспользуемые стандартные роли, не принадлежащие одному workflow, допускается хранить в engine-level каталоге стандартных агентов:
+  - они не добавляют скрытый `AgentWorkflowProfile`;
+  - подключаются к draft конкретного Multi-Agent Run как опциональные и выключенные по умолчанию;
+  - их stable IDs, инструкции и structured-output contract не должны жить в SwiftUI.
 - Не зашивать новые workflow в SwiftUI или generic planner. Профили должны оставаться data-driven и загружаться через `AgentProfileServiceProtocol`.
 - Проектный каталог профилей: `<project-root>/.workharness/agent-profiles/`.
   - `profiles.json` хранит профили, стабильные assistant IDs, соответствие assistant → Markdown-файл и порядок.
@@ -448,7 +452,9 @@ Pages/<PageName>/
   - prompt-файлы являются source of truth для инструкций, а в Run передаётся загруженный snapshot.
 - Settings работает только через `AgentProfileServiceProtocol`: выбор профиля, импорт/открытие Markdown, reload и изменение порядка.
 - Перед созданием нового multi-agent Run повторно читать prompt-файлы с диска, чтобы сохранённые пользователем правки применялись без перезапуска приложения. Обычный Chat профильные prompts не использует.
+- Toggle и model override в Chat composer являются draft-настройками следующего Run и не должны молча переписывать выбранный профиль на диске; постоянное редактирование профиля остаётся ответственностью Agent Profiles Settings/service.
 - Planner строит шаги в порядке, заданном активным профилем; UI не должен содержать фиксированный список ролей.
+- Если роль объявляет structured-output contract, `MultiAgentCoordinator` валидирует результат до запуска зависимого шага, пишет `validationStarted`/`validationFinished` и останавливает цепочку при невалидном формате или enum.
 - В `RunEvent.metadata` для multi-agent шагов сохранять `profileId`, `profileName`, `assistantName` и `promptFilePath` для audit/replay.
 - `Research` профиль не меняет файлы. `Bug Fix` обязан пройти diagnosis → focused fix → regression verification.
 - Для profile service и planner обязательны детерминированные тесты на seed/load, mapping assistant → prompt, persistence порядка и фактический execution order.

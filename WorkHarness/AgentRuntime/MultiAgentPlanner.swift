@@ -64,6 +64,7 @@ struct MultiAgentRoleConfiguration: Identifiable, Codable, Equatable {
     var enabled: Bool
     var modelOverride: String?
     var instructions: String
+    var outputContract: AgentOutputContract?
 
     init(
         id: UUID = UUID(),
@@ -72,7 +73,8 @@ struct MultiAgentRoleConfiguration: Identifiable, Codable, Equatable {
         promptFilePath: String = "",
         enabled: Bool = true,
         modelOverride: String? = nil,
-        instructions: String = ""
+        instructions: String = "",
+        outputContract: AgentOutputContract? = nil
     ) {
         self.id = id
         self.role = role
@@ -81,6 +83,7 @@ struct MultiAgentRoleConfiguration: Identifiable, Codable, Equatable {
         self.enabled = enabled
         self.modelOverride = modelOverride
         self.instructions = instructions
+        self.outputContract = outputContract
     }
 }
 
@@ -231,6 +234,8 @@ struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
             [.canOpenDiff]
         case .testRunner:
             [.canRunTests]
+        case .inputNormalizer, .decisionMaker, .resultFormatter:
+            []
         case .git:
             [.canUseTools]
         case .research, .rag:

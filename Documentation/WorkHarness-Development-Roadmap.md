@@ -259,7 +259,9 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
   - Day 7 code and live evaluation are complete; video remains;
   - Day 8 code and deterministic evaluation are complete; real routing video
     evidence remains;
-  - Days 9–10 requirements have not been received.
+  - Day 9 WorkHarness multi-stage inference and deterministic tests are
+    complete; live comparison video remains;
+  - Day 10 requirements have not been received.
 
 ## Agreed Next Implementation Sequence
 
@@ -306,8 +308,8 @@ Continue product development in this order:
    - add fallback after a real fast-model runtime failure;
    - support execution-loop routing with immutable per-task model snapshots;
    - record escalation reasons, latency and cost;
-   - defer calibrated confidence routing until the Days 9–10 requirements are
-     known.
+   - defer calibrated confidence routing until the Day 10 requirements and
+     course evidence are known.
 
 Do not start parallel execution, production fine-tuned-model integration,
 Notion task-source synchronization or a Dataset/Models UI before the preceding
@@ -1393,9 +1395,11 @@ These items are explicitly outside the submission MVP:
 
 Status: active. Day 6 is complete. Day 7 code and live API evaluation are
 complete with only the video pending. Day 8 routing code and deterministic
-evaluation are complete with real Haiku/Sonnet video evidence pending. Days
-9–10 requirements have not been received. The unified course plan and evidence
-index live in `Documentation/Course/Fine-Tuning-Days-6-10-Roadmap.md`.
+evaluation are complete with real Haiku/Sonnet video evidence pending. Day 9
+WorkHarness multi-stage inference and deterministic tests are complete with the
+live comparison video pending. Day 10 requirements have not been received. The
+unified course plan and evidence index live in
+`Documentation/Course/Fine-Tuning-Days-6-10-Roadmap.md`.
 
 Day 6 prepares a versioned task-classification dataset, validation pipeline,
 frozen baseline and a safe fine-tuning client. Days 7–10 will extend the same

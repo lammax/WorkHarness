@@ -214,9 +214,10 @@ struct WorkHarnessTests {
 
     @MainActor
     @Test func runPersistenceRetainsMultiAgentConfigurationForRestart() throws {
-        var configuration = MultiAgentRunConfiguration.default
+        var configuration = StandardAgentDefaults.addingInferenceRoles(to: .default)
         configuration.profileId = "bug-fix"
         configuration.roles[1].enabled = false
+        configuration.roles[4].enabled = true
         let run = Run(
             goal: "Restart the same workflow",
             mode: .multiAgent,
@@ -2369,6 +2370,152 @@ struct WorkHarnessTests {
         ])
     }
 
+    @Test func standardInferenceAgentsAreOptionalAndDependencyOrdered() throws {
+        var configuration = StandardAgentDefaults.addingInferenceRoles(to: .default)
+        for index in configuration.roles.indices {
+            configuration.roles[index].enabled = StandardAgentDefaults.isInferenceRole(
+                id: configuration.roles[index].id
+            )
+        }
+        let candidate = AgentCandidate(
+            agent: Agent(role: .research, providerId: "inference", model: "small"),
+            capabilities: AgentCapabilities()
+        )
+
+        let plan = try CapabilityBasedAgentPlanner().plan(
+            goal: "Classify a complex task",
+            candidates: [candidate],
+            configuration: configuration
+        )
+
+        #expect(plan.steps.map(\.role) == [
+            .inputNormalizer,
+            .decisionMaker,
+            .resultFormatter
+        ])
+        #expect(plan.steps[0].dependsOn.isEmpty)
+        #expect(plan.steps[1].dependsOn == [plan.steps[0].id])
+        #expect(plan.steps[2].dependsOn == [plan.steps[1].id])
+        #expect(configuration.roles.suffix(3).allSatisfy { !$0.instructions.isEmpty })
+        #expect(configuration.roles.suffix(3).allSatisfy { $0.outputContract != nil })
+    }
+
+    @Test func agentOutputValidatorEnforcesCompactJSONEnums() throws {
+        let contract = try #require(
+            StandardAgentDefaults.inferenceRoles.first?.outputContract
+        )
+        let validator = AgentOutputValidator()
+
+        try validator.validate(
+            #"{"intent":"fix","scope":"code","clarity":"clear","risk":"high"}"#,
+            against: contract
+        )
+
+        #expect(throws: AgentOutputValidationError.invalidJSONObject) {
+            try validator.validate(
+                #"```json {"intent":"fix","scope":"code","clarity":"clear","risk":"high"} ```"#,
+                against: contract
+            )
+        }
+        #expect(throws: AgentOutputValidationError.disallowedValue(
+            key: "risk",
+            value: "critical",
+            allowedValues: ["low", "medium", "high"]
+        )) {
+            try validator.validate(
+                #"{"intent":"fix","scope":"code","clarity":"clear","risk":"critical"}"#,
+                against: contract
+            )
+        }
+    }
+
+    @MainActor
+    @Test func chatDraftExposesConfiguredInferenceAgentsWithoutPersistingDraftChanges() throws {
+        let repository = InMemoryRunRepository()
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Inference", rootPath: projectRoot.path)
+        let profileService = AgentProfileService(projectService: projectService)
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: makeRunService(repository: repository),
+            contextAttachmentService: RunContextAttachmentService(),
+            agentProfileService: profileService
+        )
+        let normalizerId = StandardAgentDefaults.inferenceRoles[0].id
+        let profileAssistantId = try #require(
+            profileService.configuration(for: nil).roles.first?.id
+        )
+
+        #expect(profileService.profiles.map(\.id) == [
+            "bug-fix",
+            "research",
+            "implementation",
+            "testing"
+        ])
+        #expect(profileService.selectedProfile?.assistants.suffix(3).map(\.role) == [
+            .inputNormalizer,
+            .decisionMaker,
+            .resultFormatter
+        ])
+        #expect(viewModel.multiAgentConfiguration.roles.suffix(3).map(\.role) == [
+            .inputNormalizer,
+            .decisionMaker,
+            .resultFormatter
+        ])
+        #expect(viewModel.multiAgentConfiguration.roles.suffix(3).allSatisfy { !$0.enabled })
+
+        viewModel.setAssistantEnabled(id: normalizerId, enabled: true)
+        viewModel.setAssistantModelOverride(id: normalizerId, modelOverride: "haiku")
+        viewModel.setAssistantEnabled(id: profileAssistantId, enabled: false)
+        viewModel.reloadAgentProfile()
+
+        let restoredDraft = viewModel.multiAgentConfiguration.roles.first {
+            $0.id == normalizerId
+        }
+        #expect(restoredDraft?.enabled == true)
+        #expect(restoredDraft?.modelOverride == "haiku")
+        #expect(viewModel.multiAgentConfiguration.roles.first {
+            $0.id == profileAssistantId
+        }?.enabled == false)
+        #expect(profileService.configuration(for: nil).roles.first {
+            $0.id == profileAssistantId
+        }?.enabled == true)
+        #expect(profileService.configuration(for: nil).roles.first {
+            $0.id == normalizerId
+        }?.enabled == false)
+    }
+
+    @MainActor
+    @Test func implementationProfileExposesInferenceAgentsWithPromptsAndContracts() throws {
+        let projectRoot = try makeTemporaryDirectory()
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        projectService.addProject(name: "Inference Settings", rootPath: projectRoot.path)
+        let service = AgentProfileService(projectService: projectService)
+
+        let profile = try #require(service.profiles.first { $0.id == "implementation" })
+        let inferenceAssistants = Array(profile.assistants.suffix(3))
+        let configuration = StandardAgentDefaults.addingInferenceRoles(
+            to: service.configuration(for: "implementation")
+        )
+        let inferenceConfigurations = Array(configuration.roles.suffix(3))
+
+        #expect(inferenceAssistants.map(\.name) == [
+            "Input Normalizer",
+            "Decision Maker",
+            "Result Formatter"
+        ])
+        #expect(inferenceAssistants.allSatisfy { !$0.enabled })
+        #expect(inferenceAssistants.map(\.promptFileName) == [
+            "inference-input-normalizer.md",
+            "inference-decision-maker.md",
+            "inference-result-formatter.md"
+        ])
+        #expect(inferenceConfigurations.allSatisfy { $0.outputContract != nil })
+        #expect(inferenceConfigurations[0].instructions.contains("Normalize the raw task"))
+        #expect(inferenceConfigurations[1].instructions.contains("Make the task-intake decision"))
+        #expect(inferenceConfigurations[2].instructions.contains("Validate and canonicalize"))
+    }
+
     @MainActor
     @Test func agentProfileServiceSeedsProjectCatalogAndLoadsMarkdownPrompts() throws {
         let projectRoot = try makeTemporaryDirectory()
@@ -2563,6 +2710,106 @@ struct WorkHarnessTests {
         #expect(startedEvent.metadata["profileId"] == "research")
         #expect(startedEvent.metadata["assistantName"] == "Codebase Researcher")
         #expect(startedEvent.metadata["promptFilePath"]?.hasSuffix("research.md") == true)
+    }
+
+    @MainActor
+    @Test func multiAgentCoordinatorValidatesAndChainsInferenceAgentOutput() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let run = Run(goal: "Triage a security-sensitive task", mode: .multiAgent)
+        repository.insert(run)
+        let outputs = [
+            #"{"intent":"fix","scope":"code","clarity":"clear","risk":"high"}"#,
+            #"{"category":"security","profile":"bug_fix","decision":"manual_review","reason_code":"security_sensitive"}"#,
+            #"{"category":"security","profile":"bug_fix","decision":"manual_review","reason_code":"security_sensitive"}"#
+        ]
+        let client = FakeACPClient(completedMessages: outputs)
+        let runtime = ACPClientRuntime(client: client)
+        let agent = Agent(role: .research, providerId: "fake.acp", model: "haiku")
+        let candidate = AgentCandidate(agent: agent, capabilities: AgentCapabilities())
+        var configuration = MultiAgentRunConfiguration(
+            profileId: nil,
+            profileName: nil,
+            roles: StandardAgentDefaults.inferenceRoles
+        )
+        for index in configuration.roles.indices {
+            configuration.roles[index].enabled = true
+        }
+        let plan = try CapabilityBasedAgentPlanner().plan(
+            goal: run.goal,
+            candidates: [candidate],
+            configuration: configuration
+        )
+
+        let result = try await MultiAgentCoordinator(
+            repository: repository,
+            recorder: recorder
+        ).execute(
+            plan: plan,
+            candidates: [candidate],
+            runtimes: [agent.id: runtime],
+            runId: run.id,
+            configuration: configuration
+        )
+
+        #expect(result.steps.map(\.output) == outputs)
+        #expect(client.tasks.count == 3)
+        #expect(client.tasks[1].prompt.contains(outputs[0]))
+        #expect(client.tasks[2].prompt.contains(outputs[1]))
+        let validationEvents = repository.run(withId: run.id)?.events.filter {
+            $0.metadata["validationKind"] == "agentOutputContract"
+        }
+        #expect(validationEvents?.filter { $0.type == .validationStarted }.count == 3)
+        #expect(validationEvents?.filter {
+            $0.type == .validationFinished && $0.metadata["status"] == "passed"
+        }.count == 3)
+    }
+
+    @MainActor
+    @Test func multiAgentCoordinatorStopsAfterInvalidInferenceOutput() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let run = Run(goal: "Triage an invalid task", mode: .multiAgent)
+        repository.insert(run)
+        let client = FakeACPClient(
+            completedMessages: [
+                #"{"intent":"fix","scope":"code","clarity":"clear","risk":"critical"}"#
+            ]
+        )
+        let runtime = ACPClientRuntime(client: client)
+        let agent = Agent(role: .research, providerId: "fake.acp", model: "haiku")
+        let candidate = AgentCandidate(agent: agent, capabilities: AgentCapabilities())
+        var roles = StandardAgentDefaults.inferenceRoles
+        for index in roles.indices {
+            roles[index].enabled = true
+        }
+        let configuration = MultiAgentRunConfiguration(roles: roles)
+        let plan = try CapabilityBasedAgentPlanner().plan(
+            goal: run.goal,
+            candidates: [candidate],
+            configuration: configuration
+        )
+
+        do {
+            _ = try await MultiAgentCoordinator(
+                repository: repository,
+                recorder: recorder
+            ).execute(
+                plan: plan,
+                candidates: [candidate],
+                runtimes: [agent.id: runtime],
+                runId: run.id,
+                configuration: configuration
+            )
+            Issue.record("Expected invalid structured output to stop the inference chain.")
+        } catch {
+            #expect(error.localizedDescription.contains("unsupported value 'critical'"))
+        }
+
+        #expect(client.tasks.count == 1)
+        #expect(repository.run(withId: run.id)?.events.contains {
+            $0.type == .validationFinished && $0.metadata["status"] == "failed"
+        } == true)
     }
 
     @MainActor
@@ -3766,6 +4013,7 @@ private final class FakeACPClient: ACPClient {
     let displayName: String
     private let sessionId = UUID()
     private let waitsForCancellation: Bool
+    private var completedMessages: [String]
     private var continuations: [AsyncThrowingStream<ACPEvent, Error>.Continuation] = []
     private(set) var configuredModelId: String?
     private(set) var configuredWorkingDirectory: String?
@@ -3775,11 +4023,13 @@ private final class FakeACPClient: ACPClient {
     init(
         id: String = "fake.acp",
         displayName: String = "Fake ACP Agent",
-        waitsForCancellation: Bool = false
+        waitsForCancellation: Bool = false,
+        completedMessages: [String] = []
     ) {
         self.id = id
         self.displayName = displayName
         self.waitsForCancellation = waitsForCancellation
+        self.completedMessages = completedMessages
     }
 
     func configure(modelId: String?) {
@@ -3810,10 +4060,13 @@ private final class FakeACPClient: ACPClient {
                 continuations.append(continuation)
                 return
             }
+            let completedMessage = completedMessages.isEmpty
+                ? "Done."
+                : completedMessages.removeFirst()
             continuation.yield(.textDelta("Patch ready."))
             continuation.yield(.fileChanged(path: "Sources/App.swift"))
-            continuation.yield(.messageCompleted("Done."))
-            continuation.yield(.finished(AgentResponse(message: "Done.", tokenUsage: TokenUsage(inputTokens: 2, outputTokens: 3), artifacts: [])))
+            continuation.yield(.messageCompleted(completedMessage))
+            continuation.yield(.finished(AgentResponse(message: completedMessage, tokenUsage: TokenUsage(inputTokens: 2, outputTokens: 3), artifacts: [])))
             continuation.finish()
         }
     }

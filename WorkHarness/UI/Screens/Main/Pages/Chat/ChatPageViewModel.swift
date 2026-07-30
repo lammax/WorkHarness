@@ -55,7 +55,9 @@ extension MainScreen {
             self.smokeTestService = smokeTestService
             self.testingWorkflowService = testingWorkflowService
             self.executionLoopService = executionLoopService
-            self.multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? .default
+            self.multiAgentConfiguration = StandardAgentDefaults.addingInferenceRoles(
+                to: agentProfileService?.configuration(for: nil) ?? .default
+            )
         }
 
         convenience init(runService: RunServiceProtocol) {
@@ -192,35 +194,24 @@ extension MainScreen {
         }
 
         func reloadAgentProfile() {
-            multiAgentConfiguration = agentProfileService?.configuration(for: nil) ?? multiAgentConfiguration
+            multiAgentConfiguration = StandardAgentDefaults.addingInferenceRoles(
+                to: agentProfileService?.configuration(for: nil) ?? .default,
+                preserving: multiAgentConfiguration
+            )
         }
 
         func setAssistantEnabled(id: UUID, enabled: Bool) {
-            do {
-                try agentProfileService?.setAssistantEnabled(
-                    id: id,
-                    enabled: enabled,
-                    profileId: multiAgentConfiguration.profileId
-                )
-                errorMessage = nil
-            } catch {
-                errorMessage = error.localizedDescription
-                reloadAgentProfile()
+            if let index = multiAgentConfiguration.roles.firstIndex(where: { $0.id == id }) {
+                multiAgentConfiguration.roles[index].enabled = enabled
             }
+            errorMessage = nil
         }
 
         func setAssistantModelOverride(id: UUID, modelOverride: String?) {
-            do {
-                try agentProfileService?.setAssistantModelOverride(
-                    id: id,
-                    modelOverride: modelOverride,
-                    profileId: multiAgentConfiguration.profileId
-                )
-                errorMessage = nil
-            } catch {
-                errorMessage = error.localizedDescription
-                reloadAgentProfile()
+            if let index = multiAgentConfiguration.roles.firstIndex(where: { $0.id == id }) {
+                multiAgentConfiguration.roles[index].modelOverride = modelOverride
             }
+            errorMessage = nil
         }
 
         func presentAttachmentImporter() {

@@ -81,6 +81,27 @@ enum AgentProfileDefaults {
                         name: "Test Runner",
                         role: .testRunner,
                         file: "implementation-test-runner.md"
+                    ),
+                    assistant(
+                        "90000000-0000-0000-0000-000000000001",
+                        name: "Input Normalizer",
+                        role: .inputNormalizer,
+                        file: "inference-input-normalizer.md",
+                        enabled: false
+                    ),
+                    assistant(
+                        "90000000-0000-0000-0000-000000000002",
+                        name: "Decision Maker",
+                        role: .decisionMaker,
+                        file: "inference-decision-maker.md",
+                        enabled: false
+                    ),
+                    assistant(
+                        "90000000-0000-0000-0000-000000000003",
+                        name: "Result Formatter",
+                        role: .resultFormatter,
+                        file: "inference-result-formatter.md",
+                        enabled: false
                     )
                 ]
             ),
@@ -238,6 +259,33 @@ enum AgentProfileDefaults {
         Run the focused tests, relevant suite, and build. Inspect failures and distinguish patch regressions from pre-existing issues.
         Return commands, results, failures, remaining risks, and final verdict.
         """,
+        "inference-input-normalizer.md": """
+        # Input Normalizer
+
+        Normalize the raw task without making the final execution decision.
+        Return exactly one compact JSON object with these string fields:
+        intent, scope, clarity, risk.
+        Use only the enum values permitted by the output contract.
+        Do not use Markdown fences, commentary, tools, or repository files.
+        """,
+        "inference-decision-maker.md": """
+        # Decision Maker
+
+        Make the task-intake decision from the previous normalized JSON.
+        Return exactly one compact JSON object with these string fields:
+        category, profile, decision, reason_code.
+        Use only the enum values permitted by the output contract.
+        Do not use Markdown fences, commentary, tools, or repository files.
+        """,
+        "inference-result-formatter.md": """
+        # Result Formatter
+
+        Validate and canonicalize the previous decision without changing its meaning.
+        Return exactly one compact JSON object with these string fields in this order:
+        category, profile, decision, reason_code.
+        Use only the enum values permitted by the output contract.
+        Do not use Markdown fences, commentary, tools, or repository files.
+        """,
         "testing-coverage-analyst.md": """
         # Coverage Analyst
 
@@ -378,13 +426,15 @@ enum AgentProfileDefaults {
         _ id: String,
         name: String,
         role: AgentRole,
-        file: String
+        file: String,
+        enabled: Bool = true
     ) -> AgentProfileAssistant {
         AgentProfileAssistant(
             id: UUID(uuidString: id)!,
             name: name,
             role: role,
-            promptFileName: file
+            promptFileName: file,
+            enabled: enabled
         )
     }
 }

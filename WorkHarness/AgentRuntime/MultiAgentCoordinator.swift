@@ -46,12 +46,14 @@ final class MultiAgentCoordinator {
 
     private let repository: RunRepository
     private let recorder: RunRecorder
+    private let outputValidator: AgentOutputValidator
     private var activeSessionsByRunId: [UUID: [UUID: ActiveSession]] = [:]
     private var cancelledRunIds: Set<UUID> = []
 
     init(repository: RunRepository, recorder: RunRecorder) {
         self.repository = repository
         self.recorder = recorder
+        self.outputValidator = AgentOutputValidator()
     }
 
     func execute(
@@ -268,6 +270,15 @@ final class MultiAgentCoordinator {
                         metadata: metadata
                     )
                 }
+                if let outputContract = roleConfiguration?.outputContract {
+                    try validateOutput(
+                        completedOutput,
+                        against: outputContract,
+                        runId: runId,
+                        stepId: step.id,
+                        metadata: metadata
+                    )
+                }
                 recorder.record(
                     runId: runId,
                     type: .agentFinished,
@@ -289,6 +300,42 @@ final class MultiAgentCoordinator {
                 await runtime.disconnect(sessionId: session.id)
                 throw error
             }
+    }
+
+    private func validateOutput(
+        _ output: String,
+        against contract: AgentOutputContract,
+        runId: UUID,
+        stepId: UUID,
+        metadata: [String: String]
+    ) throws {
+        let validationMetadata = metadata.merging([
+            "validationKind": "agentOutputContract"
+        ]) { _, new in new }
+        recorder.record(
+            runId: runId,
+            type: .validationStarted,
+            message: "Validating structured output for \(metadata["assistantName"] ?? "agent").",
+            metadata: validationMetadata
+        )
+
+        do {
+            try outputValidator.validate(output, against: contract)
+            recorder.record(
+                runId: runId,
+                type: .validationFinished,
+                message: "Structured output is valid.",
+                metadata: validationMetadata.merging(["status": "passed"]) { _, new in new }
+            )
+        } catch {
+            recorder.record(
+                runId: runId,
+                type: .validationFinished,
+                message: error.localizedDescription,
+                metadata: validationMetadata.merging(["status": "failed"]) { _, new in new }
+            )
+            throw MultiAgentCoordinatorError.stepFailed(stepId, error.localizedDescription)
+        }
     }
 
     private func ensureRunIsActive(_ runId: UUID) throws {

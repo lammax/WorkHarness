@@ -206,46 +206,48 @@ extension MainScreen {
                     .font(.caption)
                     .fontWeight(.semibold)
 
-                ForEach(Array(configuration.roles.enumerated()), id: \.element.id) { index, roleConfiguration in
-                    if index > 0 {
-                        Image(systemName: Design.arrowIcon)
-                            .foregroundStyle(.secondary)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Toggle(roleConfiguration.assistantName, isOn: Binding(
-                            get: { roleConfiguration.enabled },
-                            set: { value in
-                                configuration.roles[index].enabled = value
-                                onEnabledChanged(roleConfiguration.id, value)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Design.spacing) {
+                        ForEach(Array(configuration.roles.enumerated()), id: \.element.id) { index, roleConfiguration in
+                            if index > 0 {
+                                Image(systemName: Design.arrowIcon)
+                                    .foregroundStyle(.secondary)
                             }
-                        ))
-                        .toggleStyle(.checkbox)
-                        .font(.caption)
-                        Picker(roleConfiguration.role.label, selection: Binding(
-                            get: {
-                                guard let modelOverride = roleConfiguration.modelOverride,
-                                      modelOptions.contains(where: { $0.id == modelOverride }) else {
-                                    return ""
+                            VStack(alignment: .leading, spacing: Design.contentSpacing) {
+                                Toggle(roleConfiguration.assistantName, isOn: Binding(
+                                    get: { roleConfiguration.enabled },
+                                    set: { value in
+                                        configuration.roles[index].enabled = value
+                                        onEnabledChanged(roleConfiguration.id, value)
+                                    }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .font(.caption)
+                                Picker(roleConfiguration.role.label, selection: Binding(
+                                    get: {
+                                        guard let modelOverride = roleConfiguration.modelOverride,
+                                              modelOptions.contains(where: { $0.id == modelOverride }) else {
+                                            return ""
+                                        }
+                                        return modelOverride
+                                    },
+                                    set: { value in
+                                        let modelOverride = value.isEmpty ? nil : value
+                                        configuration.roles[index].modelOverride = modelOverride
+                                        onModelOverrideChanged(roleConfiguration.id, modelOverride)
+                                    }
+                                )) {
+                                    Text(Design.runtimeDefaultModelTitle).tag("")
+                                    ForEach(modelOptions) { model in
+                                        Text(model.title).tag(model.id)
+                                    }
                                 }
-                                return modelOverride
-                            },
-                            set: { value in
-                                let modelOverride = value.isEmpty ? nil : value
-                                configuration.roles[index].modelOverride = modelOverride
-                                onModelOverrideChanged(roleConfiguration.id, modelOverride)
-                            }
-                        )) {
-                            Text(Design.runtimeDefaultModelTitle).tag("")
-                            ForEach(modelOptions) { model in
-                                Text(model.title).tag(model.id)
+                                .labelsHidden()
+                                .frame(width: Design.modelPickerWidth)
                             }
                         }
-                        .labelsHidden()
-                        .frame(width: Design.modelPickerWidth)
                     }
                 }
-
-                Spacer()
             }
             .padding(.horizontal, Design.horizontalPadding)
             .padding(.vertical, Design.verticalPadding)
