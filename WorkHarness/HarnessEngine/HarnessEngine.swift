@@ -462,6 +462,7 @@ final class HarnessEngine {
                     agent: agent,
                     providerId: provider.id,
                     deliveryMode: .structuredMessages,
+                    providerContextWindowTokens: provider.capabilities.contextWindowTokens,
                     ragResults: ragResults
                 ).contextItems,
                 tools: agent.tools,
@@ -513,6 +514,7 @@ final class HarnessEngine {
         agent: Agent,
         providerId: String,
         deliveryMode: ContextDeliveryMode,
+        providerContextWindowTokens: Int? = nil,
         ragResults: [RAGCitation] = []
     ) -> ContextSnapshot {
         let currentProject = projectService?.currentProject
@@ -531,27 +533,44 @@ final class HarnessEngine {
             memoryItems: memoryItems,
             ragResults: ragResults,
             tokenBudget: defaultTokenBudget(for: agent),
+            providerContextWindowTokens: providerContextWindowTokens,
             safetyMode: safetyMode,
             deliveryMode: deliveryMode
         ))
+
+        let contextSourceCount = snapshot.sections.flatMap(\.sources).count +
+            (snapshot.objectiveSource == nil ? 0 : 1)
+        var metadata = [
+            "contextSnapshotId": snapshot.id.uuidString,
+            "providerId": providerId,
+            "agentId": agent.id.uuidString,
+            "tokenEstimate": "\(snapshot.tokenCount)",
+            "contextItemCount": "\(snapshot.contextItems.count)",
+            "contextSectionCount": "\(snapshot.sections.count)",
+            "contextSourceCount": "\(contextSourceCount)",
+            "contextSectionOrder": snapshot.sections.map(\.kind.rawValue).joined(separator: ","),
+            "attachmentCount": "\(contextAttachments.count)",
+            "memoryItemCount": "\(memoryItems.count)",
+            "ragResultCount": "\(snapshot.includedRAGResults.count)",
+            "summaryCount": "\(snapshot.includedSummaries.count)",
+            "deliveryMode": snapshot.deliveryMode.rawValue,
+            "safetyMode": safetyMode.rawValue
+        ]
+        if let configuredMaxInputTokens = snapshot.windowConstraint.configuredMaxInputTokens {
+            metadata["configuredMaxInputTokens"] = "\(configuredMaxInputTokens)"
+        }
+        if let reservedOutputTokens = snapshot.windowConstraint.reservedOutputTokens {
+            metadata["reservedOutputTokens"] = "\(reservedOutputTokens)"
+        }
+        if let providerContextWindowTokens = snapshot.windowConstraint.providerContextWindowTokens {
+            metadata["providerContextWindowTokens"] = "\(providerContextWindowTokens)"
+        }
 
         recorder.record(
             runId: runId,
             type: .contextBuilt,
             message: "Context prepared: \(snapshot.contextItems.count) item(s), estimated \(snapshot.tokenCount) tokens.",
-            metadata: [
-                "contextSnapshotId": snapshot.id.uuidString,
-                "providerId": providerId,
-                "agentId": agent.id.uuidString,
-                "tokenEstimate": "\(snapshot.tokenCount)",
-                "contextItemCount": "\(snapshot.contextItems.count)",
-                "attachmentCount": "\(contextAttachments.count)",
-                "memoryItemCount": "\(memoryItems.count)",
-                "ragResultCount": "\(snapshot.includedRAGResults.count)",
-                "summaryCount": "\(snapshot.includedSummaries.count)",
-                "deliveryMode": snapshot.deliveryMode.rawValue,
-                "safetyMode": safetyMode.rawValue
-            ]
+            metadata: metadata
         )
 
         return snapshot

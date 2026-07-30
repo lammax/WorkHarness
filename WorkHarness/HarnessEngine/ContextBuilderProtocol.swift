@@ -26,6 +26,7 @@ struct ContextBuildInput: Equatable {
     var memoryItems: [String]
     var ragResults: [RAGCitation]
     var tokenBudget: TokenBudget?
+    var providerContextWindowTokens: Int?
     var safetyMode: SafetyMode
     var deliveryMode: ContextDeliveryMode
 
@@ -43,6 +44,7 @@ struct ContextBuildInput: Equatable {
         memoryItems: [String] = [],
         ragResults: [RAGCitation] = [],
         tokenBudget: TokenBudget? = nil,
+        providerContextWindowTokens: Int? = nil,
         safetyMode: SafetyMode = AppSettingsDefaults.defaultSafetyMode,
         deliveryMode: ContextDeliveryMode = .unsupported
     ) {
@@ -59,6 +61,7 @@ struct ContextBuildInput: Equatable {
         self.memoryItems = memoryItems
         self.ragResults = ragResults
         self.tokenBudget = tokenBudget
+        self.providerContextWindowTokens = providerContextWindowTokens
         self.safetyMode = safetyMode
         self.deliveryMode = deliveryMode
     }

@@ -17,57 +17,55 @@ final class ContextBuilder: ContextBuilderProtocol {
     func buildSnapshot(from input: ContextBuildInput) -> ContextSnapshot {
         let project = input.currentProject
         let rootPath = input.rootPath ?? project?.rootPath
-        var contextItems: [String] = []
+        var sections: [ContextSection] = []
         var includedSummaries: [String] = []
 
+        func append(_ section: ContextSection?) {
+            guard var section else { return }
+            section.order = sections.count
+            sections.append(section)
+        }
+
         if let project {
-            contextItems.append("Current project: \(project.name)")
+            append(projectIdentitySection(for: project))
         }
 
         if let rootPath, !rootPath.isEmpty {
-            contextItems.append("Project root: \(rootPath)")
+            append(projectRootSection(path: rootPath, projectId: project?.id))
         }
 
         if input.safetyMode == .autoInsideSandbox {
-            contextItems.append(Self.autoApprovalInstruction)
+            append(safetyInstructionSection(mode: input.safetyMode))
         }
 
         if let recentRunSummary = input.recentRunSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
            !recentRunSummary.isEmpty {
-            contextItems.append("Recent run summary: \(recentRunSummary)")
+            append(recentRunSummarySection(summary: recentRunSummary, runId: input.runId))
             includedSummaries.append(recentRunSummary)
         }
 
         if let contextFoldSummary = input.contextFoldSummary {
-            contextItems.append("Folded context:\n\(contextFoldSummary.renderedText)")
+            append(foldedContextSection(summary: contextFoldSummary, runId: input.runId))
             includedSummaries.append(contextFoldSummary.renderedText)
         }
 
         if !input.selectedFiles.isEmpty {
-            contextItems.append("Selected files: \(input.selectedFiles.joined(separator: ", "))")
+            append(selectedFilesSection(paths: input.selectedFiles))
         }
 
         for attachment in input.contextAttachments {
-            contextItems.append("""
-            Attached read-only file "\(attachment.name)" (the original external path is intentionally unavailable):
-            --- BEGIN ATTACHMENT \(attachment.name) ---
-            \(attachment.content)
-            --- END ATTACHMENT \(attachment.name) ---
-            """)
+            append(attachmentSection(for: attachment))
         }
 
         if !input.memoryItems.isEmpty {
-            contextItems.append("Project memory:\n\(input.memoryItems.joined(separator: "\n"))")
+            append(projectMemorySection(items: input.memoryItems, projectId: project?.id))
         }
 
         if !input.ragResults.isEmpty {
-            let results = input.ragResults.map { citation in
-                let quote = citation.quote.map { "\nQuote: \($0)" } ?? ""
-                return "\(citation.displayText)\(quote)"
-            }
-            contextItems.append("RAG results:\n\(results.joined(separator: "\n"))")
+            append(retrievalResultsSection(citations: input.ragResults))
         }
 
+        let contextItems = sections.map(\.content)
         let summary = contextItems.isEmpty
             ? "No additional context was included."
             : contextItems.joined(separator: "\n")
@@ -77,6 +75,10 @@ final class ContextBuilder: ContextBuilderProtocol {
             agentId: input.agent.id,
             providerId: input.providerId,
             userMessage: input.userMessage,
+            objectiveSource: makeObjectiveSource(
+                content: input.userMessage,
+                runId: input.runId
+            ),
             projectId: project?.id,
             projectName: project?.name,
             rootPath: rootPath,
@@ -86,14 +88,23 @@ final class ContextBuilder: ContextBuilderProtocol {
             includedMemories: input.memoryItems,
             includedRAGResults: input.ragResults,
             includedSummaries: includedSummaries,
+            sections: sections,
+            omissions: [],
+            windowConstraint: ContextWindowConstraint(
+                configuredMaxInputTokens: input.tokenBudget?.maxInputTokens,
+                reservedOutputTokens: input.tokenBudget?.maxOutputTokens,
+                providerContextWindowTokens: input.providerContextWindowTokens
+            ),
             deliveryMode: input.deliveryMode,
             tokenCount: estimateTokenCount(for: contextItems)
         )
     }
 
-    private func estimateTokenCount(for contextItems: [String]) -> Int {
-        contextItems.reduce(0) { partialResult, item in
-            partialResult + max(1, item.split(whereSeparator: \.isWhitespace).count)
-        }
+    func estimateTokenCount(for contextItems: [String]) -> Int {
+        contextItems.reduce(0) { $0 + estimateTokenCount(for: $1) }
+    }
+
+    func estimateTokenCount(for content: String) -> Int {
+        max(1, content.split(whereSeparator: \.isWhitespace).count)
     }
 }

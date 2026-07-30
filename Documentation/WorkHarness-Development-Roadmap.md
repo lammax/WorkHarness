@@ -324,9 +324,9 @@ Continue product development in this order:
      Claude CLI, and the structured Local LLM boundary;
    - [x] replace raw `contextBuilt` content with bounded metadata and record a
      typed delivery mode;
-   - classify selected context as required-now, retrievable, persistent or
+   - [x] classify selected context as required-now, retrievable, persistent or
      discardable;
-   - add typed provenance, priority, freshness, estimated token cost and
+   - [x] add typed provenance, priority, freshness, estimated token cost and
      retention metadata where the audit shows it is needed;
    - make section budgets, overflow priority, omissions and truncation visible
      through `ContextSnapshot` metadata and append-only RunEvents;

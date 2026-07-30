@@ -570,6 +570,46 @@ Verification:
   default parallel UI run reproduced an existing macOS activation conflict
   (`Running Background`) and is not caused by the context-delivery paths.
 
+## Step 2 implementation result
+
+Completed on 31.07.2026:
+
+- `ContextSnapshot` is now the minimal provider-neutral context contract behind
+  the existing `ContextBuilderProtocol` boundary; no parallel builder or
+  provider DTO was introduced.
+- Context is represented as deterministic ordered `ContextSection` values.
+  The legacy `contextItems` delivered to providers/runtimes are derived from
+  those sections, preserving the existing model-visible text and order.
+- Every selected source records a typed source kind, purpose, classification,
+  priority, freshness, estimated token count, retention policy, and sensitive
+  data flag.
+- The snapshot records configured input tokens, reserved output tokens, and
+  the provider context-window limit when the provider reports one.
+- Typed omission models exist for the next budget slice, but no source is
+  omitted or truncated in Phase 2.
+- `contextBuilt` exposes safe section/source counts, section order, and known
+  window constraints without storing source content or sensitive source IDs.
+- Existing encoded `ContextSnapshot` values remain decodable when the new
+  contract fields are absent.
+
+Deliberately unchanged:
+
+- input budgets and provider limits are recorded but not enforced;
+- source selection remains identical, including eager project memory and
+  attachment inclusion;
+- no new retrieval, compaction, tool-result, persistence, or UI behavior was
+  added;
+- runtime descriptors do not yet expose provider context-window limits.
+
+Verification:
+
+- 7 focused contract and delivery tests passed.
+- The complete serial test plan passed: 179 passed and 1 opt-in live
+  Claude/MCP test remained skipped.
+- The successful provider trace retains the same user message and ordered
+  context text; only provider-neutral metadata was added before adapter
+  encoding.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:

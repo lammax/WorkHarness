@@ -151,9 +151,13 @@ struct ContextDeliveryTests {
         #expect(!event.metadata.values.contains { $0.contains(marker) })
         #expect(event.metadata["deliveryMode"] == ContextDeliveryMode.structuredMessages.rawValue)
         #expect(event.metadata["contextItemCount"] == "\(request.context.count)")
+        #expect(event.metadata["contextSectionCount"] == "\(request.context.count)")
+        #expect(event.metadata["contextSourceCount"] == "2")
         #expect(event.metadata["attachmentCount"] == "1")
+        #expect(event.metadata["providerContextWindowTokens"] == "16000")
     }
 
+    @MainActor
     private func makeSnapshot(marker: String) -> ContextSnapshot {
         ContextSnapshot(
             runId: UUID(),
