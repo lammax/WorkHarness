@@ -665,6 +665,96 @@ Finding status after this slice:
   resolved for `contextBuilt`; exact token usage and snapshot resolvability
   remain open.
 
+## Step 4 implementation result
+
+Completed on 31.07.2026:
+
+- `ToolService` applies one typed retention policy before a result reaches the
+  agent-facing MCP gateway or `RunEvent`.
+- Results of at most 12,000 characters remain inline. Larger results are
+  redacted, written once to a `tool-result` artifact under WorkHarness
+  Application Support, and replaced by a 2,000-character factual preview plus
+  an artifact reference.
+- `ToolResultRetention` records storage disposition, original and retained
+  character counts, redaction state, artifact ID, and explicit retention.
+  Legacy encoded `ToolResult` values decode as inline request-scoped results.
+- Every WorkHarness MCP tool advertises `_output_offset` and `_output_limit`.
+  These reserved controls are removed before downstream MCP invocation and
+  produce deterministic character windows capped by the inline limit.
+- Tool errors are redacted and limited to 2,000 characters before both
+  `toolCallFailed` persistence and caller exposure.
+- Agent-facing references use artifact IDs when storage is outside the current
+  workspace, and `artifactCreated` metadata no longer copies host filesystem
+  paths into RunEvents.
+- Multi-agent execution now gives the next role only the preceding role's
+  bounded handoff. Outputs over 12,000 characters become
+  `multi-agent-handoff` artifacts; only the first 4,000 streamed characters are
+  retained as delta events, followed by one explicit bound marker.
+- Full results are no longer copied into a second full `assistantMessage` or
+  `toolResult` event when artifact fallback is active.
+- Artifact storage is behind `RunArtifactStoreProtocol` and is shared through
+  DI by tool retention and multi-agent handoff policy.
+
+Retention rules:
+
+- small successful tool output: inline for the request and bounded RunEvent;
+- large successful tool output: persistent artifact until explicit cleanup,
+  with only a preview/reference in active context and RunEvent;
+- tool error: bounded request/event text; overflow is discarded after the
+  failure is reported;
+- large multi-agent output: persistent artifact until explicit cleanup;
+  bounded handoff lives only through subsequent execution state and events;
+- existing MCP-provided artifacts remain unchanged and addressable.
+
+Measured deterministic before/after traces:
+
+- the large-tool fixture produces 672 raw characters. Previously all 672
+  characters would reach both the caller and `toolResult.message`; now neither
+  surface contains the full payload, the 651-character redacted source exists
+  once in a resolvable artifact, and the event records typed counts and
+  disposition;
+- the multi-agent fixture produces 750 characters. The next role and
+  `assistantMessage` receive only the bounded reference/preview, the tail marker
+  is absent from active handoff context, and the complete output is resolvable
+  from the artifact;
+- no additional provider inference is introduced, so provider tokens and cost
+  are unchanged; the policy adds local redaction/file-write latency only for
+  oversized results. Exact local latency was not promoted to product telemetry
+  in this slice.
+
+Verification:
+
+- 5 focused retention tests cover large results, repeated calls, deterministic
+  windows, bounded/redacted failures, artifact resolvability, and legacy
+  decoding.
+- The coordinator integration test covers bounded next-role context, clearing
+  the consumed raw handoff, stream-event limits, and artifact resolution.
+- The MCP gateway regression verifies pagination controls are advertised,
+  applied, and not forwarded as downstream tool arguments.
+- The complete serial test plan passed: 193 passed and 1 opt-in live
+  Claude/MCP test remained skipped (194 total, 0 failed).
+
+Deliberately unchanged:
+
+- Cursor and Claude may retain runtime-managed session history outside the
+  WorkHarness context contract; their current adapters expose no measurable
+  history window to compact safely.
+- Artifact content is resolvable by `RunArtifact` path and the Runs UI, but
+  there is no path-free artifact-content tool for agents yet.
+- Persistent artifacts do not yet have automatic deletion tied to Run removal;
+  the metadata therefore says `persistent-until-explicit-cleanup`.
+- downstream MCP servers may still generate a large response internally;
+  WorkHarness bounds it immediately at its own agent/event boundary.
+- no semantic summarization model or new memory subsystem was introduced.
+
+Finding status after this slice:
+
+- P1.6 is resolved at the WorkHarness MCP gateway and RunEvent boundary.
+- P1.5 is mitigated for previous-step handoff and persisted stream growth;
+  per-role prompt/token budgeting remains a later slice.
+- P2 tool-result retention, size, redaction, and artifact-reference metadata
+  are now observable without persisting the original raw payload in events.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:

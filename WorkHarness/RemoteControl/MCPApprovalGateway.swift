@@ -85,19 +85,21 @@ final class MCPApprovalGateway: MCPApprovalGatewayProtocol {
             return response(id: request.id, errorCode: -32602, message: "Tool name is required.")
         }
 
-        let arguments: [String: String]
+        var arguments: [String: String]
         if case .object(let rawArguments) = parameters["arguments"] {
             arguments = rawArguments.mapValues(\.stringValue)
         } else {
             arguments = [:]
         }
+        let outputWindow = outputWindow(from: &arguments)
 
         do {
             let result = try await toolService.executeAwaitingApproval(.init(
                 runId: runId,
                 toolId: toolName,
                 arguments: arguments,
-                projectRootPath: projectRootPath
+                projectRootPath: projectRootPath,
+                outputWindow: outputWindow
             ))
             return response(id: request.id, result: .object([
                 "content": .array([
@@ -122,7 +124,7 @@ final class MCPApprovalGateway: MCPApprovalGatewayProtocol {
     }
 
     private func toolJSON(_ tool: ToolDefinition) -> JSONValue {
-        let properties = Dictionary(uniqueKeysWithValues: tool.inputSchema.map { field in
+        var properties = Dictionary(uniqueKeysWithValues: tool.inputSchema.map { field in
             (
                 field.name,
                 JSONValue.object([
@@ -131,6 +133,14 @@ final class MCPApprovalGateway: MCPApprovalGatewayProtocol {
                 ])
             )
         })
+        properties["_output_offset"] = .object([
+            "type": .string("string"),
+            "description": .string("Optional zero-based character offset for bounded output retrieval.")
+        ])
+        properties["_output_limit"] = .object([
+            "type": .string("string"),
+            "description": .string("Optional maximum characters to return; capped by WorkHarness.")
+        ])
         let required = tool.inputSchema
             .filter(\.required)
             .map { JSONValue.string($0.name) }
@@ -144,6 +154,13 @@ final class MCPApprovalGateway: MCPApprovalGatewayProtocol {
                 "required": .array(required)
             ])
         ])
+    }
+
+    private func outputWindow(from arguments: inout [String: String]) -> ToolOutputWindow? {
+        let rawOffset = arguments.removeValue(forKey: "_output_offset")
+        let rawLimit = arguments.removeValue(forKey: "_output_limit")
+        guard let rawLimit, let limit = Int(rawLimit), limit > 0 else { return nil }
+        return ToolOutputWindow(offset: Int(rawOffset ?? "") ?? 0, limit: limit)
     }
 
     private func response(id: JSONValue?, result: JSONValue) -> MCPGatewayHTTPResponse {

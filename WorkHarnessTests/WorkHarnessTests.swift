@@ -754,7 +754,8 @@ struct WorkHarnessTests {
             .artifactCreated,
             .toolResult
         ])
-        #expect(storedRun.events[3].metadata["path"] == artifact.path)
+        #expect(storedRun.events[3].metadata["path"] == nil)
+        #expect(storedRun.events[3].metadata["hasPath"] == "true")
     }
 
     @MainActor
@@ -933,9 +934,13 @@ struct WorkHarnessTests {
         let tools = try #require(listResult["tools"] as? [[String: Any]])
 
         #expect(tools.map { $0["name"] as? String } == ["file.read"])
+        let inputSchema = try #require(tools.first?["inputSchema"] as? [String: Any])
+        let properties = try #require(inputSchema["properties"] as? [String: Any])
+        #expect(properties["_output_offset"] != nil)
+        #expect(properties["_output_limit"] != nil)
 
         let callResponse = await gateway.handle(
-            requestBody: Data(#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"file.read","arguments":{"path":"README.md"}}}"#.utf8),
+            requestBody: Data(#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"file.read","arguments":{"path":"README.md","_output_offset":"1","_output_limit":"3"}}}"#.utf8),
             runId: run.id,
             projectRootPath: "/tmp/project"
         )
@@ -944,8 +949,10 @@ struct WorkHarnessTests {
         let content = try #require(callResult["content"] as? [[String: Any]])
 
         #expect(callResult["isError"] as? Bool == false)
-        #expect(content.first?["text"] as? String == "contents")
+        #expect((content.first?["text"] as? String)?.hasPrefix("ont") == true)
+        #expect((content.first?["text"] as? String)?.contains("Next _output_offset: 4") == true)
         #expect(mcpClient.invocations.first?.projectRootPath == "/tmp/project")
+        #expect(mcpClient.invocations.first?.arguments == ["path": "README.md"])
     }
 
     @MainActor
@@ -2864,6 +2871,71 @@ struct WorkHarnessTests {
         #expect(validationEvents?.filter {
             $0.type == .validationFinished && $0.metadata["status"] == "passed"
         }.count == 3)
+    }
+
+    @MainActor
+    @Test func multiAgentCoordinatorReplacesConsumedLargeOutputWithResolvableBoundedHandoff() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let run = Run(goal: "Bound the handoff", mode: .multiAgent)
+        repository.insert(run)
+        let marker = "TAIL-MARKER-MUST-STAY-EXTERNAL"
+        let largeOutput = String(repeating: "analysis ", count: 80) + marker
+        let client = FakeACPClient(completedMessages: [largeOutput, "reviewed"])
+        let runtime = ACPClientRuntime(client: client)
+        let agent = Agent(role: .coder, providerId: "fake.acp", model: "fake")
+        let candidate = AgentCandidate(agent: agent, capabilities: AgentCapabilities())
+        let first = AgentPlanStep(role: .coder, agentId: agent.id, requiredCapabilities: [])
+        let second = AgentPlanStep(
+            role: .reviewer,
+            agentId: agent.id,
+            requiredCapabilities: [],
+            dependsOn: [first.id]
+        )
+        let coordinator = MultiAgentCoordinator(
+            repository: repository,
+            recorder: recorder,
+            handoffPolicy: MultiAgentHandoffPolicy(
+                artifactStore: FileRunArtifactStore(fallbackRoot: root),
+                configuration: MultiAgentHandoffConfiguration(
+                    maxInlineCharacters: 120,
+                    previewCharacters: 40,
+                    maxPersistedStreamCharacters: 30
+                )
+            )
+        )
+
+        let result = try await coordinator.execute(
+            plan: AgentExecutionPlan(goal: run.goal, steps: [first, second]),
+            candidates: [candidate],
+            runtimes: [agent.id: runtime],
+            runId: run.id,
+            workingDirectory: root.path,
+            configuration: .default
+        )
+
+        #expect(result.steps[0].output.count < largeOutput.count)
+        #expect(!result.steps[0].output.contains(marker))
+        #expect(client.tasks[1].prompt.contains("Full redacted output: .workharness/artifacts/"))
+        #expect(!client.tasks[1].prompt.contains(marker))
+        let artifact = try #require(
+            repository.run(withId: run.id)?.artifacts.first { $0.kind == "multi-agent-handoff" }
+        )
+        let path = try #require(artifact.path)
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == largeOutput)
+        let assistantEvent = try #require(
+            repository.run(withId: run.id)?.events.first {
+                $0.type == .assistantMessage && $0.metadata["planStepId"] == first.id.uuidString
+            }
+        )
+        #expect(assistantEvent.metadata["handoffStorage"] == "artifactReference")
+        #expect(!assistantEvent.message.contains(marker))
+        let persistedDeltas = repository.run(withId: run.id)?.events.filter {
+            $0.type == .providerStreamDelta && $0.metadata["planStepId"] == first.id.uuidString
+        } ?? []
+        #expect(persistedDeltas.reduce(0) { $0 + $1.message.count } < largeOutput.count)
     }
 
     @MainActor

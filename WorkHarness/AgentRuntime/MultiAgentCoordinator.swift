@@ -47,6 +47,7 @@ final class MultiAgentCoordinator {
     private let repository: RunRepository
     private let recorder: RunRecorder
     private let outputValidator: AgentOutputValidator
+    private let handoffPolicy: MultiAgentHandoffPolicy
     private var activeSessionsByRunId: [UUID: [UUID: ActiveSession]] = [:]
     private var cancelledRunIds: Set<UUID> = []
 
@@ -54,6 +55,18 @@ final class MultiAgentCoordinator {
         self.repository = repository
         self.recorder = recorder
         self.outputValidator = AgentOutputValidator()
+        self.handoffPolicy = MultiAgentHandoffPolicy()
+    }
+
+    init(
+        repository: RunRepository,
+        recorder: RunRecorder,
+        handoffPolicy: MultiAgentHandoffPolicy
+    ) {
+        self.repository = repository
+        self.recorder = recorder
+        self.outputValidator = AgentOutputValidator()
+        self.handoffPolicy = handoffPolicy
     }
 
     func execute(
@@ -209,7 +222,8 @@ final class MultiAgentCoordinator {
             )
 
             var output = ""
-            var didRecordCompletedMessage = false
+            var persistedStreamCharacterCount = 0
+            var didRecordStreamLimit = false
             do {
                 let execution = try await runtime.run(
                     task: AgentTask(
@@ -233,11 +247,33 @@ final class MultiAgentCoordinator {
                     switch event {
                     case .textDelta(let delta):
                         output += delta
-                        recorder.record(runId: runId, type: .providerStreamDelta, message: delta, metadata: metadata)
+                        let safeDelta = SensitiveTextRedactor.redact(delta)
+                        let remaining = max(
+                            0,
+                            handoffPolicy.configuration.maxPersistedStreamCharacters
+                                - persistedStreamCharacterCount
+                        )
+                        if remaining > 0 {
+                            let boundedDelta = String(safeDelta.prefix(remaining))
+                            persistedStreamCharacterCount += boundedDelta.count
+                            recorder.record(
+                                runId: runId,
+                                type: .providerStreamDelta,
+                                message: boundedDelta,
+                                metadata: metadata
+                            )
+                        }
+                        if safeDelta.count > remaining, !didRecordStreamLimit {
+                            didRecordStreamLimit = true
+                            recorder.record(
+                                runId: runId,
+                                type: .providerStreamDelta,
+                                message: "[Further stream output retained in the final handoff artifact.]",
+                                metadata: metadata.merging(["contentBounded": "true"]) { _, new in new }
+                            )
+                        }
                     case .messageCompleted(let message):
                         output = message
-                        didRecordCompletedMessage = true
-                        recorder.record(runId: runId, type: .assistantMessage, message: message, metadata: metadata)
                     case .toolCallRequested(let name, let input):
                         recorder.record(runId: runId, type: .toolCallRequested, message: name, metadata: metadata.merging(["input": input]) { _, new in new })
                     case .fileChanged(let path):
@@ -263,14 +299,6 @@ final class MultiAgentCoordinator {
 
                 try ensureRunIsActive(runId)
                 let completedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !didRecordCompletedMessage, !completedOutput.isEmpty {
-                    recorder.record(
-                        runId: runId,
-                        type: .assistantMessage,
-                        message: completedOutput,
-                        metadata: metadata
-                    )
-                }
                 if let outputContract = roleConfiguration?.outputContract {
                     try validateOutput(
                         completedOutput,
@@ -278,6 +306,34 @@ final class MultiAgentCoordinator {
                         runId: runId,
                         stepId: step.id,
                         metadata: metadata
+                    )
+                }
+                let handoff = try handoffPolicy.prepare(
+                    output: completedOutput,
+                    runId: runId,
+                    stepId: step.id,
+                    assistantName: roleConfiguration?.assistantName ?? step.role.label,
+                    projectRootPath: workingDirectory
+                )
+                if let artifact = handoff.artifact {
+                    recorder.recordArtifact(runId: runId, artifact: artifact)
+                    recorder.record(
+                        runId: runId,
+                        type: .artifactCreated,
+                        message: artifact.name,
+                        metadata: [
+                            "artifactId": artifact.id.uuidString,
+                            "kind": artifact.kind,
+                            "sourcePlanStepId": step.id.uuidString
+                        ]
+                    )
+                }
+                if !handoff.content.isEmpty {
+                    recorder.record(
+                        runId: runId,
+                        type: .assistantMessage,
+                        message: handoff.content,
+                        metadata: metadata.merging(handoff.metadata) { _, new in new }
                     )
                 }
                 recorder.record(
@@ -290,7 +346,7 @@ final class MultiAgentCoordinator {
                     stepId: step.id,
                     role: step.role,
                     agentId: candidate.agent.id,
-                    output: output,
+                    output: handoff.content,
                     sessionId: session.id
                 )
                 activeSessionsByRunId[runId]?.removeValue(forKey: step.id)

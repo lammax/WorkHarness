@@ -13,6 +13,7 @@ final class ToolService: ToolServiceProtocol {
     private let mcpClient: MCPToolClientProtocol
     private let approvalService: ApprovalServiceProtocol
     private let recorder: RunRecorder
+    private let resultProcessor: ToolResultRetentionProcessor
 
     init(
         registry: ToolRegistry,
@@ -24,6 +25,21 @@ final class ToolService: ToolServiceProtocol {
         self.mcpClient = mcpClient
         self.approvalService = approvalService
         self.recorder = recorder
+        self.resultProcessor = ToolResultRetentionProcessor()
+    }
+
+    init(
+        registry: ToolRegistry,
+        mcpClient: MCPToolClientProtocol,
+        approvalService: ApprovalServiceProtocol,
+        recorder: RunRecorder,
+        resultProcessor: ToolResultRetentionProcessor
+    ) {
+        self.registry = registry
+        self.mcpClient = mcpClient
+        self.approvalService = approvalService
+        self.recorder = recorder
+        self.resultProcessor = resultProcessor
     }
 
     var availableTools: [ToolDefinition] {
@@ -117,11 +133,12 @@ final class ToolService: ToolServiceProtocol {
         recorder.record(runId: request.runId, type: .toolCallStarted, message: tool.displayName, metadata: metadata)
 
         do {
-            let result = try await mcpClient.invoke(.init(
+            let rawResult = try await mcpClient.invoke(.init(
                 toolId: tool.id,
                 arguments: request.arguments,
                 projectRootPath: request.projectRootPath
             ))
+            let result = try resultProcessor.process(rawResult, request: request)
             recorder.record(
                 runId: request.runId,
                 type: .toolCallFinished,
@@ -137,7 +154,7 @@ final class ToolService: ToolServiceProtocol {
                     metadata: [
                         "artifactId": artifact.id.uuidString,
                         "kind": artifact.kind,
-                        "path": artifact.path ?? ""
+                        "hasPath": "\(artifact.path != nil)"
                     ]
                 )
             }
@@ -149,13 +166,14 @@ final class ToolService: ToolServiceProtocol {
             )
             return result
         } catch {
+            let message = resultProcessor.boundedErrorMessage(error, request: request)
             recorder.record(
                 runId: request.runId,
                 type: .toolCallFailed,
-                message: error.localizedDescription,
+                message: message,
                 metadata: metadata
             )
-            throw error
+            throw ToolServiceError.executionFailed(message)
         }
     }
 
@@ -165,5 +183,16 @@ final class ToolService: ToolServiceProtocol {
             "toolId": tool.id,
             "permission": tool.permission.rawValue
         ]
+    }
+}
+
+enum ToolServiceError: LocalizedError, Equatable {
+    case executionFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .executionFailed(let message):
+            message
+        }
     }
 }

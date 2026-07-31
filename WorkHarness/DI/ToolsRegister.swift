@@ -37,7 +37,10 @@ extension Container {
                 registry: resolver.resolve(ToolRegistry.self)!,
                 mcpClient: resolver.resolve(MCPToolClientProtocol.self)!,
                 approvalService: resolver.resolve(ApprovalServiceProtocol.self)!,
-                recorder: resolver.resolve(RunRecorder.self)!
+                recorder: resolver.resolve(RunRecorder.self)!,
+                resultProcessor: ToolResultRetentionProcessor(
+                    artifactStore: resolver.resolve(RunArtifactStoreProtocol.self)!
+                )
             )
         }.inObjectScope(.container)
 

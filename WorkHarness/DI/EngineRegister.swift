@@ -9,6 +9,10 @@ import Swinject
 
 extension Container {
     func registerEngine() {
+        register(RunArtifactStoreProtocol.self) { _ in
+            FileRunArtifactStore()
+        }.inObjectScope(.container)
+
         register(ContextTokenEstimatorProtocol.self) { _ in
             ApproximateContextTokenEstimator()
         }.inObjectScope(.container)
@@ -30,7 +34,10 @@ extension Container {
         register(MultiAgentCoordinator.self) { resolver in
             MultiAgentCoordinator(
                 repository: resolver.resolve(RunRepository.self)!,
-                recorder: resolver.resolve(RunRecorder.self)!
+                recorder: resolver.resolve(RunRecorder.self)!,
+                handoffPolicy: MultiAgentHandoffPolicy(
+                    artifactStore: resolver.resolve(RunArtifactStoreProtocol.self)!
+                )
             )
         }.inObjectScope(.container)
 

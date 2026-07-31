@@ -65,6 +65,7 @@ struct ToolExecutionRequest: Equatable {
     var toolId: String
     var arguments: [String: String]
     var projectRootPath: String?
+    var outputWindow: ToolOutputWindow?
     var createdAt: Date
 
     init(
@@ -73,6 +74,7 @@ struct ToolExecutionRequest: Equatable {
         toolId: String,
         arguments: [String: String] = [:],
         projectRootPath: String? = nil,
+        outputWindow: ToolOutputWindow? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -80,7 +82,18 @@ struct ToolExecutionRequest: Equatable {
         self.toolId = toolId
         self.arguments = arguments
         self.projectRootPath = projectRootPath
+        self.outputWindow = outputWindow
         self.createdAt = createdAt
+    }
+}
+
+struct ToolOutputWindow: Codable, Equatable {
+    var offset: Int
+    var limit: Int
+
+    init(offset: Int = 0, limit: Int) {
+        self.offset = max(0, offset)
+        self.limit = max(1, limit)
     }
 }
 
@@ -90,25 +103,61 @@ enum ToolExecutionStatus: String, Codable, Equatable {
     case approvalRequired
 }
 
+enum ToolResultStorage: String, Codable, Equatable {
+    case inline
+    case artifactReference
+}
+
+struct ToolResultRetention: Codable, Equatable {
+    var storage: ToolResultStorage
+    var originalCharacterCount: Int
+    var retainedCharacterCount: Int
+    var wasRedacted: Bool
+    var artifactId: UUID?
+    var policy: String
+
+    init(
+        storage: ToolResultStorage = .inline,
+        originalCharacterCount: Int = 0,
+        retainedCharacterCount: Int = 0,
+        wasRedacted: Bool = false,
+        artifactId: UUID? = nil,
+        policy: String = "request"
+    ) {
+        self.storage = storage
+        self.originalCharacterCount = originalCharacterCount
+        self.retainedCharacterCount = retainedCharacterCount
+        self.wasRedacted = wasRedacted
+        self.artifactId = artifactId
+        self.policy = policy
+    }
+}
+
 struct ToolResult: Codable, Equatable {
     var toolId: String
     var status: ToolExecutionStatus
     var output: String
     var metadata: [String: String]
     var artifacts: [RunArtifact]
+    var retention: ToolResultRetention
 
     init(
         toolId: String,
         status: ToolExecutionStatus,
         output: String,
         metadata: [String: String] = [:],
-        artifacts: [RunArtifact] = []
+        artifacts: [RunArtifact] = [],
+        retention: ToolResultRetention? = nil
     ) {
         self.toolId = toolId
         self.status = status
         self.output = output
         self.metadata = metadata
         self.artifacts = artifacts
+        self.retention = retention ?? ToolResultRetention(
+            originalCharacterCount: output.count,
+            retainedCharacterCount: output.count
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -117,6 +166,7 @@ struct ToolResult: Codable, Equatable {
         case output
         case metadata
         case artifacts
+        case retention
     }
 
     init(from decoder: Decoder) throws {
@@ -126,6 +176,11 @@ struct ToolResult: Codable, Equatable {
         output = try container.decode(String.self, forKey: .output)
         metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
         artifacts = try container.decodeIfPresent([RunArtifact].self, forKey: .artifacts) ?? []
+        retention = try container.decodeIfPresent(ToolResultRetention.self, forKey: .retention)
+            ?? ToolResultRetention(
+                originalCharacterCount: output.count,
+                retainedCharacterCount: output.count
+            )
     }
 }
 
