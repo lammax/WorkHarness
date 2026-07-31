@@ -104,6 +104,7 @@ enum RunMode: String, Codable, CaseIterable, Equatable {
     case reactToolLoop
     case codingLoop
     case multiAgent
+    case inferenceEvaluation
     case remoteTask
 
     var label: String {
@@ -112,6 +113,7 @@ enum RunMode: String, Codable, CaseIterable, Equatable {
         case .reactToolLoop: "ReAct"
         case .codingLoop: "Coding"
         case .multiAgent: "Multi-Agent"
+        case .inferenceEvaluation: "Inference Evaluation"
         case .remoteTask: "Remote"
         }
     }

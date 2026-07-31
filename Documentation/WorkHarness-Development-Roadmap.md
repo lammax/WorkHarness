@@ -268,7 +268,8 @@ Direct CLI provider work already done for Codex CLI and Cursor CLI was temporary
     evidence remains;
   - Day 9 WorkHarness multi-stage inference and deterministic tests are
     complete; live comparison video remains;
-  - Day 10 requirements have not been received.
+  - Day 10 Haiku-first inference, Sonnet fallback, 24-case evaluation, reports
+    and deterministic tests are complete; live evaluation and video remain.
 
 ## Agreed Next Implementation Sequence
 
@@ -315,8 +316,8 @@ Continue product development in this order:
    - add fallback after a real fast-model runtime failure;
    - support execution-loop routing with immutable per-task model snapshots;
    - record escalation reasons, latency and cost;
-   - defer calibrated confidence routing until the Day 10 requirements and
-     course evidence are known.
+   - keep the Day 10 self-reported confidence pipeline as course evidence, then
+     add calibrated production confidence on a larger held-out set.
 7. Measured context-engineering hardening:
    - [x] audit current `ContextBuilder`, folding, memory/RAG and tool-result
      traces before changing their architecture;
@@ -1435,18 +1436,22 @@ Status: active. Day 6 is complete. Day 7 code and live API evaluation are
 complete with only the video pending. Day 8 routing code and deterministic
 evaluation are complete with real Haiku/Sonnet video evidence pending. Day 9
 WorkHarness multi-stage inference and deterministic tests are complete with the
-live comparison video pending. Day 10 requirements have not been received. The
-unified course plan and evidence index live in
+live comparison video pending. Day 10 Haiku-first classification, strict
+confidence control, Sonnet fallback, 24-case evaluation, artifacts and tests
+are complete; the live WorkHarness Run and video remain. The unified course plan
+and evidence index live in
 `Documentation/Course/Fine-Tuning-Days-6-10-Roadmap.md`.
 
 Day 6 prepares a versioned task-classification dataset, validation pipeline,
-frozen baseline and a safe fine-tuning client. Days 7–10 will extend the same
-experiment only after their exact course requirements are provided.
+frozen baseline and a safe fine-tuning client. Days 7–10 add confidence control,
+model routing, multi-stage inference and micro-model-first classification.
 
 Production integration is deliberately deferred until the course evidence
 shows an improvement over the frozen baseline. Deferred product work includes
 an MCP-backed task-classification service, dataset/model registry, secure
-training-candidate collection, experiment UI and automated evaluation.
+training-candidate collection, experiment UI, calibrated confidence, local or
+embedding-based micro tiers, batch evaluation and automated historical
+comparison.
 
 # Architectural Direction
 

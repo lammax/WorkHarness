@@ -56,7 +56,7 @@ extension MainScreen {
                             LazyVStack(alignment: .leading, spacing: Design.recentRunRowSpacing) {
                                 ForEach(screenModel.chatPageViewModel.recentRuns) { run in
                                     Button {
-                                        screenModel.selectRun(run)
+                                        screenModel.showRunDetails(run)
                                     } label: {
                                         VStack(alignment: .leading, spacing: Design.recentRunSpacing) {
                                             Text(run.goal)

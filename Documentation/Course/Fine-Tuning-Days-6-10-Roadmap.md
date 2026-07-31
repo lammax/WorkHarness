@@ -250,19 +250,39 @@ Deferred beyond Day 9:
 
 ## Day 10
 
-Status: requirements not received.
+Status: implementation and deterministic verification complete. The live
+WorkHarness evaluation and video proof remain.
 
-When the exact assignment is available, it must state:
+Implemented minimum complete scope:
 
-- required input dataset version;
-- model and parameters;
-- commands executed;
-- external cost or approval required;
-- produced artifacts;
-- evaluation against the frozen baseline;
-- user-only evidence steps;
-- completion criteria;
-- out-of-scope production work.
+1. task-intent classification with seven strict labels;
+2. Haiku as the required micro-model and Sonnet as the large-model fallback;
+3. exact JSON validation with `category`, `confidence`, and `OK` / `UNSURE`;
+4. fallback on invalid format or enum, `UNSURE`, or confidence below `0.80`;
+5. a frozen 24-case set: 8 simple, 8 boundary and 8 complex inputs;
+6. RunEvents plus Markdown and JSON reports with micro-model count, fallback
+   count, large-model calls, accuracy, latency, tokens and reported cost;
+7. the Chat command `/micro-model evaluate` and deterministic coverage of both
+   accepted and fallback routes.
+
+User-only actions:
+
+1. run `/micro-model evaluate` with authenticated Claude CLI;
+2. verify both artifacts and the Final Summary;
+3. record the video using
+   `Documentation/Course/Day10-Micro-Model-First/video-script.md`.
+
+Deferred beyond Day 10:
+
+1. settings UI for models, threshold and evaluation catalog;
+2. an Ollama/local-LLM or embedding classifier as the micro tier;
+3. calibrated confidence on a larger held-out set, including ECE/Brier score;
+4. concurrent/batch evaluation, caching and latency budgets;
+5. production task-intake and execution-loop routing;
+6. additional runtime/model families and a shared model registry;
+7. stronger cancellation that terminates the currently executing runtime
+   process immediately;
+8. a dedicated evaluation dashboard and historical comparisons.
 
 ## Evidence index
 

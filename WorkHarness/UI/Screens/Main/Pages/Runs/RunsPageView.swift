@@ -15,20 +15,26 @@ extension MainScreen {
         let onRunSelected: (Run) -> Void
 
         var body: some View {
-            if viewModel.runs.isEmpty {
-                EmptyRunsView()
-            } else {
-                HSplitView {
-                    RunsListView(viewModel: viewModel)
-                        .frame(
-                            minWidth: Design.Layout.listMinWidth,
-                            idealWidth: Design.Layout.listIdealWidth
-                        )
+            GeometryReader { geometry in
+                if viewModel.runs.isEmpty {
+                    EmptyRunsView()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                } else {
+                    HSplitView {
+                        RunsListView(viewModel: viewModel)
+                            .frame(
+                                minWidth: Design.Layout.listMinWidth,
+                                idealWidth: Design.Layout.listIdealWidth
+                            )
 
-                    Divider()
-
-                    RunDetailView(viewModel: viewModel, onRunSelected: onRunSelected)
-                        .frame(minWidth: Design.Layout.detailMinWidth)
+                        RunDetailView(viewModel: viewModel, onRunSelected: onRunSelected)
+                            .frame(minWidth: Design.Layout.detailMinWidth)
+                    }
+                    .frame(
+                        width: geometry.size.width,
+                        height: geometry.size.height,
+                        alignment: .topLeading
+                    )
                 }
             }
         }
@@ -132,12 +138,12 @@ extension MainScreen {
                                 .foregroundStyle(.red)
                         }
                         MetricsView(metrics: detail.metrics)
-                        TimelineView(viewModel: viewModel, events: detail.events, hasEvents: detail.hasEvents)
                         ArtifactsView(
                             artifacts: detail.artifacts,
                             error: viewModel.artifactError,
                             onOpen: viewModel.openArtifact
                         )
+                        TimelineView(viewModel: viewModel, events: detail.events, hasEvents: detail.hasEvents)
                         EventInspectorView(event: detail.selectedEvent)
                     }
                     .padding(Design.Detail.padding)

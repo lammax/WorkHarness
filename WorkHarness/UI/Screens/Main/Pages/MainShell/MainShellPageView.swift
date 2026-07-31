@@ -21,11 +21,14 @@ extension MainScreen {
                         ideal: Design.Sidebar.idealWidth
                     )
             } detail: {
-                if let detailPage = screenModel.detailPage {
-                    detailPage.content
-                } else {
-                    EmptyView()
+                Group {
+                    if let detailPage = screenModel.detailPage {
+                        detailPage.content
+                    } else {
+                        EmptyView()
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(
                 minWidth: Design.Window.minWidth,

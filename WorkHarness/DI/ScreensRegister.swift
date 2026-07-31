@@ -16,7 +16,8 @@ extension Container {
                 agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
                 smokeTestService: resolver.resolve(SmokeTestServiceProtocol.self)!,
                 testingWorkflowService: resolver.resolve(TestingWorkflowServiceProtocol.self)!,
-                executionLoopService: resolver.resolve(ExecutionLoopServiceProtocol.self)!
+                executionLoopService: resolver.resolve(ExecutionLoopServiceProtocol.self)!,
+                microModelEvaluationService: resolver.resolve(MicroModelEvaluationServiceProtocol.self)!
             )
         }.inObjectScope(.container)
 

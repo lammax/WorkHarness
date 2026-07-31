@@ -23,6 +23,7 @@ extension MainScreen {
         private let smokeTestService: SmokeTestServiceProtocol?
         private let testingWorkflowService: TestingWorkflowServiceProtocol?
         private let executionLoopService: ExecutionLoopServiceProtocol?
+        private let microModelEvaluationService: MicroModelEvaluationServiceProtocol?
         @ObservationIgnored private var taskPoolSecurityScopedURL: URL?
         private var submissionTask: Task<Void, Never>?
 
@@ -53,7 +54,8 @@ extension MainScreen {
             agentProfileService: AgentProfileServiceProtocol? = nil,
             smokeTestService: SmokeTestServiceProtocol? = nil,
             testingWorkflowService: TestingWorkflowServiceProtocol? = nil,
-            executionLoopService: ExecutionLoopServiceProtocol? = nil
+            executionLoopService: ExecutionLoopServiceProtocol? = nil,
+            microModelEvaluationService: MicroModelEvaluationServiceProtocol? = nil
         ) {
             self.runService = runService
             self.contextAttachmentService = contextAttachmentService
@@ -61,6 +63,7 @@ extension MainScreen {
             self.smokeTestService = smokeTestService
             self.testingWorkflowService = testingWorkflowService
             self.executionLoopService = executionLoopService
+            self.microModelEvaluationService = microModelEvaluationService
             self.multiAgentConfiguration = StandardAgentDefaults.addingInferenceRoles(
                 to: agentProfileService?.configuration(for: nil) ?? .default
             )
@@ -225,6 +228,10 @@ extension MainScreen {
             }
             if let command = ExecutionLoopCommand.parse(trimmedMessage) {
                 await runExecutionLoopCommand(command)
+                return
+            }
+            if MicroModelEvaluationCommand.parse(trimmedMessage) != nil {
+                runMicroModelEvaluationCommand()
                 return
             }
             await send(trimmedMessage, contextAttachments: attachments)
@@ -552,6 +559,19 @@ extension MainScreen {
                     }
                     selectedRunId = controllerRunId
                 }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        private func runMicroModelEvaluationCommand() {
+            guard let microModelEvaluationService else {
+                errorMessage = ChatPageDesign.Command.microModelEvaluationUnavailable
+                return
+            }
+            do {
+                selectedRunId = try microModelEvaluationService.startEvaluation()
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }

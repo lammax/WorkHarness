@@ -540,6 +540,12 @@ struct WorkHarnessTests {
         #expect(screenModel.selectedSection == .chat)
         #expect(screenModel.detailPage is MainScreen.ChatPage)
         #expect(chatPageViewModel.selectedRun?.id == run.id)
+
+        screenModel.showRunDetails(run)
+
+        #expect(screenModel.selectedSection == .runs)
+        #expect(screenModel.detailPage is MainScreen.RunsPage)
+        #expect(runsPageViewModel.selectedRun?.id == run.id)
     }
 
     @MainActor

@@ -31,6 +31,7 @@ extension MainScreen {
             static let smokeUnavailable = "Smoke commands are unavailable for the selected project."
             static let testingUnavailable = "Testing commands are unavailable for the selected project."
             static let executionLoopUnavailable = "Execution Loop is unavailable."
+            static let microModelEvaluationUnavailable = "Micro-model evaluation is unavailable."
         }
 
         enum Header {

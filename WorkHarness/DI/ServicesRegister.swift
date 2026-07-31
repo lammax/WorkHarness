@@ -19,6 +19,17 @@ extension Container {
             )
         }.inObjectScope(.container)
 
+        register(MicroModelEvaluationServiceProtocol.self) { resolver in
+            MicroModelEvaluationService(
+                runRepository: resolver.resolve(RunRepository.self)!,
+                recorder: resolver.resolve(RunRecorder.self)!,
+                runtimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!,
+                projectService: resolver.resolve(ProjectServiceProtocol.self)!,
+                appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
+                artifactStore: resolver.resolve(RunArtifactStoreProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(ApprovalServiceProtocol.self) { resolver in
             ApprovalService(
                 repository: resolver.resolve(ApprovalRepositoryProtocol.self)!,

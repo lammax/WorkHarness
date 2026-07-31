@@ -101,6 +101,11 @@ extension MainScreen {
             show(section: .chat)
         }
 
+        func showRunDetails(_ run: Run) {
+            runsPageViewModel.selectRun(id: run.id)
+            show(section: .runs)
+        }
+
         func showApproval(_ request: ApprovalRequestState) {
             activeApprovalRequestId = request.id
             approvalDecisionError = nil
