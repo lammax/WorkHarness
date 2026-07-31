@@ -174,9 +174,24 @@ extension MainScreen {
                 message: RunEventDisplayFormatter.message(for: event),
                 createdAt: event.createdAt,
                 metadata: event.metadata.sorted { $0.key < $1.key }.map { key, value in
-                    MetadataState(key: key, value: value)
+                    MetadataState(key: key, value: formattedMetadataValue(key: key, value: value))
                 }
             )
+        }
+
+        private func formattedMetadataValue(key: String, value: String) -> String {
+            guard key.hasSuffix("JSON"),
+                  let data = value.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data),
+                  JSONSerialization.isValidJSONObject(object),
+                  let formattedData = try? JSONSerialization.data(
+                    withJSONObject: object,
+                    options: [.prettyPrinted, .sortedKeys]
+                  ),
+                  let formatted = String(data: formattedData, encoding: .utf8) else {
+                return value
+            }
+            return formatted
         }
 
         private func artifactStates(for run: Run) -> [ArtifactState] {

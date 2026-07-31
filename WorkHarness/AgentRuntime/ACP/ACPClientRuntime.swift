@@ -177,11 +177,17 @@ final class ACPRunEventMapper {
         case .approvalRequested(let summary):
             recorder.record(runId: runId, type: .approvalRequested, message: summary, metadata: ["source": "acp"])
         case .tokenUsage(let usage):
-            recorder.record(runId: runId, type: .providerRequestFinished, message: "ACP token usage updated.", metadata: [
-                "inputTokens": "\(usage.inputTokens)",
-                "outputTokens": "\(usage.outputTokens)",
-                "source": "acp"
-            ])
+            recorder.record(
+                runId: runId,
+                type: .usageUpdated,
+                message: "ACP token and cost usage updated.",
+                metadata: ContextUsageObservation.metadata(
+                    usage: usage,
+                    snapshot: nil,
+                    providerId: "acp",
+                    source: "acpMapper"
+                )
+            )
         case .artifactCreated(let artifact):
             recorder.record(runId: runId, type: .finalSummary, message: artifact.name, metadata: ["artifactKind": artifact.kind, "source": "acp"])
         case .finished(let response):

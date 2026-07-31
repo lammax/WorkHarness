@@ -54,7 +54,11 @@ enum RunEventType: String, Codable, CaseIterable, Equatable, Hashable {
     case approvalGranted
     case approvalRejected
     case contextBuilt
+    case contextBuildFailed
+    case contextRetrievalStarted
+    case contextRetrievalFinished
     case contextCompacted
+    case usageUpdated
     case modelRoutingDecision
     case memorySaved
     case validationStarted
@@ -91,7 +95,11 @@ enum RunEventType: String, Codable, CaseIterable, Equatable, Hashable {
         case .approvalGranted: "Approval Granted"
         case .approvalRejected: "Approval Rejected"
         case .contextBuilt: "Context Built"
+        case .contextBuildFailed: "Context Build Failed"
+        case .contextRetrievalStarted: "Context Retrieval Started"
+        case .contextRetrievalFinished: "Context Retrieval Finished"
         case .contextCompacted: "Context Compacted"
+        case .usageUpdated: "Usage Updated"
         case .modelRoutingDecision: "Model Routing"
         case .memorySaved: "Memory Saved"
         case .validationStarted: "Validation Started"

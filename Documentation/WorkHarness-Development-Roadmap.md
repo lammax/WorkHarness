@@ -335,12 +335,16 @@ Continue product development in this order:
      handoffs with bounded factual previews plus addressable artifact
      references; bound persisted multi-agent stream deltas and expose narrow
      output windows;
+   - [x] expose safe selected-source reasons, section estimates, omissions,
+     provider limits, build/retrieval duration, and reported token/cost usage
+     through ContextSnapshot-linked RunEvents and the existing Runs inspector;
    - add cleanup for persistent context/tool artifacts and an artifact-content
      retrieval contract that does not require exposing host paths;
    - add measured history limits for runtime-managed Cursor/Claude sessions
      when their adapters expose history/context telemetry;
-   - compare at least one realistic trace before and after each context-policy
-     change and record quality, latency, token and cost impact.
+   - [x] compare deterministic representative traces before and after each
+     completed context-policy slice and record quality, latency, token and cost
+     impact in the context-engineering baseline;
 
 Do not start parallel execution, production fine-tuned-model integration,
 Notion task-source synchronization or a Dataset/Models UI before the preceding

@@ -755,6 +755,85 @@ Finding status after this slice:
 - P2 tool-result retention, size, redaction, and artifact-reference metadata
   are now observable without persisting the original raw payload in events.
 
+## Step 5 implementation result
+
+Completed on 31.07.2026:
+
+- `contextBuilt` now records typed JSON observations for every observed
+  selected source, section token estimate, and omission. Source observations
+  include kind, purpose, selection reason, priority, freshness, estimated token
+  count, and retention policy.
+- Source IDs are represented by stable SHA-256-derived opaque IDs. Filesystem
+  paths, RAG source paths, attachment IDs, memory IDs, and raw content are not
+  copied into observability events.
+- Observation arrays are bounded to 128 selected sources and 128 omissions.
+  Explicit unrecorded counts disclose metadata overflow instead of silently
+  hiding it.
+- `contextBuilt` records monotonic build duration in milliseconds alongside
+  configured input limit, provider context window, output reservation,
+  effective input limit, total estimate, and delivery mode.
+- Failed construction now emits `contextBuildFailed` before provider
+  invocation. Mandatory overflow records safe source ID, required tokens and
+  available tokens without logging the source or error content.
+- RAG execution emits `contextRetrievalStarted` and
+  `contextRetrievalFinished` with a correlation ID, retrieval bounds, duration,
+  candidate/result counts, status, and opaque selected citation IDs. The query,
+  quote, answer and source path remain absent.
+- Provider, AgentRuntime, and multi-agent usage paths emit `usageUpdated` when
+  actual usage is reported. The event links to `contextSnapshotId` and records
+  input/output/total tokens, cost, estimated input, and estimate delta.
+- The existing Runs Event Inspector pretty-prints observation JSON. No new
+  screen, repository access from UI, or parallel telemetry subsystem was
+  introduced.
+- Existing `contextCompacted` remains the explicit compaction event; this slice
+  did not add automatic compaction.
+
+Representative trace comparison:
+
+- before Step 5, the provider trace exposed only aggregate context counts and
+  the Run-level final usage; selected source reasons, section estimates, build
+  time, and estimate-versus-actual usage could not be correlated;
+- after Step 5, the same deterministic provider Run exposes one opaque
+  objective source, its selection reason, effective 50-token input limit under
+  a 100-token provider window, build duration, reported 9 input / 4 output
+  tokens, `$0.01` cost, and the delta from the linked context estimate;
+- the output and context delivered to the provider are unchanged. The change
+  adds local metadata serialization and append-only events, not provider calls,
+  model tokens, or provider cost.
+
+Verification:
+
+- 5 focused observability tests cover safe selected-source metadata, section
+  estimates, omission reasons, build failure, actual usage linkage, successful
+  retrieval events, duration fields, and absence of raw path/attachment/RAG
+  content.
+- Existing ContextDelivery and ContextBudget suites continue to pass.
+- The Runs ViewModel regression verifies JSON observation values are rendered
+  as readable multiline inspector metadata.
+- The complete serial test plan passed: 198 passed and 1 opt-in live
+  Claude/MCP test remained skipped (199 total, 0 failed).
+
+Deliberately unchanged:
+
+- `ContextSnapshot` is still not persisted in a dedicated repository; the
+  observation is correlated through its snapshot ID and safe event metadata.
+- Actual usage remains unavailable when a provider/runtime does not report it;
+  WorkHarness does not present estimates as actual usage.
+- runtime-managed Cursor/Claude conversation history is still opaque to
+  WorkHarness and cannot yet be measured or compacted safely.
+- source-observation metadata is intentionally bounded; unrecorded counts are
+  visible, but a separate observation artifact is not created.
+- exact model tokenizer support remains behind the estimator backlog; current
+  context estimates retain the documented approximation.
+
+Finding status after this slice:
+
+- P2 selected-source, section-cost, omission, provider-limit, duration,
+  retrieval, and actual-usage observability gaps are resolved at the RunEvent
+  boundary.
+- Snapshot resolvability, runtime-managed history telemetry, and exact
+  tokenizer reconciliation remain open.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:

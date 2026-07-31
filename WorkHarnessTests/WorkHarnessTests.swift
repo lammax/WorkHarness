@@ -1223,7 +1223,10 @@ struct WorkHarnessTests {
             runId: runId,
             type: .providerRequestFinished,
             message: "Finished",
-            metadata: ["providerId": "test.provider"],
+            metadata: [
+                "providerId": "test.provider",
+                "selectedSourcesJSON": #"[{"id":"objective:abc","kind":"objective"}]"#
+            ],
             createdAt: Date(timeIntervalSince1970: 20)
         )
         let artifact = RunArtifact(
@@ -1258,6 +1261,8 @@ struct WorkHarnessTests {
         #expect(detail.artifacts.first?.title == "Report")
         #expect(detail.selectedEvent?.id == lateEvent.id)
         #expect(detail.selectedEvent?.metadata.first?.key == "providerId")
+        #expect(detail.selectedEvent?.metadata.last?.key == "selectedSourcesJSON")
+        #expect(detail.selectedEvent?.metadata.last?.value.contains("\n") == true)
     }
 
     @MainActor

@@ -21,6 +21,7 @@ final class HarnessEngine {
     private let agentModelRoutingService: AgentModelRoutingServiceProtocol?
     private let agentRuntimeRegistry: AgentRuntimeRegistry
     private let multiAgentCoordinator: MultiAgentCoordinator
+    private let contextObservationPolicy = ContextObservationPolicy()
     private var activeRuntimeSessions: [UUID: (runtime: AgentRuntime, sessionId: UUID)] = [:]
 
     init(
@@ -452,19 +453,20 @@ final class HarnessEngine {
 
         do {
             let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
+            let requestContextSnapshot = try context(
+                for: runId,
+                prompt: prompt,
+                agent: agent,
+                providerId: provider.id,
+                deliveryMode: .structuredMessages,
+                providerContextWindowTokens: provider.capabilities.contextWindowTokens,
+                ragResults: ragResults
+            )
             let request = AIRequest(
                 runId: runId,
                 agent: agent,
                 messages: [.init(role: .user, content: prompt)],
-                context: try context(
-                    for: runId,
-                    prompt: prompt,
-                    agent: agent,
-                    providerId: provider.id,
-                    deliveryMode: .structuredMessages,
-                    providerContextWindowTokens: provider.capabilities.contextWindowTokens,
-                    ragResults: ragResults
-                ).contextItems,
+                context: requestContextSnapshot.contextItems,
                 tools: agent.tools,
                 budget: defaultTokenBudget(for: agent)
             )
@@ -488,6 +490,17 @@ final class HarnessEngine {
                         run.tokenUsage = usage
                         run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
                     }
+                    recorder.record(
+                        runId: runId,
+                        type: .usageUpdated,
+                        message: "Provider reported token and cost usage.",
+                        metadata: ContextUsageObservation.metadata(
+                            usage: usage,
+                            snapshot: requestContextSnapshot,
+                            providerId: provider.id,
+                            source: "provider"
+                        )
+                    )
                 case .finished:
                     recorder.record(runId: runId, type: .providerRequestFinished, message: completedMessage.isEmpty ? "Provider finished." : completedMessage)
                 case .error(let message):
@@ -517,26 +530,43 @@ final class HarnessEngine {
         providerContextWindowTokens: Int? = nil,
         ragResults: [RAGCitation] = []
     ) throws -> ContextSnapshot {
+        let buildStartedAt = ProcessInfo.processInfo.systemUptime
         let currentProject = projectService?.currentProject
         let safetyMode = appSettingsService?.defaultSafetyMode ?? AppSettingsDefaults.defaultSafetyMode
         let contextAttachments = repository.run(withId: runId)?.contextAttachments ?? []
         let memoryItems = currentProjectMemory(for: currentProject)
-        let snapshot = try contextBuilder.buildSnapshot(from: ContextBuildInput(
-            runId: runId,
-            agent: agent,
-            providerId: providerId,
-            userMessage: prompt,
-            currentProject: currentProject,
-            rootPath: currentProject?.rootPath,
-            contextFoldSummary: latestContextFoldSummary(for: runId),
-            contextAttachments: contextAttachments,
-            memoryItems: memoryItems,
-            ragResults: ragResults,
-            tokenBudget: defaultTokenBudget(for: agent),
-            providerContextWindowTokens: providerContextWindowTokens,
-            safetyMode: safetyMode,
-            deliveryMode: deliveryMode
-        ))
+        let snapshot: ContextSnapshot
+        do {
+            snapshot = try contextBuilder.buildSnapshot(from: ContextBuildInput(
+                runId: runId,
+                agent: agent,
+                providerId: providerId,
+                userMessage: prompt,
+                currentProject: currentProject,
+                rootPath: currentProject?.rootPath,
+                contextFoldSummary: latestContextFoldSummary(for: runId),
+                contextAttachments: contextAttachments,
+                memoryItems: memoryItems,
+                ragResults: ragResults,
+                tokenBudget: defaultTokenBudget(for: agent),
+                providerContextWindowTokens: providerContextWindowTokens,
+                safetyMode: safetyMode,
+                deliveryMode: deliveryMode
+            ))
+        } catch {
+            recorder.record(
+                runId: runId,
+                type: .contextBuildFailed,
+                message: "Context construction failed before provider invocation.",
+                metadata: contextObservationPolicy.failureMetadata(
+                    error: error,
+                    providerId: providerId,
+                    agentId: agent.id,
+                    buildDurationMilliseconds: elapsedMilliseconds(since: buildStartedAt)
+                )
+            )
+            throw error
+        }
 
         let contextSourceCount = snapshot.sections.flatMap(\.sources).count +
             (snapshot.objectiveSource == nil ? 0 : 1)
@@ -581,6 +611,10 @@ final class HarnessEngine {
             .sorted()
             .joined(separator: ",")
         }
+        contextObservationPolicy.metadata(
+            for: snapshot,
+            buildDurationMilliseconds: elapsedMilliseconds(since: buildStartedAt)
+        ).forEach { metadata[$0.key] = $0.value }
 
         recorder.record(
             runId: runId,
@@ -701,6 +735,7 @@ final class HarnessEngine {
             let mapper = ACPRunEventMapper(recorder: recorder)
             var assistantMessage = ""
             var hasStreamedText = false
+            var didRecordUsage = false
 
             for try await event in execution.events {
                 guard repository.run(withId: runId)?.status != .cancelled else { break }
@@ -712,11 +747,22 @@ final class HarnessEngine {
                 case .messageCompleted(let message):
                     assistantMessage = message
                 case .tokenUsage(let usage):
-                    mapper.record(runId: runId, event: event)
+                    didRecordUsage = true
                     repository.updateRun(runId) { run in
                         run.tokenUsage = usage
                         run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
                     }
+                    recorder.record(
+                        runId: runId,
+                        type: .usageUpdated,
+                        message: "Agent runtime reported token and cost usage.",
+                        metadata: ContextUsageObservation.metadata(
+                            usage: usage,
+                            snapshot: snapshot,
+                            providerId: runtime.id,
+                            source: "agentRuntime"
+                        )
+                    )
                 case .finished(let response):
                     guard repository.run(withId: runId)?.status != .cancelled else { break }
                     if !assistantMessage.isEmpty && !hasStreamedText {
@@ -730,6 +776,19 @@ final class HarnessEngine {
                             run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
                         }
                         run.artifacts.append(contentsOf: response.artifacts)
+                    }
+                    if let usage = response.tokenUsage, !didRecordUsage {
+                        recorder.record(
+                            runId: runId,
+                            type: .usageUpdated,
+                            message: "Agent runtime reported final token and cost usage.",
+                            metadata: ContextUsageObservation.metadata(
+                                usage: usage,
+                                snapshot: snapshot,
+                                providerId: runtime.id,
+                                source: "agentRuntimeFinal"
+                            )
+                        )
                     }
                 case .failed(let message):
                     mapper.record(runId: runId, event: event)
@@ -795,20 +854,81 @@ final class HarnessEngine {
 
     private func ragResults(for prompt: String, agent: Agent, runId: UUID) async -> [RAGCitation] {
         guard agent.contextPolicy.includeRAG, let ragService else { return [] }
+        let retrievalId = UUID()
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        let settings = appSettingsService?.ragRetrievalSettings ?? .default
+        recorder.record(
+            runId: runId,
+            type: .contextRetrievalStarted,
+            message: "Retrieving bounded project context.",
+            metadata: [
+                "retrievalId": retrievalId.uuidString,
+                "retrievalKind": "rag",
+                "topKBeforeFiltering": "\(settings.topKBeforeFiltering)",
+                "topKAfterFiltering": "\(settings.topKAfterFiltering)"
+            ]
+        )
         do {
-            return try await ragService.search(
+            let result = try await ragService.search(
                 question: prompt,
-                settings: appSettingsService?.ragRetrievalSettings ?? .default
-            ).citations
+                settings: settings
+            )
+            recorder.record(
+                runId: runId,
+                type: .contextRetrievalFinished,
+                message: "Retrieved \(result.citations.count) bounded context result(s).",
+                metadata: [
+                    "retrievalId": retrievalId.uuidString,
+                    "retrievalKind": "rag",
+                    "status": "succeeded",
+                    "durationMs": "\(elapsedMilliseconds(since: startedAt))",
+                    "candidateCount": "\(result.retrieval.candidatesBeforeFiltering)",
+                    "resultCount": "\(result.citations.count)",
+                    "isUnknown": "\(result.isUnknown)",
+                    "selectedSourceIdsJSON": encodedIdentifiers(
+                        result.citations.map {
+                            ContextObservationPolicy.safeIdentifier($0.id, kind: "ragCitation")
+                        }
+                    )
+                ]
+            )
+            return result.citations
         } catch {
             recorder.record(
                 runId: runId,
+                type: .contextRetrievalFinished,
+                message: "Context retrieval failed; no retrieved context was included.",
+                metadata: [
+                    "retrievalId": retrievalId.uuidString,
+                    "retrievalKind": "rag",
+                    "status": "failed",
+                    "durationMs": "\(elapsedMilliseconds(since: startedAt))",
+                    "errorType": String(describing: type(of: error))
+                ]
+            )
+            recorder.record(
+                runId: runId,
                 type: .toolCallFailed,
-                message: error.localizedDescription,
-                metadata: ["toolId": "rag.search"]
+                message: "Project context retrieval failed.",
+                metadata: [
+                    "toolId": "rag.search",
+                    "retrievalId": retrievalId.uuidString
+                ]
             )
             return []
         }
+    }
+
+    private func elapsedMilliseconds(since startedAt: TimeInterval) -> Int {
+        Int(max(0, (ProcessInfo.processInfo.systemUptime - startedAt) * 1_000))
+    }
+
+    private func encodedIdentifiers(_ identifiers: [String]) -> String {
+        guard let data = try? JSONEncoder().encode(identifiers),
+              let value = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return value
     }
 
     private func currentProjectMemory(for project: Project?) -> [String] {

@@ -224,6 +224,7 @@ final class MultiAgentCoordinator {
             var output = ""
             var persistedStreamCharacterCount = 0
             var didRecordStreamLimit = false
+            var didRecordUsage = false
             do {
                 let execution = try await runtime.run(
                     task: AgentTask(
@@ -281,15 +282,48 @@ final class MultiAgentCoordinator {
                     case .approvalRequested(let summary):
                         recorder.record(runId: runId, type: .approvalRequested, message: summary, metadata: metadata)
                     case .tokenUsage(let usage):
+                        didRecordUsage = true
                         repository.updateRun(runId) { run in
                             run.tokenUsage.inputTokens += usage.inputTokens
                             run.tokenUsage.outputTokens += usage.outputTokens
                             run.costUsage = CostUsage(totalUSD: run.costUsage.totalUSD + usage.totalCostUSD)
                         }
+                        recorder.record(
+                            runId: runId,
+                            type: .usageUpdated,
+                            message: "\(roleConfiguration?.assistantName ?? step.role.label) reported token and cost usage.",
+                            metadata: ContextUsageObservation.metadata(
+                                usage: usage,
+                                snapshot: context,
+                                providerId: runtime.id,
+                                source: "multiAgentStep",
+                                additionalMetadata: metadata
+                            )
+                        )
                     case .artifactCreated(let artifact):
                         repository.updateRun(runId) { run in run.artifacts.append(artifact) }
-                    case .finished:
-                        break
+                    case .finished(let response):
+                        if let usage = response.tokenUsage, !didRecordUsage {
+                            repository.updateRun(runId) { run in
+                                run.tokenUsage.inputTokens += usage.inputTokens
+                                run.tokenUsage.outputTokens += usage.outputTokens
+                                run.costUsage = CostUsage(
+                                    totalUSD: run.costUsage.totalUSD + usage.totalCostUSD
+                                )
+                            }
+                            recorder.record(
+                                runId: runId,
+                                type: .usageUpdated,
+                                message: "\(roleConfiguration?.assistantName ?? step.role.label) reported final token and cost usage.",
+                                metadata: ContextUsageObservation.metadata(
+                                    usage: usage,
+                                    snapshot: context,
+                                    providerId: runtime.id,
+                                    source: "multiAgentStepFinal",
+                                    additionalMetadata: metadata
+                                )
+                            )
+                        }
                     case .started, .thinking:
                         break
                     case .failed(let message):
