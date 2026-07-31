@@ -15,6 +15,8 @@ protocol MemoryRepositoryProtocol: BaseRepositoryProtocol {
     func insert(_ item: MemoryItem)
     func remove(id: UUID)
     func items(for projectId: UUID) -> [MemoryItem]
+    func references(for projectId: UUID) -> [MemoryReference]
+    func items(withIDs ids: [UUID], for projectId: UUID) -> [MemoryItem]
 }
 
 extension MemoryRepositoryProtocol {
@@ -37,5 +39,21 @@ final class InMemoryMemoryRepository: MemoryRepositoryProtocol {
 
     func items(for projectId: UUID) -> [MemoryItem] {
         items.filter { $0.projectId == projectId }
+    }
+
+    func references(for projectId: UUID) -> [MemoryReference] {
+        items(for: projectId).map {
+            MemoryReference(
+                id: $0.id,
+                projectId: projectId,
+                createdAt: $0.createdAt,
+                contentCharacterCount: $0.content.count
+            )
+        }
+    }
+
+    func items(withIDs ids: [UUID], for projectId: UUID) -> [MemoryItem] {
+        let itemsByID = Dictionary(uniqueKeysWithValues: items(for: projectId).map { ($0.id, $0) })
+        return ids.compactMap { itemsByID[$0] }
     }
 }

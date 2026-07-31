@@ -150,7 +150,14 @@ struct ContextContractTests {
             contextFoldSummary: fold,
             selectedFiles: ["WorkHarness/HarnessEngine/ContextBuilder.swift"],
             contextAttachments: [attachment],
-            memoryItems: ["WorkHarness uses a provider-neutral ContextBuilder."],
+            memoryItems: [
+                MemoryItem(
+                    id: UUID(uuidString: "00000000-0000-0000-0000-000000000106")!,
+                    projectId: project.id,
+                    content: "WorkHarness uses a provider-neutral ContextBuilder.",
+                    createdAt: Date(timeIntervalSince1970: 100)
+                )
+            ],
             ragResults: [citation],
             tokenBudget: TokenBudget(maxInputTokens: 8_000, maxOutputTokens: 1_000),
             providerContextWindowTokens: 16_384,

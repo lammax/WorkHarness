@@ -10,6 +10,8 @@ import Foundation
 @MainActor
 protocol MemoryServiceProtocol: BaseServiceProtocol {
     func items(for projectId: UUID) -> [MemoryItem]
+    func references(for projectId: UUID) -> [MemoryReference]
+    func items(withIDs ids: [UUID], for projectId: UUID) -> [MemoryItem]
     func saveProjectMemory(content: String, projectId: UUID, runId: UUID?) throws -> MemoryItem
     func removeMemory(id: UUID)
 }

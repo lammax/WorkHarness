@@ -23,7 +23,7 @@ struct ContextBuildInput: Equatable {
     var contextFoldSummary: ContextFoldSummary?
     var selectedFiles: [String]
     var contextAttachments: [RunContextAttachment]
-    var memoryItems: [String]
+    var memoryItems: [MemoryItem]
     var ragResults: [RAGCitation]
     var tokenBudget: TokenBudget?
     var providerContextWindowTokens: Int?
@@ -41,7 +41,7 @@ struct ContextBuildInput: Equatable {
         contextFoldSummary: ContextFoldSummary? = nil,
         selectedFiles: [String] = [],
         contextAttachments: [RunContextAttachment] = [],
-        memoryItems: [String] = [],
+        memoryItems: [MemoryItem] = [],
         ragResults: [RAGCitation] = [],
         tokenBudget: TokenBudget? = nil,
         providerContextWindowTokens: Int? = nil,

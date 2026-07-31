@@ -3121,7 +3121,12 @@ struct WorkHarnessTests {
             providerId: agent.providerId,
             userMessage: "Continue",
             currentProject: project,
-            memoryItems: ["The project uses MCP boundaries."]
+            memoryItems: [
+                MemoryItem(
+                    projectId: project.id,
+                    content: "The project uses MCP boundaries."
+                )
+            ]
         ))
 
         #expect(snapshot.includedMemories == ["The project uses MCP boundaries."])

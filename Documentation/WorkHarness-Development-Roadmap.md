@@ -338,6 +338,9 @@ Continue product development in this order:
    - [x] expose safe selected-source reasons, section estimates, omissions,
      provider limits, build/retrieval duration, and reported token/cost usage
      through ContextSnapshot-linked RunEvents and the existing Runs inspector;
+   - [x] replace eager project-memory delivery with metadata-first reference
+     selection and deterministic just-in-time resolution, bounded to 8 recent
+     items and 8,000 characters before ContextBuilder budget enforcement;
    - add cleanup for persistent context/tool artifacts and an artifact-content
      retrieval contract that does not require exposing host paths;
    - add measured history limits for runtime-managed Cursor/Claude sessions

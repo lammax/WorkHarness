@@ -31,6 +31,14 @@ final class MemoryService: MemoryServiceProtocol {
         repository.items(for: projectId)
     }
 
+    func references(for projectId: UUID) -> [MemoryReference] {
+        repository.references(for: projectId)
+    }
+
+    func items(withIDs ids: [UUID], for projectId: UUID) -> [MemoryItem] {
+        repository.items(withIDs: ids, for: projectId)
+    }
+
     func saveProjectMemory(content: String, projectId: UUID, runId: UUID? = nil) throws -> MemoryItem {
         let normalizedContent = try writePolicy.normalizedContent(from: content)
         let item = MemoryItem(projectId: projectId, content: normalizedContent)

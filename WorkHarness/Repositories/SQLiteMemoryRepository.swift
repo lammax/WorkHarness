@@ -41,6 +41,22 @@ final class SQLiteMemoryRepository: MemoryRepositoryProtocol {
         items.filter { $0.projectId == projectId }
     }
 
+    func references(for projectId: UUID) -> [MemoryReference] {
+        items(for: projectId).map {
+            MemoryReference(
+                id: $0.id,
+                projectId: projectId,
+                createdAt: $0.createdAt,
+                contentCharacterCount: $0.content.count
+            )
+        }
+    }
+
+    func items(withIDs ids: [UUID], for projectId: UUID) -> [MemoryItem] {
+        let itemsByID = Dictionary(uniqueKeysWithValues: items(for: projectId).map { ($0.id, $0) })
+        return ids.compactMap { itemsByID[$0] }
+    }
+
     private func persist(_ item: MemoryItem) {
         try? database.withStatement(
             "INSERT OR REPLACE INTO memory_items (id, project_id, payload, created_at) VALUES (?, ?, ?, ?)"

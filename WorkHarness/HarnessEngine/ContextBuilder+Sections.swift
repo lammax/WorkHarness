@@ -191,18 +191,17 @@ extension ContextBuilder {
         )
     }
 
-    func projectMemorySection(items: [String], projectId: UUID?) throws -> ContextSection {
-        let content = "Project memory:\n\(items.joined(separator: "\n"))"
-        let stableProjectId = projectId?.uuidString ?? "unscoped"
-        let sources = try items.enumerated().map { index, item in
+    func projectMemorySection(items: [MemoryItem]) throws -> ContextSection {
+        let content = "Project memory:\n\(items.map(\.content).joined(separator: "\n"))"
+        let sources = try items.map { item in
             try makeSource(
-                id: "memory:\(stableProjectId):\(index)",
+                id: "memory:\(item.id.uuidString)",
                 kind: .memory,
                 purpose: "Apply a durable project fact.",
                 informationClass: .persistentState,
                 priority: .low,
                 freshness: .unknown,
-                content: item,
+                content: item.content,
                 retentionPolicy: .project,
                 containsSensitiveData: true
             )

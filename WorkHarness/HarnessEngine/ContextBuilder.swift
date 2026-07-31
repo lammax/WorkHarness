@@ -77,7 +77,7 @@ final class ContextBuilder: ContextBuilderProtocol {
         }
 
         if !input.memoryItems.isEmpty {
-            append(try projectMemorySection(items: input.memoryItems, projectId: project?.id))
+            append(try projectMemorySection(items: input.memoryItems))
         }
 
         if !input.ragResults.isEmpty {
@@ -128,7 +128,9 @@ final class ContextBuilder: ContextBuilderProtocol {
             summary: summary,
             contextItems: contextItems,
             includedFiles: includedFiles,
-            includedMemories: includedKinds.contains(.projectMemory) ? input.memoryItems : [],
+            includedMemories: includedKinds.contains(.projectMemory)
+                ? input.memoryItems.map(\.content)
+                : [],
             includedRAGResults: includedKinds.contains(.retrievalResults) ? input.ragResults : [],
             includedSummaries: includedSummaries,
             sections: budgetResult.sections,

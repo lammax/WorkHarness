@@ -834,6 +834,86 @@ Finding status after this slice:
 - Snapshot resolvability, runtime-managed history telemetry, and exact
   tokenizer reconciliation remain open.
 
+## Step 6 implementation result
+
+Completed on 31.07.2026:
+
+- Project memory is no longer requested from `MemoryService` as an unbounded
+  content array before context construction. `HarnessEngine` first requests
+  typed `MemoryReference` metadata and resolves only selected IDs.
+- `ContextMemoryRetrievalPolicy` sorts references deterministically by newest
+  creation date and stable ID, then applies both production limits: at most 8
+  items and at most 8,000 referenced content characters.
+- Selection respects `ContextPolicy.includeMemoryFacts` and
+  `MemoryPolicy.canReadMemory`. Disabled memory policy produces no selected
+  references or content resolution.
+- Resolution remains project-scoped. Missing selected IDs are omitted safely,
+  reported as invalid references, and do not block the optional-memory provider
+  request. Reference creation dates provide the explicit recency signal used
+  for selection.
+- Resolved memory enters `ContextBuilder` as typed `MemoryItem` values, so each
+  context source preserves its real memory ID as provenance instead of an
+  unstable array index. RunEvent observations continue to expose only opaque
+  hashed IDs.
+- `contextRetrievalStarted` and `contextRetrievalFinished` now distinguish
+  `projectMemory` retrieval and record limits, candidate/selected/resolved/
+  omitted counts, selected and retrieved character counts, duration, status,
+  and safe source IDs without recording memory content.
+- The existing ContextBuilder token budget remains the second guard. A
+  metadata estimate that understates resolved content cannot bypass the final
+  provider input budget.
+
+Representative trace comparison:
+
+- before Step 6, three available project-memory values were all copied into a
+  single section before budget selection; the Engine had no narrow reference
+  selection or record of which stored items it attempted to resolve;
+- after Step 6, the deterministic Engine fixture sees three references, selects
+  and resolves only the two newest IDs, delivers `RECENT_MEMORY` and
+  `MIDDLE_MEMORY`, and leaves `OLD_MEMORY` external. The Run completes with one
+  provider request and no raw memory content in retrieval or context-build
+  events;
+- the production-policy fixture starts with 10 references / 10,000 referenced
+  characters in reversed input order and consistently selects the 8 newest /
+  8,000 characters, omitting 2 before content resolution;
+- the small representative ContextBuilder section decreases from 5 estimated
+  whitespace tokens with all three facts to 4 with the two selected facts.
+  The deterministic provider does not report actual token usage or cost, so
+  WorkHarness correctly leaves those values unavailable rather than treating
+  estimates as provider usage;
+- retrieval latency is measured in the RunEvent. Tests require the duration
+  field but intentionally do not assert a machine-specific millisecond value.
+
+Verification:
+
+- 5 focused Step 6 tests cover production-default count/character bounds,
+  deterministic ordering, policy disablement, selected-ID-only resolution,
+  safe event metadata, missing references, and source provenance;
+- existing ContextContract, ContextBudget, and ContextDelivery suites continue
+  to pass in the 20-test focused context run;
+- the complete serial test plan passed: 203 passed and 1 opt-in live
+  Claude/MCP test remained skipped (204 total, 0 failed).
+
+Deliberately unchanged:
+
+- memory selection is recency-based, not semantic. No embeddings, vector
+  index, model call, or speculative memory subsystem was added;
+- `SQLiteMemoryRepository` still keeps its existing in-process item collection
+  for the Memory UI. The new service/engine boundary avoids copying unselected
+  contents into context construction and permits a future storage-level narrow
+  query without changing HarnessEngine;
+- user-selected attachments remain required-now evidence and are not converted
+  to optional just-in-time sources;
+- RAG already uses bounded query-time retrieval and remains unchanged.
+
+Finding status after this slice:
+
+- the project-memory eager-delivery part of P1.4 is resolved at the Engine and
+  context boundary; attachments remain aggregate-budgeted required input;
+- the `includeMemoryFacts` and `canReadMemory` portion of P1.3 is active;
+- semantic memory ranking remains an optional measured follow-up, not an MVP
+  requirement.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:

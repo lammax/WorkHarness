@@ -22,6 +22,7 @@ final class HarnessEngine {
     private let agentRuntimeRegistry: AgentRuntimeRegistry
     private let multiAgentCoordinator: MultiAgentCoordinator
     private let contextObservationPolicy = ContextObservationPolicy()
+    private let contextMemoryRetrievalPolicy: ContextMemoryRetrievalPolicy
     private var activeRuntimeSessions: [UUID: (runtime: AgentRuntime, sessionId: UUID)] = [:]
 
     init(
@@ -36,7 +37,8 @@ final class HarnessEngine {
         appSettingsService: AppSettingsServiceProtocol? = nil,
         agentModelRoutingService: AgentModelRoutingServiceProtocol? = nil,
         agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
-        multiAgentCoordinator: MultiAgentCoordinator? = nil
+        multiAgentCoordinator: MultiAgentCoordinator? = nil,
+        contextMemoryRetrievalPolicy: ContextMemoryRetrievalPolicy? = nil
     ) {
         self.repository = repository
         self.recorder = recorder
@@ -50,6 +52,7 @@ final class HarnessEngine {
         self.agentModelRoutingService = agentModelRoutingService
         self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
         self.multiAgentCoordinator = multiAgentCoordinator ?? MultiAgentCoordinator(repository: repository, recorder: recorder)
+        self.contextMemoryRetrievalPolicy = contextMemoryRetrievalPolicy ?? ContextMemoryRetrievalPolicy()
     }
 
     var providerName: String {
@@ -534,9 +537,14 @@ final class HarnessEngine {
         let currentProject = projectService?.currentProject
         let safetyMode = appSettingsService?.defaultSafetyMode ?? AppSettingsDefaults.defaultSafetyMode
         let contextAttachments = repository.run(withId: runId)?.contextAttachments ?? []
-        let memoryItems = currentProjectMemory(for: currentProject)
         let snapshot: ContextSnapshot
+        let memoryItems: [MemoryItem]
         do {
+            memoryItems = try retrieveProjectMemory(
+                for: currentProject,
+                agent: agent,
+                runId: runId
+            )
             snapshot = try contextBuilder.buildSnapshot(from: ContextBuildInput(
                 runId: runId,
                 agent: agent,
@@ -931,9 +939,88 @@ final class HarnessEngine {
         return value
     }
 
-    private func currentProjectMemory(for project: Project?) -> [String] {
-        guard let project else { return [] }
-        return memoryService?.items(for: project.id).map(\.content) ?? []
+    private func retrieveProjectMemory(
+        for project: Project?,
+        agent: Agent,
+        runId: UUID
+    ) throws -> [MemoryItem] {
+        guard let project, let memoryService,
+              agent.contextPolicy.includeMemoryFacts,
+              agent.memoryPolicy.canReadMemory else { return [] }
+
+        let retrievalId = UUID()
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        recorder.record(
+            runId: runId,
+            type: .contextRetrievalStarted,
+            message: "Selecting bounded project memory references.",
+            metadata: [
+                "retrievalId": retrievalId.uuidString,
+                "retrievalKind": "projectMemory",
+                "maximumItemCount": "\(contextMemoryRetrievalPolicy.maximumItemCount)",
+                "maximumCharacterCount": "\(contextMemoryRetrievalPolicy.maximumCharacterCount)"
+            ]
+        )
+
+        do {
+            try Task.checkCancellation()
+            let references = memoryService.references(for: project.id)
+            let selection = try contextMemoryRetrievalPolicy.select(
+                from: references,
+                contextPolicy: agent.contextPolicy,
+                memoryPolicy: agent.memoryPolicy
+            )
+            let selectedIDs = selection.selectedReferences.map(\.id)
+            let retrievedItems = memoryService.items(withIDs: selectedIDs, for: project.id)
+                .filter { $0.projectId == project.id }
+            let itemsByID = Dictionary(uniqueKeysWithValues: retrievedItems.map { ($0.id, $0) })
+            let orderedItems = selectedIDs.compactMap { itemsByID[$0] }
+            let invalidReferenceCount = max(0, selectedIDs.count - orderedItems.count)
+            let selectedCharacterCount = selection.selectedReferences.reduce(0) {
+                $0 + $1.contentCharacterCount
+            }
+            let retrievedCharacterCount = orderedItems.reduce(0) {
+                $0 + $1.content.count
+            }
+            recorder.record(
+                runId: runId,
+                type: .contextRetrievalFinished,
+                message: "Retrieved \(orderedItems.count) bounded project memory item(s).",
+                metadata: [
+                    "retrievalId": retrievalId.uuidString,
+                    "retrievalKind": "projectMemory",
+                    "status": invalidReferenceCount == 0 ? "succeeded" : "partial",
+                    "durationMs": "\(elapsedMilliseconds(since: startedAt))",
+                    "candidateReferenceCount": "\(references.count)",
+                    "selectedReferenceCount": "\(selectedIDs.count)",
+                    "resolvedItemCount": "\(orderedItems.count)",
+                    "omittedReferenceCount": "\(selection.omittedReferenceCount)",
+                    "invalidReferenceCount": "\(invalidReferenceCount)",
+                    "selectedCharacterCount": "\(selectedCharacterCount)",
+                    "retrievedCharacterCount": "\(retrievedCharacterCount)",
+                    "selectedSourceIdsJSON": encodedIdentifiers(
+                        selectedIDs.map {
+                            ContextObservationPolicy.safeIdentifier($0.uuidString, kind: "memory")
+                        }
+                    )
+                ]
+            )
+            return orderedItems
+        } catch {
+            recorder.record(
+                runId: runId,
+                type: .contextRetrievalFinished,
+                message: "Project memory retrieval failed; no memory was included.",
+                metadata: [
+                    "retrievalId": retrievalId.uuidString,
+                    "retrievalKind": "projectMemory",
+                    "status": error is CancellationError ? "cancelled" : "failed",
+                    "durationMs": "\(elapsedMilliseconds(since: startedAt))",
+                    "errorType": String(describing: type(of: error))
+                ]
+            )
+            throw error
+        }
     }
 
     private func latestContextFoldSummary(for runId: UUID) -> ContextFoldSummary? {
