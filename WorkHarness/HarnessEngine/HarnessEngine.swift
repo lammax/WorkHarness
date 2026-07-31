@@ -242,7 +242,7 @@ final class HarnessEngine {
                 candidates: [candidate],
                 configuration: configuration
             )
-            let snapshot = context(
+            let snapshot = try context(
                 for: run.id,
                 prompt: goal,
                 agent: agent,
@@ -456,7 +456,7 @@ final class HarnessEngine {
                 runId: runId,
                 agent: agent,
                 messages: [.init(role: .user, content: prompt)],
-                context: context(
+                context: try context(
                     for: runId,
                     prompt: prompt,
                     agent: agent,
@@ -516,12 +516,12 @@ final class HarnessEngine {
         deliveryMode: ContextDeliveryMode,
         providerContextWindowTokens: Int? = nil,
         ragResults: [RAGCitation] = []
-    ) -> ContextSnapshot {
+    ) throws -> ContextSnapshot {
         let currentProject = projectService?.currentProject
         let safetyMode = appSettingsService?.defaultSafetyMode ?? AppSettingsDefaults.defaultSafetyMode
         let contextAttachments = repository.run(withId: runId)?.contextAttachments ?? []
         let memoryItems = currentProjectMemory(for: currentProject)
-        let snapshot = contextBuilder.buildSnapshot(from: ContextBuildInput(
+        let snapshot = try contextBuilder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
             providerId: providerId,
@@ -545,6 +545,7 @@ final class HarnessEngine {
             "providerId": providerId,
             "agentId": agent.id.uuidString,
             "tokenEstimate": "\(snapshot.tokenCount)",
+            "estimatedInputTokenCount": "\(snapshot.estimatedInputTokenCount)",
             "contextItemCount": "\(snapshot.contextItems.count)",
             "contextSectionCount": "\(snapshot.sections.count)",
             "contextSourceCount": "\(contextSourceCount)",
@@ -553,6 +554,8 @@ final class HarnessEngine {
             "memoryItemCount": "\(memoryItems.count)",
             "ragResultCount": "\(snapshot.includedRAGResults.count)",
             "summaryCount": "\(snapshot.includedSummaries.count)",
+            "omissionCount": "\(snapshot.omissions.count)",
+            "omittedTokenEstimate": "\(snapshot.omissions.compactMap(\.estimatedTokenCount).reduce(0, +))",
             "deliveryMode": snapshot.deliveryMode.rawValue,
             "safetyMode": safetyMode.rawValue
         ]
@@ -565,11 +568,24 @@ final class HarnessEngine {
         if let providerContextWindowTokens = snapshot.windowConstraint.providerContextWindowTokens {
             metadata["providerContextWindowTokens"] = "\(providerContextWindowTokens)"
         }
+        if let effectiveMaxInputTokens = snapshot.windowConstraint.effectiveMaxInputTokens {
+            metadata["effectiveMaxInputTokens"] = "\(effectiveMaxInputTokens)"
+        }
+        if !snapshot.omissions.isEmpty {
+            metadata["omissionReasons"] = Set(snapshot.omissions.map(\.reason.rawValue))
+                .sorted()
+                .joined(separator: ",")
+            metadata["omittedSectionKinds"] = Set(snapshot.omissions.compactMap {
+                $0.sectionKind?.rawValue
+            })
+            .sorted()
+            .joined(separator: ",")
+        }
 
         recorder.record(
             runId: runId,
             type: .contextBuilt,
-            message: "Context prepared: \(snapshot.contextItems.count) item(s), estimated \(snapshot.tokenCount) tokens.",
+            message: "Context prepared: \(snapshot.contextItems.count) item(s), \(snapshot.omissions.count) omission(s), estimated \(snapshot.estimatedInputTokenCount) input tokens.",
             metadata: metadata
         )
 
@@ -652,7 +668,7 @@ final class HarnessEngine {
     private func runAgentRuntimeTask(runId: UUID, prompt: String, agent: Agent, runtime: AgentRuntime) async {
         do {
             let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
-            let snapshot = context(
+            let snapshot = try context(
                 for: runId,
                 prompt: prompt,
                 agent: agent,

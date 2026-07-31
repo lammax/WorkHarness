@@ -92,6 +92,8 @@ enum ContextOmissionReason: String, Codable, CaseIterable, Equatable {
 
 struct ContextOmission: Codable, Equatable {
     var sourceId: String
+    var sourceKind: ContextSourceKind?
+    var sectionKind: ContextSectionKind?
     var reason: ContextOmissionReason
     var estimatedTokenCount: Int?
 }
@@ -100,4 +102,22 @@ struct ContextWindowConstraint: Codable, Equatable {
     var configuredMaxInputTokens: Int?
     var reservedOutputTokens: Int?
     var providerContextWindowTokens: Int?
+
+    var effectiveMaxInputTokens: Int? {
+        let configuredLimit = configuredMaxInputTokens.map { max(0, $0) }
+        let providerLimit = providerContextWindowTokens.map {
+            max(0, $0 - max(0, reservedOutputTokens ?? 0))
+        }
+
+        switch (configuredLimit, providerLimit) {
+        case let (.some(configured), .some(provider)):
+            return min(configured, provider)
+        case let (.some(configured), .none):
+            return configured
+        case let (.none, .some(provider)):
+            return provider
+        case (.none, .none):
+            return nil
+        }
+    }
 }

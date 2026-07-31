@@ -15,8 +15,8 @@ struct ContextContractTests {
         let input = makeCompleteInput()
         let builder = ContextBuilder()
 
-        let first = builder.buildSnapshot(from: input)
-        let second = builder.buildSnapshot(from: input)
+        let first = try builder.buildSnapshot(from: input)
+        let second = try builder.buildSnapshot(from: input)
 
         #expect(first.objective == input.userMessage)
         #expect(first.objectiveSource == second.objectiveSource)
@@ -44,7 +44,7 @@ struct ContextContractTests {
 
     @MainActor
     @Test func everySelectedSourceHasContextPolicyMetadata() throws {
-        let snapshot = ContextBuilder().buildSnapshot(from: makeCompleteInput())
+        let snapshot = try ContextBuilder().buildSnapshot(from: makeCompleteInput())
         let sources = snapshot.sections.flatMap(\.sources)
 
         #expect(!sources.isEmpty)
@@ -76,7 +76,7 @@ struct ContextContractTests {
 
     @MainActor
     @Test func contextSnapshotDecodesLegacyPayloadWithoutTypedContract() throws {
-        let snapshot = ContextBuilder().buildSnapshot(from: makeCompleteInput())
+        let snapshot = try ContextBuilder().buildSnapshot(from: makeCompleteInput())
         let encoded = try JSONEncoder().encode(snapshot)
         var object = try #require(
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
@@ -86,6 +86,7 @@ struct ContextContractTests {
         object.removeValue(forKey: "windowConstraint")
         object.removeValue(forKey: "deliveryMode")
         object.removeValue(forKey: "objectiveSource")
+        object.removeValue(forKey: "estimatedInputTokenCount")
         let legacyData = try JSONSerialization.data(withJSONObject: object)
 
         let decoded = try JSONDecoder().decode(ContextSnapshot.self, from: legacyData)
@@ -95,6 +96,7 @@ struct ContextContractTests {
         #expect(decoded.sections.isEmpty)
         #expect(decoded.omissions.isEmpty)
         #expect(decoded.deliveryMode == .unsupported)
+        #expect(decoded.estimatedInputTokenCount == decoded.tokenCount)
         #expect(decoded.windowConstraint == ContextWindowConstraint(
             configuredMaxInputTokens: nil,
             reservedOutputTokens: nil,

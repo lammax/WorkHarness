@@ -114,6 +114,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
     var windowConstraint: ContextWindowConstraint
     var deliveryMode: ContextDeliveryMode
     var tokenCount: Int
+    var estimatedInputTokenCount: Int
     var createdAt: Date
 
     init(
@@ -141,6 +142,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
         ),
         deliveryMode: ContextDeliveryMode = .unsupported,
         tokenCount: Int = 0,
+        estimatedInputTokenCount: Int? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -163,6 +165,7 @@ struct ContextSnapshot: Identifiable, Codable, Equatable {
         self.windowConstraint = windowConstraint
         self.deliveryMode = deliveryMode
         self.tokenCount = tokenCount
+        self.estimatedInputTokenCount = estimatedInputTokenCount ?? tokenCount
         self.createdAt = createdAt
     }
 
@@ -193,6 +196,7 @@ extension ContextSnapshot {
         case windowConstraint
         case deliveryMode
         case tokenCount
+        case estimatedInputTokenCount
         case createdAt
     }
 
@@ -231,6 +235,10 @@ extension ContextSnapshot {
             forKey: .deliveryMode
         ) ?? .unsupported
         tokenCount = try container.decodeIfPresent(Int.self, forKey: .tokenCount) ?? 0
+        estimatedInputTokenCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .estimatedInputTokenCount
+        ) ?? tokenCount
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 
@@ -256,6 +264,7 @@ extension ContextSnapshot {
         try container.encode(windowConstraint, forKey: .windowConstraint)
         try container.encode(deliveryMode, forKey: .deliveryMode)
         try container.encode(tokenCount, forKey: .tokenCount)
+        try container.encode(estimatedInputTokenCount, forKey: .estimatedInputTokenCount)
         try container.encode(createdAt, forKey: .createdAt)
     }
 }

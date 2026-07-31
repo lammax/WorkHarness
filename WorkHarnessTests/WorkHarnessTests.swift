@@ -1664,7 +1664,7 @@ struct WorkHarnessTests {
         let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
         let runId = UUID()
 
-        let snapshot = builder.buildSnapshot(from: ContextBuildInput(
+        let snapshot = try builder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
             providerId: "test.provider",
@@ -1691,19 +1691,19 @@ struct WorkHarnessTests {
     }
 
     @MainActor
-    @Test func contextBuilderAddsAutoApprovalInstructionOnlyForAutoMode() {
+    @Test func contextBuilderAddsAutoApprovalInstructionOnlyForAutoMode() throws {
         let builder = ContextBuilder()
         let runId = UUID()
         let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
 
-        let automaticSnapshot = builder.buildSnapshot(from: ContextBuildInput(
+        let automaticSnapshot = try builder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
             providerId: "test.provider",
             userMessage: "Update the file",
             safetyMode: .autoInsideSandbox
         ))
-        let manualSnapshot = builder.buildSnapshot(from: ContextBuildInput(
+        let manualSnapshot = try builder.buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
             providerId: "test.provider",
@@ -2994,6 +2994,7 @@ struct WorkHarnessTests {
             relevanceFilterMode: .heuristic
         )
         let appSettings = InMemoryAppSettingsService(
+            defaultMaxOutputTokens: 200,
             ragAnswerMode: .enabled,
             ragRetrievalSettings: settings
         )
@@ -3037,7 +3038,7 @@ struct WorkHarnessTests {
         let project = Project(name: "Memory Project")
         let agent = Agent(role: .coder, providerId: "test.provider", model: "test-model")
 
-        let snapshot = ContextBuilder().buildSnapshot(from: ContextBuildInput(
+        let snapshot = try ContextBuilder().buildSnapshot(from: ContextBuildInput(
             runId: UUID(),
             agent: agent,
             providerId: agent.providerId,
@@ -3062,7 +3063,7 @@ struct WorkHarnessTests {
             score: 0.91
         )
 
-        let snapshot = ContextBuilder().buildSnapshot(from: ContextBuildInput(
+        let snapshot = try ContextBuilder().buildSnapshot(from: ContextBuildInput(
             runId: UUID(),
             agent: agent,
             providerId: agent.providerId,
@@ -3119,7 +3120,7 @@ struct WorkHarnessTests {
         #expect(compactedEvent.metadata["sourceEventCount"] == "\(summary.sourceEventCount)")
 
         let agent = try #require(run.agents.first)
-        let snapshot = ContextBuilder().buildSnapshot(from: ContextBuildInput(
+        let snapshot = try ContextBuilder().buildSnapshot(from: ContextBuildInput(
             runId: runId,
             agent: agent,
             providerId: agent.providerId,

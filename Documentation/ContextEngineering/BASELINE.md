@@ -610,6 +610,61 @@ Verification:
   context text; only provider-neutral metadata was added before adapter
   encoding.
 
+## Step 3 implementation result
+
+Completed on 31.07.2026:
+
+- `ContextBuilder` now applies an effective WorkHarness-owned input budget:
+  `min(configured input limit, provider context window - reserved output)`.
+  When one limit is unknown, the known limit is used.
+- The objective, active safety instruction, and user-selected attachments are
+  mandatory. They fail with a typed `ContextBuildError` before provider
+  invocation when they cannot fit.
+- Optional sections are selected deterministically by priority. Trusted recent
+  and folded summaries plus RAG evidence have precedence over project metadata,
+  selected-file references, and project memory.
+- Selection is priority-based, but included sections are delivered in their
+  original canonical order.
+- Optional overflow produces typed `ContextOmission` values. No source is
+  silently truncated.
+- Token estimation is behind `ContextTokenEstimatorProtocol`; the current
+  implementation remains the documented whitespace approximation.
+- `contextBuilt` records effective budget, included input estimate, omission
+  count/reasons/section kinds, and omitted-token estimate without logging
+  source content or sensitive source IDs.
+- Cancellation and estimator failures stop context construction explicitly.
+
+Deliberately unchanged:
+
+- provider/runtime-managed instructions and tool schemas are not measurable by
+  the current WorkHarness contract and are not included in this estimate;
+- AgentRuntime descriptors still do not report model context-window limits, so
+  those paths use the configured input limit;
+- memory, RAG, and attachments are still loaded before selection; just-in-time
+  retrieval remains a later phase;
+- no partial string truncation, automatic compaction, tool/history bounding,
+  persistence, or UI was added.
+
+Verification:
+
+- 8 focused budget-policy tests cover below-budget, exact-boundary, optional
+  overflow, mandatory overflow, stable priority, smaller provider window,
+  cancellation, estimator failure, Run failure before provider invocation, and
+  safe omission metadata.
+- The complete serial test plan passed: 187 passed and 1 opt-in live
+  Claude/MCP test remained skipped.
+- One RAG fixture now reserves 200 output tokens for its 1,000-token fake
+  provider instead of the invalid previous 2,000-token reservation.
+
+Finding status after this slice:
+
+- P1.2 is resolved for context owned and measurable by WorkHarness.
+- P1.4 is mitigated at the model-input boundary; eager loading and aggregate
+  source retrieval remain unresolved.
+- P2 omission, effective-budget, and estimated-input observability gaps are
+  resolved for `contextBuilt`; exact token usage and snapshot resolvability
+  remain open.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:

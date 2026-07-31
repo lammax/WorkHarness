@@ -9,8 +9,14 @@ import Swinject
 
 extension Container {
     func registerEngine() {
-        register(ContextBuilderProtocol.self) { _ in
-            ContextBuilder()
+        register(ContextTokenEstimatorProtocol.self) { _ in
+            ApproximateContextTokenEstimator()
+        }.inObjectScope(.container)
+
+        register(ContextBuilderProtocol.self) { resolver in
+            ContextBuilder(
+                tokenEstimator: resolver.resolve(ContextTokenEstimatorProtocol.self)!
+            )
         }.inObjectScope(.container)
 
         register(ContextFoldingServiceProtocol.self) { _ in

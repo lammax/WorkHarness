@@ -328,8 +328,9 @@ Continue product development in this order:
      discardable;
    - [x] add typed provenance, priority, freshness, estimated token cost and
      retention metadata where the audit shows it is needed;
-   - make section budgets, overflow priority, omissions and truncation visible
-     through `ContextSnapshot` metadata and append-only RunEvents;
+   - [x] enforce the effective input budget, apply deterministic overflow
+     priority, fail mandatory overflow, and expose omissions through
+     `ContextSnapshot` metadata and append-only RunEvents;
    - replace consumed oversized tool results with bounded summaries plus
      addressable artifact/event references;
    - compare at least one realistic trace before and after each context-policy

@@ -9,7 +9,7 @@ import Foundation
 
 @MainActor
 protocol ContextBuilderProtocol: AnyObject {
-    func buildSnapshot(from input: ContextBuildInput) -> ContextSnapshot
+    func buildSnapshot(from input: ContextBuildInput) throws -> ContextSnapshot
 }
 
 struct ContextBuildInput: Equatable {
