@@ -342,6 +342,10 @@ Continue product development in this order:
    - [x] replace eager project-memory delivery with metadata-first reference
      selection and deterministic just-in-time resolution, bounded to 8 recent
      items and 8,000 characters before ContextBuilder budget enforcement;
+   - [x] complete the Phase 7 long-horizon decision gate: automatic compaction,
+     a separate structured-notes subsystem and additional subagent isolation
+     are not needed for the current MVP; reopen only on measured runtime-history
+     utilization or a reproducible long-horizon context failure;
    - add cleanup for persistent context/tool artifacts and an artifact-content
      retrieval contract that does not require exposing host paths;
    - add measured history limits for runtime-managed Cursor/Claude sessions

@@ -914,6 +914,98 @@ Finding status after this slice:
 - semantic memory ranking remains an optional measured follow-up, not an MVP
   requirement.
 
+## Step 7 decision result
+
+Completed on 02.08.2026.
+
+Decision: do not add automatic context compaction, a separate structured-notes
+subsystem, or another subagent-context isolation layer for the current MVP.
+Keep the existing explicit `ContextFoldingService` path available, but do not
+trigger it automatically until runtime-managed history becomes measurable or a
+representative failure demonstrates that the current bounded context loses
+required long-horizon state.
+
+Measured local Run snapshot:
+
+- the durable store contained 69 Runs and 21,671 RunEvents;
+- the largest Run contained 2,949 events;
+- only 3 Runs built context more than once, and the maximum was 3 context
+  builds in one Run;
+- no persisted `contextCompacted` event existed;
+- the largest inspected pre-hardening execution-loop Run contained 2,704
+  `providerStreamDelta` events and 8 tool results. The tool-result messages
+  totalled 109,761 characters and the largest single result was 83,478
+  characters. That trace was recorded on 26.07.2026, before Step 4 introduced
+  bounded previews and artifact-backed retention, so it is evidence for the
+  completed tool-result fix rather than evidence that automatic compaction is
+  still required.
+
+Why event volume does not currently require automatic compaction:
+
+- `HarnessEngine.context(...)` does not copy the Run event list into a provider
+  request. It sends the current objective plus deliberately selected typed
+  sections only;
+- every request is constrained by `ContextBudgetPolicy`, including an output
+  reservation and provider context-window limit when the runtime reports it;
+- project memory is selected by reference and resolved within the 8-item /
+  8,000-character pre-budget limit;
+- RAG remains query-time retrieval and user attachments remain explicit
+  required-now evidence;
+- multi-agent streams are bounded to 4,000 persisted characters per step and
+  inter-agent handoffs use a 12,000-character inline limit with a 2,000-
+  character preview plus an artifact reference;
+- large tool output is no longer retained inline indefinitely after Step 4.
+
+Decision gates:
+
+1. **Automatic compaction:** reopen only when Cursor/Claude exposes measurable
+   history or context-window utilization, or when a reproducible Run fails
+   because required prior state cannot fit despite the existing selection and
+   budget policy.
+2. **Structured notes:** do not duplicate Run, Project, ExecutionTask, artifact,
+   and memory persistence. Reopen only when required cross-session state cannot
+   be represented or retrieved through those typed stores. Durable Execution
+   Loop recovery remains a separate product task, not a reason to place loop
+   state in model context.
+3. **Subagent isolation:** the current multi-agent coordinator already creates
+   task-local sessions and supplies bounded, explicit handoffs. Reopen only if
+   a measured cross-agent leakage or irrelevant-context failure remains after
+   provider consistency work.
+
+If automatic compaction is later approved, it must have an explicit threshold,
+preserve intent, constraints, decisions, evidence, artifact references, open
+issues and the next action, record an append-only `contextCompacted` event, link
+the source events, and pass long-trace regression tests. Provider-internal
+history must never be silently rewritten from WorkHarness estimates.
+
+Verification and limitations:
+
+- source-flow inspection confirms that RunEvents are persistent audit state,
+  not implicit ContextBuilder input;
+- existing ContextContract, ContextBudget, ContextMemoryRetrieval,
+  ToolResultRetention, ContextDelivery and ContextFolding tests cover the
+  mechanisms used by this decision;
+- the persisted long traces predate Steps 2–6. This prevents an honest claim
+  about post-hardening runtime-history utilization, but it does not justify a
+  speculative mechanism: runtime-managed Cursor/Claude history is still opaque
+  and WorkHarness-managed context is already bounded per request;
+- Step 8 must verify provider/adapter consistency and record capability
+  fallbacks before this decision can be considered part of the final context
+  refactoring closeout.
+
+Context impact:
+
+1. No new content enters model context; existing objective and selected typed
+   sections remain unchanged.
+2. Complete Run history, artifacts, project state, memory storage and RAG data
+   remain external and are retrieved only through their existing boundaries.
+3. No new content is discarded or summarized automatically. Existing bounded
+   tool/handoff policies and explicit Context Folding remain unchanged.
+4. The effective per-request input budget, provider output reservation, memory
+   limits, handoff limits and tool-result limits remain the active guards.
+5. The decision is based on the persisted Run measurements above, source-flow
+   inspection and the focused regression suites listed above.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:
