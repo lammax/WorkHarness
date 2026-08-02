@@ -1,6 +1,6 @@
 # WorkHarness → WorkHarnessMobile Development Roadmap
 
-Updated: 29.07.2026
+Updated: 02.08.2026
 
 ## Purpose
 
@@ -67,15 +67,20 @@ Now available for autonomous mobile development:
 - current-branch execution without forced task branches;
 - runtime and model snapshots for every task;
 - visible start, pause-after-current-task, resume and stop controls;
-- per-attempt metrics and Markdown comparison-report output.
+- per-attempt metrics and Markdown comparison-report output;
+- durable execution-loop checkpoints, relaunch recovery and repository
+  reconciliation;
+- tool-capable Ollama-backed Local LLM AgentRuntime;
+- immutable per-task runtime/model snapshots and routing-v2 fallback metrics;
+- bounded agent/tool artifacts and measured context-delivery policies.
 
 Still required:
 
 - tighten the mobile workspace contract before the first evidence run;
 - execute and preserve two cloud attempts against the immutable Day 5 pool;
-- add a tool-capable local-model AgentRuntime and execute the local comparison;
-- add durable resume after relaunch/crash and idempotent task reconciliation;
-- expand validation artifacts and integrated mobile/API contract testing.
+- execute and preserve the tool-capable local-model comparison;
+- implement Remote Control API contract verification;
+- expand mobile validation artifacts and integrated mobile/API testing.
 
 ### WorkHarnessMobile
 
@@ -88,6 +93,19 @@ Already available:
 - fixture-backed pairing/workspace UI;
 - Runs, Approvals and New Run surfaces;
 - deterministic unit and UI coverage.
+
+Current implementation status:
+
+- `WHM-001`, `WHM-002` and `WHM-003` are committed;
+- the `WHM-004` error/retry behavior is implemented, but its acceptance gate is
+  not complete because the current unit suite contains one failing retry-count
+  assertion;
+- the app builds for the selected iPhone 17 Pro Simulator;
+- DEBUG composition uses fixture routing;
+- non-DEBUG composition still uses `InMemoryRemoteControlClient`, so there is
+  no production network path yet;
+- the next product feature after restoring a green validation baseline is
+  `WHM-005` Reject approval.
 
 Still required for the first production-capable client:
 
@@ -114,12 +132,69 @@ Still required for the first production-capable client:
 9. Features are delivered as small execution-loop tasks with one validated
    commit per task.
 10. WorkHarnessMobile does not duplicate orchestration, provider or tool logic.
+11. Large logs, tool results and artifacts stay outside active model/mobile
+    context and are exposed through bounded previews, pagination or opaque
+    references.
+12. Mobile observability shows explicit Run state and safe summaries; it never
+    invents or exposes private chain-of-thought.
+
+## Current Delivery Snapshot
+
+### Stable task progress
+
+| Task | State | Evidence |
+|---|---|---|
+| `WHM-001` | Complete | Repository guidance and build/test contract committed. |
+| `WHM-002` | Complete | Remote-control domain types split from the client protocol. |
+| `WHM-003` | Complete | Placeholder test replaced with domain-state coverage. |
+| `WHM-004` | Validation repair required | Error/retry UI exists; full unit gate currently fails in `retryCallsLoad()`. |
+| `WHM-005`–`WHM-020` | Not started | Immutable Day 5 task definitions remain pending by design. |
+
+The Day 5 task pool is immutable input. Effective completion state belongs in
+this roadmap and execution-attempt reports; task-source `Status` fields remain
+`pending` so cloud and local attempts use identical prompts.
+
+### Validation snapshot — 02.08.2026
+
+- Build: passed on `platform=iOS Simulator,name=iPhone 17 Pro`.
+- Unit tests: 61 passed, 1 failed.
+- Failing test: `RemoteWorkspaceViewModelTests/retryCallsLoad()` expects one
+  aggregate load call, while retry currently invokes the three load-related
+  service operations: capabilities, Runs and Approvals.
+- UI/integration validation was not rerun during this roadmap audit.
+
+### Available WorkHarness Remote Control surface
+
+WorkHarness currently exposes bearer-authenticated health, capabilities,
+Projects, Runs, Run details, RunEvents, SSE streaming, Approvals, approve,
+reject, Run creation and cancellation routes. The remaining gap is the mobile
+production transport and verified shared contract, not the absence of the
+basic server operations.
+
+Still missing at the shared contract level:
+
+- canonical request/response fixtures consumed by contract tests;
+- an explicit compatibility/version value in capabilities;
+- verified mobile DTO coverage for errors, dates, enums and optional fields;
+- verified SSE framing, ordering and reconnect cursor behavior.
+
+### Immediate delivery order
+
+1. Repair the `WHM-004` test contract and restore a green full unit gate.
+2. Execute `WHM-005`–`WHM-009`: Reject, endpoint normalization, DTO mapping,
+   URLSession foundation, health and capabilities.
+3. Execute `WHM-010`–`WHM-015`: production Runs/Approvals/actions, Keychain,
+   restore/disconnect and explicit connectivity/authentication states.
+4. Execute `WHM-016`–`WHM-019`: SSE parser/stream, minimum Dashboard and Run
+   Details.
+5. Complete `WHM-020` with a real mobile-to-WorkHarness integration runbook and
+   Release M1 evidence.
 
 ## Track A — WorkHarness as the Mobile Development Harness
 
 ### WH-A0. Mobile workspace contract
 
-Status: Baseline exists; tighten before the first autonomous evidence run.
+Status: Operational baseline exists; hardening and evidence capture remain.
 
 Scope:
 
@@ -138,8 +213,8 @@ Done when:
 
 ### WH-A1. Execution Loop v1
 
-Status: MVP implemented as WorkHarness Step 24; course execution evidence
-pending.
+Status: MVP and durable recovery implemented as WorkHarness Step 24; course
+execution evidence pending.
 
 Scope:
 
@@ -161,7 +236,9 @@ Done when:
 
 ### WH-A2. Mobile validation pipeline
 
-Status: Planned.
+Status: Planned. Basic configured build/test execution exists, but artifact
+retention, failure classification and a consistently green mobile regression
+gate are not complete.
 
 Scope:
 
@@ -258,7 +335,8 @@ Done when:
 
 ## Stage 0. Foundation
 
-Status: Mostly implemented; production networking boundaries remain.
+Status: Fixture foundation implemented; production composition and a green
+regression gate remain.
 
 Goal:
 Maintain a small, testable application foundation.
@@ -279,6 +357,11 @@ Done when:
 - feature ViewModels call service/client protocols;
 - DEBUG fixtures and production composition are explicit;
 - the app builds and tests on the selected iOS Simulator.
+
+Current gap:
+
+- non-DEBUG composition still selects `InMemoryRemoteControlClient`;
+- the current unit suite has one failing `WHM-004` retry assertion.
 
 ## Stage 1. Pairing
 
@@ -660,6 +743,10 @@ Includes:
 
 This is the active WorkHarnessMobile target and contains the Day 5 task pool.
 
+Current M1 state: foundation and fixture UX are present, but no production
+transport milestone is complete. Release M1 is blocked first by the red unit
+gate, then by `WHM-005`–`WHM-020`.
+
 ### Release M2 — Remote Interaction
 
 Includes:
@@ -734,4 +821,6 @@ A mobile stage is complete only when:
 - real integration is verified where a server interaction is involved;
 - security and approval behavior is explicit;
 - WorkHarness RunEvents and artifacts provide evidence;
+- remote payloads and artifact access are bounded, reference-based and do not
+  duplicate large raw content across UI, events and logs;
 - roadmap status matches actual behavior.
