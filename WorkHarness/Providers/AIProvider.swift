@@ -29,6 +29,8 @@ struct ProviderCapabilities: Codable, Equatable {
     var supportsApprovals: Bool
     var supportsMCP: Bool
     var supportedModels: [String]
+    var supportsUsageReporting: Bool?
+    var supportsCancellation: Bool?
 
     init(
         supportsStreaming: Bool = true,
@@ -43,7 +45,9 @@ struct ProviderCapabilities: Codable, Equatable {
         costModel: String? = nil,
         supportsApprovals: Bool = false,
         supportsMCP: Bool = false,
-        supportedModels: [String] = []
+        supportedModels: [String] = [],
+        supportsUsageReporting: Bool? = nil,
+        supportsCancellation: Bool? = nil
     ) {
         self.supportsStreaming = supportsStreaming
         self.supportsToolCalls = supportsToolCalls
@@ -58,6 +62,22 @@ struct ProviderCapabilities: Codable, Equatable {
         self.supportsApprovals = supportsApprovals
         self.supportsMCP = supportsMCP
         self.supportedModels = supportedModels
+        self.supportsUsageReporting = supportsUsageReporting
+        self.supportsCancellation = supportsCancellation
+    }
+
+    func contextDeliveryPlan(reservedOutputTokens: Int?) -> ContextDeliveryPlan {
+        ContextDeliveryPlan(
+            mode: .structuredMessages,
+            capabilities: ContextBoundaryCapabilities(
+                contextWindowTokens: contextWindowTokens,
+                reservedOutputTokens: reservedOutputTokens,
+                streaming: InferenceCapabilitySupport(supportsStreaming),
+                tools: InferenceCapabilitySupport(supportsToolCalls),
+                usageReporting: InferenceCapabilitySupport(supportsUsageReporting),
+                cancellation: InferenceCapabilitySupport(supportsCancellation)
+            )
+        )
     }
 }
 

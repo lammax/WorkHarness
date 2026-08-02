@@ -86,6 +86,9 @@ struct AgentRuntimeDescriptor: Equatable {
     let modelRouting: AgentModelRoutingDescriptor?
     let contextDeliveryMode: ContextDeliveryMode
     let capabilities: AgentCapabilities
+    let contextWindowTokens: Int?
+    let supportsUsageReporting: Bool?
+    let supportsCancellation: Bool?
 
     init(
         id: String,
@@ -96,7 +99,10 @@ struct AgentRuntimeDescriptor: Equatable {
         defaultModelId: String? = nil,
         modelRouting: AgentModelRoutingDescriptor? = nil,
         contextDeliveryMode: ContextDeliveryMode = .unsupported,
-        capabilities: AgentCapabilities = AgentCapabilities()
+        capabilities: AgentCapabilities = AgentCapabilities(),
+        contextWindowTokens: Int? = nil,
+        supportsUsageReporting: Bool? = nil,
+        supportsCancellation: Bool? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -107,6 +113,27 @@ struct AgentRuntimeDescriptor: Equatable {
         self.modelRouting = modelRouting
         self.contextDeliveryMode = contextDeliveryMode
         self.capabilities = capabilities
+        self.contextWindowTokens = contextWindowTokens
+        self.supportsUsageReporting = supportsUsageReporting
+        self.supportsCancellation = supportsCancellation
+    }
+
+    func contextDeliveryPlan(reservedOutputTokens: Int?) -> ContextDeliveryPlan {
+        ContextDeliveryPlan(
+            mode: contextDeliveryMode,
+            capabilities: ContextBoundaryCapabilities(
+                contextWindowTokens: contextWindowTokens,
+                reservedOutputTokens: reservedOutputTokens,
+                streaming: InferenceCapabilitySupport(
+                    capabilities.supports(.canStreamTokens)
+                ),
+                tools: InferenceCapabilitySupport(
+                    capabilities.supports(.canUseTools)
+                ),
+                usageReporting: InferenceCapabilitySupport(supportsUsageReporting),
+                cancellation: InferenceCapabilitySupport(supportsCancellation)
+            )
+        )
     }
 }
 

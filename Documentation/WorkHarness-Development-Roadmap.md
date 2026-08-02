@@ -346,6 +346,14 @@ Continue product development in this order:
      a separate structured-notes subsystem and additional subagent isolation
      are not needed for the current MVP; reopen only on measured runtime-history
      utilization or a reproducible long-horizon context failure;
+   - [x] normalize direct providers and AgentRuntimes into one context-delivery
+     capability plan, keep adapter-specific encoding local, and record unknown
+     context-window, output-reservation, usage and cancellation fallbacks in
+     safe RunEvent metadata;
+   - [x] close the ContextPlan MVP with equivalent structured/rendered context
+     policy tests, a successful macOS build and 210 passing regression tests;
+     retain the documented macOS Automation Mode initialization failure as an
+     environment-level UI-test rerun requirement;
    - add cleanup for persistent context/tool artifacts and an artifact-content
      retrieval contract that does not require exposing host paths;
    - add measured history limits for runtime-managed Cursor/Claude sessions

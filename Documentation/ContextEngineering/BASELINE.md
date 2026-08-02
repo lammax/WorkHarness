@@ -1006,6 +1006,90 @@ Context impact:
 5. The decision is based on the persisted Run measurements above, source-flow
    inspection and the focused regression suites listed above.
 
+## Step 8 provider consistency and final closeout
+
+Completed on 02.08.2026.
+
+Provider and runtime boundaries now convert their execution metadata into one
+provider-neutral `ContextDeliveryPlan` before `ContextBuilder` is invoked. The
+plan carries only the information needed by WorkHarness domain policy:
+
+- delivery mode (`structuredMessages` or `renderedPrompt`);
+- reported context-window limit;
+- configured output-token reservation;
+- streaming and tool support;
+- usage-reporting and cancellation support.
+
+`HarnessEngine` passes the same plan shape for direct `AIProvider` requests,
+Cursor ACP, Claude CLI and multi-agent runtime requests. `ContextBuilder`
+continues to own selection, section order, budgeting and omissions. Adapter-
+specific encoding remains local: Local LLM emits one structured system
+message, while Cursor ACP and Claude CLI render the same selected context into
+their prompt format.
+
+Capability fallback is explicit in the safe `contextBuilt` metadata:
+
+- an unknown provider window records whether the configured WorkHarness input
+  budget is used or no limit is available;
+- a missing output reservation is recorded as `outputReservation:none`;
+- unknown usage reporting records `usageReporting:observeEvents`;
+- unknown cancellation support records `cancellation:boundaryContract`.
+
+These fields contain capability state only. They do not copy prompt content,
+tool output, memory contents or attachment contents into RunEvents.
+
+Representative deterministic comparison:
+
+| Metric | Structured provider | Rendered runtime | Result |
+| --- | --- | --- | --- |
+| Context sections | Same typed sections | Same typed sections | Equal |
+| Section order | Deterministic builder order | Deterministic builder order | Equal |
+| Omissions | Same IDs and reasons | Same IDs and reasons | Equal |
+| Estimated input tokens | Same estimate | Same estimate | Equal |
+| Encoding | Structured system message | Rendered prompt | Intentionally different |
+| Raw attachment in `contextBuilt` | Absent | Absent | Equal |
+| Actual output tokens / cost | No live model invoked | No live model invoked | Not generated |
+| Network latency | No live model invoked | No live model invoked | Not generated |
+
+The comparison intentionally uses deterministic fake boundaries. Step 8 does
+not spend provider credits or present model/network variance as context-policy
+evidence. Existing provider usage events still link actual input/output tokens,
+cost and estimates to the same `ContextSnapshot` when a real backend reports
+them.
+
+Verification:
+
+- macOS build succeeded;
+- all 7 focused `ContextDeliveryTests` passed, including Cursor ACP, Claude
+  CLI, Local LLM, legacy capability decoding, normalized boundary capability
+  equality, safe fallback metadata and provider-neutral policy equivalence;
+- the full scheme executed 210 tests successfully and skipped the existing
+  opt-in live test; the only failure was the UI test runner timing out while
+  enabling macOS Automation Mode before UI tests initialized;
+- a separate UI-target retry reproduced an Automation Mode initialization hang
+  and was interrupted after 195 seconds;
+- no unit, integration, build or context-policy assertion failed.
+
+Result: the ContextPlan implementation is complete for the current MVP.
+Provider selection changes encoding and reported capabilities, not WorkHarness
+context policy. Persistent artifact cleanup, host-path-free artifact retrieval
+and runtime-managed history telemetry remain explicit post-MVP roadmap work.
+
+Context impact:
+
+1. The same objective and selected typed sections enter model context; the new
+   capability plan controls delivery and observability, not prompt content.
+2. Run history, artifacts, unselected memory, RAG storage and provider-internal
+   history remain external and are retrieved through existing typed services.
+3. No new content is discarded or summarized. Existing deterministic budget,
+   omission, bounded tool-result and handoff behavior remains unchanged.
+4. The configured input budget, output reservation and reported provider
+   context window determine the effective limit; unknown capabilities now
+   produce explicit fallback metadata.
+5. Behavior was verified by exact structured-vs-rendered snapshot comparison,
+   adapter delivery tests, safe-event assertions, build and the 210-test
+   regression run.
+
 ## Comparison metrics for later slices
 
 Every representative before/after trace should compare:

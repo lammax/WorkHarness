@@ -121,3 +121,72 @@ struct ContextWindowConstraint: Codable, Equatable {
         }
     }
 }
+
+enum InferenceCapabilitySupport: String, Codable, Equatable {
+    case supported
+    case unsupported
+    case unknown
+
+    init(_ value: Bool?) {
+        switch value {
+        case true:
+            self = .supported
+        case false:
+            self = .unsupported
+        case nil:
+            self = .unknown
+        }
+    }
+}
+
+struct ContextBoundaryCapabilities: Codable, Equatable {
+    var contextWindowTokens: Int?
+    var reservedOutputTokens: Int?
+    var streaming: InferenceCapabilitySupport
+    var tools: InferenceCapabilitySupport
+    var usageReporting: InferenceCapabilitySupport
+    var cancellation: InferenceCapabilitySupport
+}
+
+struct ContextDeliveryPlan: Codable, Equatable {
+    var mode: ContextDeliveryMode
+    var capabilities: ContextBoundaryCapabilities
+
+    func observationMetadata(configuredMaxInputTokens: Int?) -> [String: String] {
+        var metadata = [
+            "contextWindowCapability": capabilities.contextWindowTokens == nil
+                ? "unknown"
+                : "reported",
+            "outputReservationCapability": capabilities.reservedOutputTokens == nil
+                ? "unavailable"
+                : "configured",
+            "streamingCapability": capabilities.streaming.rawValue,
+            "toolsCapability": capabilities.tools.rawValue,
+            "usageReportingCapability": capabilities.usageReporting.rawValue,
+            "cancellationCapability": capabilities.cancellation.rawValue
+        ]
+        var fallbacks: [String] = []
+
+        if capabilities.contextWindowTokens == nil {
+            fallbacks.append(
+                configuredMaxInputTokens == nil
+                    ? "contextWindow:noLimitAvailable"
+                    : "contextWindow:configuredInputBudget"
+            )
+        }
+        if capabilities.reservedOutputTokens == nil {
+            fallbacks.append("outputReservation:none")
+        }
+        if capabilities.usageReporting == .unknown {
+            fallbacks.append("usageReporting:observeEvents")
+        }
+        if capabilities.cancellation == .unknown {
+            fallbacks.append("cancellation:boundaryContract")
+        }
+
+        metadata["capabilityFallbacks"] = fallbacks.isEmpty
+            ? "none"
+            : fallbacks.joined(separator: ",")
+        return metadata
+    }
+}

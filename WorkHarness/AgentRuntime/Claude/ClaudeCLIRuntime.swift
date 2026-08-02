@@ -79,7 +79,9 @@ final class ClaudeCLIRuntime: AgentRuntime {
             .canReadGit,
             .canRunTests,
             .canOpenDiff
-        ])
+        ]),
+        supportsUsageReporting: true,
+        supportsCancellation: true
     )
 
     let descriptor = runtimeDescriptor

@@ -56,6 +56,13 @@ struct ContextDeliveryTests {
         #expect(occurrenceCount(of: marker, in: prompt) == 1)
         #expect(prompt.contains("Task:\nInspect the supplied context"))
         #expect(event.metadata["deliveryMode"] == ContextDeliveryMode.renderedPrompt.rawValue)
+        #expect(event.metadata["contextWindowCapability"] == "unknown")
+        #expect(event.metadata["outputReservationCapability"] == "configured")
+        #expect(event.metadata["usageReportingCapability"] == "unknown")
+        #expect(event.metadata["cancellationCapability"] == "unknown")
+        #expect(event.metadata["capabilityFallbacks"]?.contains(
+            "contextWindow:configuredInputBudget"
+        ) == true)
     }
 
     @MainActor
@@ -155,6 +162,102 @@ struct ContextDeliveryTests {
         #expect(event.metadata["contextSourceCount"] == "2")
         #expect(event.metadata["attachmentCount"] == "1")
         #expect(event.metadata["providerContextWindowTokens"] == "16000")
+        #expect(event.metadata["contextWindowCapability"] == "reported")
+        #expect(event.metadata["outputReservationCapability"] == "unavailable")
+        #expect(event.metadata["streamingCapability"] == "supported")
+        #expect(event.metadata["toolsCapability"] == "unsupported")
+        #expect(event.metadata["usageReportingCapability"] == "supported")
+        #expect(event.metadata["cancellationCapability"] == "unsupported")
+        #expect(event.metadata["capabilityFallbacks"] == "outputReservation:none")
+    }
+
+    @MainActor
+    @Test func providerSelectionChangesEncodingButNotContextPolicy() throws {
+        let runId = UUID()
+        let agent = Agent(role: .coder, providerId: "test", model: "test")
+        let attachment = RunContextAttachment(
+            name: "policy.txt",
+            content: "Equivalent provider-neutral evidence"
+        )
+        let builder = ContextBuilder()
+        let commonInput = ContextBuildInput(
+            runId: runId,
+            agent: agent,
+            providerId: "structured.provider",
+            userMessage: "Inspect the evidence",
+            contextAttachments: [attachment],
+            tokenBudget: TokenBudget(maxInputTokens: 8_000, maxOutputTokens: 1_000),
+            providerContextWindowTokens: 16_000,
+            deliveryMode: .structuredMessages
+        )
+        let structured = try builder.buildSnapshot(from: commonInput)
+        var renderedInput = commonInput
+        renderedInput.providerId = "rendered.runtime"
+        renderedInput.deliveryMode = .renderedPrompt
+        let rendered = try builder.buildSnapshot(from: renderedInput)
+
+        #expect(structured.contextItems == rendered.contextItems)
+        #expect(structured.sections == rendered.sections)
+        #expect(structured.omissions == rendered.omissions)
+        #expect(structured.estimatedInputTokenCount == rendered.estimatedInputTokenCount)
+        #expect(structured.windowConstraint == rendered.windowConstraint)
+        #expect(structured.deliveryMode == .structuredMessages)
+        #expect(rendered.deliveryMode == .renderedPrompt)
+    }
+
+    @MainActor
+    @Test func providerAndRuntimeCapabilitiesUseTheSameBoundaryContract() {
+        let providerPlan = ProviderCapabilities(
+            supportsStreaming: true,
+            supportsToolCalls: true,
+            contextWindowTokens: 32_000,
+            supportsUsageReporting: true,
+            supportsCancellation: false
+        ).contextDeliveryPlan(reservedOutputTokens: 2_000)
+        let runtimePlan = AgentRuntimeDescriptor(
+            id: "runtime",
+            displayName: "Runtime",
+            transport: .cli,
+            contextDeliveryMode: .renderedPrompt,
+            capabilities: AgentCapabilities([.canStreamTokens, .canUseTools]),
+            contextWindowTokens: 32_000,
+            supportsUsageReporting: true,
+            supportsCancellation: false
+        ).contextDeliveryPlan(reservedOutputTokens: 2_000)
+
+        #expect(providerPlan.capabilities == runtimePlan.capabilities)
+        #expect(providerPlan.mode == .structuredMessages)
+        #expect(runtimePlan.mode == .renderedPrompt)
+    }
+
+    @MainActor
+    @Test func legacyProviderCapabilitiesDecodeWithUnknownNewCapabilities() throws {
+        let payload = Data("""
+        {
+          "supportsStreaming": true,
+          "supportsToolCalls": false,
+          "supportsFileEditing": false,
+          "supportsShellExecution": false,
+          "supportsVision": false,
+          "supportsEmbeddings": false,
+          "supportsReasoningMode": false,
+          "supportsLocalExecution": true,
+          "supportsApprovals": false,
+          "supportsMCP": true,
+          "supportedModels": ["legacy"]
+        }
+        """.utf8)
+
+        let capabilities = try JSONDecoder().decode(
+            ProviderCapabilities.self,
+            from: payload
+        )
+
+        #expect(capabilities.supportsUsageReporting == nil)
+        #expect(capabilities.supportsCancellation == nil)
+        #expect(capabilities.contextDeliveryPlan(
+            reservedOutputTokens: nil
+        ).capabilities.usageReporting == .unknown)
     }
 
     @MainActor
@@ -273,7 +376,9 @@ private final class ContextRecordingProvider: AIProvider {
     let capabilities = ProviderCapabilities(
         supportsStreaming: true,
         contextWindowTokens: 16_000,
-        supportedModels: ["context-test"]
+        supportedModels: ["context-test"],
+        supportsUsageReporting: true,
+        supportsCancellation: false
     )
     private(set) var requests: [AIRequest] = []
 

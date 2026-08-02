@@ -246,12 +246,16 @@ final class HarnessEngine {
                 candidates: [candidate],
                 configuration: configuration
             )
+            let tokenBudget = defaultTokenBudget(for: agent)
             let snapshot = try context(
                 for: run.id,
                 prompt: goal,
                 agent: agent,
                 providerId: runtime.id,
-                deliveryMode: runtime.descriptor.contextDeliveryMode
+                deliveryPlan: runtime.descriptor.contextDeliveryPlan(
+                    reservedOutputTokens: tokenBudget.maxOutputTokens
+                ),
+                tokenBudget: tokenBudget
             )
             _ = try await multiAgentCoordinator.execute(
                 plan: plan,
@@ -456,13 +460,16 @@ final class HarnessEngine {
 
         do {
             let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
+            let tokenBudget = defaultTokenBudget(for: agent)
             let requestContextSnapshot = try context(
                 for: runId,
                 prompt: prompt,
                 agent: agent,
                 providerId: provider.id,
-                deliveryMode: .structuredMessages,
-                providerContextWindowTokens: provider.capabilities.contextWindowTokens,
+                deliveryPlan: provider.capabilities.contextDeliveryPlan(
+                    reservedOutputTokens: tokenBudget.maxOutputTokens
+                ),
+                tokenBudget: tokenBudget,
                 ragResults: ragResults
             )
             let request = AIRequest(
@@ -471,7 +478,7 @@ final class HarnessEngine {
                 messages: [.init(role: .user, content: prompt)],
                 context: requestContextSnapshot.contextItems,
                 tools: agent.tools,
-                budget: defaultTokenBudget(for: agent)
+                budget: tokenBudget
             )
             let stream = try await provider.send(request)
             var completedMessage = ""
@@ -529,8 +536,8 @@ final class HarnessEngine {
         prompt: String,
         agent: Agent,
         providerId: String,
-        deliveryMode: ContextDeliveryMode,
-        providerContextWindowTokens: Int? = nil,
+        deliveryPlan: ContextDeliveryPlan,
+        tokenBudget: TokenBudget,
         ragResults: [RAGCitation] = []
     ) throws -> ContextSnapshot {
         let buildStartedAt = ProcessInfo.processInfo.systemUptime
@@ -556,22 +563,26 @@ final class HarnessEngine {
                 contextAttachments: contextAttachments,
                 memoryItems: memoryItems,
                 ragResults: ragResults,
-                tokenBudget: defaultTokenBudget(for: agent),
-                providerContextWindowTokens: providerContextWindowTokens,
+                tokenBudget: tokenBudget,
+                providerContextWindowTokens: deliveryPlan.capabilities.contextWindowTokens,
                 safetyMode: safetyMode,
-                deliveryMode: deliveryMode
+                deliveryMode: deliveryPlan.mode
             ))
         } catch {
+            var failureMetadata = contextObservationPolicy.failureMetadata(
+                error: error,
+                providerId: providerId,
+                agentId: agent.id,
+                buildDurationMilliseconds: elapsedMilliseconds(since: buildStartedAt)
+            )
+            deliveryPlan.observationMetadata(
+                configuredMaxInputTokens: tokenBudget.maxInputTokens
+            ).forEach { failureMetadata[$0.key] = $0.value }
             recorder.record(
                 runId: runId,
                 type: .contextBuildFailed,
                 message: "Context construction failed before provider invocation.",
-                metadata: contextObservationPolicy.failureMetadata(
-                    error: error,
-                    providerId: providerId,
-                    agentId: agent.id,
-                    buildDurationMilliseconds: elapsedMilliseconds(since: buildStartedAt)
-                )
+                metadata: failureMetadata
             )
             throw error
         }
@@ -609,6 +620,9 @@ final class HarnessEngine {
         if let effectiveMaxInputTokens = snapshot.windowConstraint.effectiveMaxInputTokens {
             metadata["effectiveMaxInputTokens"] = "\(effectiveMaxInputTokens)"
         }
+        deliveryPlan.observationMetadata(
+            configuredMaxInputTokens: tokenBudget.maxInputTokens
+        ).forEach { metadata[$0.key] = $0.value }
         if !snapshot.omissions.isEmpty {
             metadata["omissionReasons"] = Set(snapshot.omissions.map(\.reason.rawValue))
                 .sorted()
@@ -710,12 +724,16 @@ final class HarnessEngine {
     private func runAgentRuntimeTask(runId: UUID, prompt: String, agent: Agent, runtime: AgentRuntime) async {
         do {
             let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
+            let tokenBudget = defaultTokenBudget(for: agent)
             let snapshot = try context(
                 for: runId,
                 prompt: prompt,
                 agent: agent,
                 providerId: runtime.id,
-                deliveryMode: runtime.descriptor.contextDeliveryMode,
+                deliveryPlan: runtime.descriptor.contextDeliveryPlan(
+                    reservedOutputTokens: tokenBudget.maxOutputTokens
+                ),
+                tokenBudget: tokenBudget,
                 ragResults: ragResults
             )
             runtime.configure(

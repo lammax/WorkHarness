@@ -65,7 +65,9 @@ struct MCPProviderDescriptor: Equatable {
             costModel: "local",
             supportsApprovals: false,
             supportsMCP: true,
-            supportedModels: [AppSettingsDefaults.localLLMModel]
+            supportedModels: [AppSettingsDefaults.localLLMModel],
+            supportsUsageReporting: true,
+            supportsCancellation: false
         ),
         mcpServerPath: MCPProviderConfiguration.defaultServerBasePath,
         mcpEndpointURL: "http://127.0.0.1:3007/mcp"

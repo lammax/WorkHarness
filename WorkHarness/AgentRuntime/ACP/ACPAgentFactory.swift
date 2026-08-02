@@ -14,6 +14,9 @@ struct ACPAgentDefinition: Equatable {
     var modelOptions: [AgentRuntimeModelOption]
     var defaultModelId: String?
     var capabilities: AgentCapabilities
+    var contextWindowTokens: Int?
+    var supportsUsageReporting: Bool?
+    var supportsCancellation: Bool?
 
     init(
         id: String,
@@ -21,7 +24,10 @@ struct ACPAgentDefinition: Equatable {
         subprocess: ACPSubprocessConfiguration,
         modelOptions: [AgentRuntimeModelOption] = [],
         defaultModelId: String? = nil,
-        capabilities: AgentCapabilities = AgentCapabilities()
+        capabilities: AgentCapabilities = AgentCapabilities(),
+        contextWindowTokens: Int? = nil,
+        supportsUsageReporting: Bool? = nil,
+        supportsCancellation: Bool? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -29,6 +35,9 @@ struct ACPAgentDefinition: Equatable {
         self.modelOptions = modelOptions
         self.defaultModelId = defaultModelId
         self.capabilities = capabilities
+        self.contextWindowTokens = contextWindowTokens
+        self.supportsUsageReporting = supportsUsageReporting
+        self.supportsCancellation = supportsCancellation
     }
 
     var descriptor: AgentRuntimeDescriptor {
@@ -40,7 +49,10 @@ struct ACPAgentDefinition: Equatable {
             modelOptions: modelOptions,
             defaultModelId: defaultModelId,
             contextDeliveryMode: .renderedPrompt,
-            capabilities: capabilities
+            capabilities: capabilities,
+            contextWindowTokens: contextWindowTokens,
+            supportsUsageReporting: supportsUsageReporting,
+            supportsCancellation: supportsCancellation
         )
     }
 }
@@ -92,7 +104,9 @@ enum ACPAgentDefinitions {
                 .canReadGit,
                 .canRunTests,
                 .canOpenDiff
-            ])
+            ]),
+            supportsUsageReporting: true,
+            supportsCancellation: true
         )
     }
 }
