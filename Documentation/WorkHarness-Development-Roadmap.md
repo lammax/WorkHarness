@@ -1487,6 +1487,35 @@ training-candidate collection, experiment UI, calibrated confidence, local or
 embedding-based micro tiers, batch evaluation and automated historical
 comparison.
 
+## Step 26 - Remote Platform Lean MVP v1
+
+Status: active. R0 Architecture Contract is complete. R1 RemoteSDK Models is
+the next implementation phase.
+
+The detailed R0–R7 sequence, current RemoteControl prototype audit, security
+constraints, migration rules and acceptance criteria live in
+`Documentation/WorkHarness-Remote-Module-Roadmap.md`.
+
+The existing Step 20 Remote Control implementation is retained as a working
+HTTP/SSE compatibility baseline, but it is not considered the final Remote
+Platform: it has unversioned routes, encodes internal models, stores a shared
+token in UserDefaults and does not provide pairing, trusted devices,
+revocation, a typed RemoteSDK client, provider routes or full hardening.
+
+Active order:
+
+1. R0 — architecture and scope contract (complete);
+2. R1 — independent RemoteSDK package and shared DTO fixtures;
+3. R2 — explicit server lifecycle and versioned typed status connection;
+4. R3 — pairing, Keychain credential and trusted-device revocation;
+5. R4 — project and Run read APIs;
+6. R5 — idempotent Run commands and bounded live event stream;
+7. R6 — safe versioned remote approvals;
+8. R7 — providers and MVP hardening.
+
+Deferred Remote v2 features remain inactive until R7 is complete and the
+personal iPhone flow has been used in practice.
+
 # Architectural Direction
 
 This section does not change the implementation order.
