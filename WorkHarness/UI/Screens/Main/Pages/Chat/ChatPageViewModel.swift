@@ -9,6 +9,11 @@ import Foundation
 import Observation
 
 extension MainScreen {
+    enum FileImportPurpose: Equatable {
+        case contextAttachment
+        case taskPool
+    }
+
     enum MultiAgentConfigurationSection: String, CaseIterable {
         case workflowProfile
         case inference
@@ -44,8 +49,8 @@ extension MainScreen {
         var multiAgentConfiguration = MultiAgentRunConfiguration.default
         var multiAgentConfigurationSection: MultiAgentConfigurationSection = .workflowProfile
         var isSending = false
-        var isAttachmentImporterPresented = false
-        var isTaskPoolImporterPresented = false
+        var isFileImporterPresented = false
+        private(set) var fileImportPurpose: FileImportPurpose?
         var errorMessage: String?
 
         init(
@@ -283,11 +288,40 @@ extension MainScreen {
         }
 
         func presentAttachmentImporter() {
-            isAttachmentImporterPresented = true
+            presentFileImporter(for: .contextAttachment)
         }
 
         func presentTaskPoolImporter() {
-            isTaskPoolImporterPresented = true
+            presentFileImporter(for: .taskPool)
+        }
+
+        func handleImportedFile(_ url: URL) {
+            let purpose = fileImportPurpose
+            dismissFileImporter()
+
+            switch purpose {
+            case .contextAttachment:
+                attachFile(url)
+            case .taskPool:
+                selectTaskPool(url)
+            case nil:
+                break
+            }
+        }
+
+        func handleFileImportFailure(_ message: String) {
+            dismissFileImporter()
+            errorMessage = message
+        }
+
+        private func presentFileImporter(for purpose: FileImportPurpose) {
+            fileImportPurpose = purpose
+            isFileImporterPresented = true
+        }
+
+        private func dismissFileImporter() {
+            isFileImporterPresented = false
+            fileImportPurpose = nil
         }
 
         func selectTaskPool(_ url: URL) {
@@ -355,12 +389,14 @@ extension MainScreen {
         }
 
         func attachFile(_ url: URL) {
-            Task {
-                await attachFileAndWait(url)
-            }
+            loadAttachment(from: url)
         }
 
         func attachFileAndWait(_ url: URL) async {
+            loadAttachment(from: url)
+        }
+
+        private func loadAttachment(from url: URL) {
             do {
                 let attachment = try contextAttachmentService.loadAttachment(from: url)
                 draftContextAttachments.removeAll { $0.name == attachment.name }
@@ -373,10 +409,6 @@ extension MainScreen {
 
         func removeAttachment(_ attachment: RunContextAttachment) {
             draftContextAttachments.removeAll { $0.id == attachment.id }
-        }
-
-        func setAttachmentError(_ message: String) {
-            errorMessage = message
         }
 
         func stopRun() {

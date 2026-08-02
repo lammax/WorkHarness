@@ -426,6 +426,45 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func chatPageUsesOneImporterAndRoutesAttachmentSelection() throws {
+        let viewModel = MainScreen.ChatPageViewModel(
+            runService: makeRunService(),
+            contextAttachmentService: RunContextAttachmentService()
+        )
+        let attachmentURL = try makeTemporaryDirectory().appendingPathComponent("Context.md")
+        try Data("Selected through the shared importer.".utf8).write(to: attachmentURL)
+
+        viewModel.presentAttachmentImporter()
+
+        #expect(viewModel.isFileImporterPresented)
+        #expect(viewModel.fileImportPurpose == .contextAttachment)
+
+        viewModel.handleImportedFile(attachmentURL)
+
+        #expect(!viewModel.isFileImporterPresented)
+        #expect(viewModel.fileImportPurpose == nil)
+        #expect(viewModel.draftContextAttachments.map(\.name) == ["Context.md"])
+        #expect(viewModel.draftContextAttachments.first?.content == "Selected through the shared importer.")
+        #expect(viewModel.errorMessage == nil)
+    }
+
+    @MainActor
+    @Test func chatPageSharedImporterPreservesTaskPoolPurpose() {
+        let viewModel = MainScreen.ChatPageViewModel(runService: makeRunService())
+
+        viewModel.presentTaskPoolImporter()
+
+        #expect(viewModel.isFileImporterPresented)
+        #expect(viewModel.fileImportPurpose == .taskPool)
+
+        viewModel.handleFileImportFailure("Cancelled")
+
+        #expect(!viewModel.isFileImporterPresented)
+        #expect(viewModel.fileImportPurpose == nil)
+        #expect(viewModel.errorMessage == "Cancelled")
+    }
+
+    @MainActor
     @Test func chatPageAttachesReadOnlyFileToRunAndProviderContext() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)

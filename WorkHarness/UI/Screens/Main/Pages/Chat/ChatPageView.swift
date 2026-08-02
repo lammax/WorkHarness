@@ -109,31 +109,17 @@ extension MainScreen {
                 }
             }
             .fileImporter(
-                isPresented: $viewModel.isAttachmentImporterPresented,
+                isPresented: $viewModel.isFileImporterPresented,
                 allowedContentTypes: [.item],
                 allowsMultipleSelection: false
             ) { result in
                 switch result {
                 case .success(let urls):
                     if let url = urls.first {
-                        viewModel.attachFile(url)
+                        viewModel.handleImportedFile(url)
                     }
                 case .failure(let error):
-                    viewModel.setAttachmentError(error.localizedDescription)
-                }
-            }
-            .fileImporter(
-                isPresented: $viewModel.isTaskPoolImporterPresented,
-                allowedContentTypes: [.plainText],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    if let url = urls.first {
-                        viewModel.selectTaskPool(url)
-                    }
-                case .failure(let error):
-                    viewModel.setAttachmentError(error.localizedDescription)
+                    viewModel.handleFileImportFailure(error.localizedDescription)
                 }
             }
             .onAppear {
