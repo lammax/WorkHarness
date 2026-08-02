@@ -12,6 +12,12 @@ protocol AgentModelRoutingServiceProtocol: BaseServiceProtocol {
         runtime: AgentRuntimeDescriptor,
         manualModelId: String?
     ) -> AgentModelRoutingDecision
+
+    func fallbackDecision(
+        afterRuntimeFailureFor prompt: String,
+        runtime: AgentRuntimeDescriptor,
+        failedModelId: String?
+    ) -> AgentModelRoutingDecision?
 }
 
 extension AgentModelRoutingServiceProtocol {

@@ -41,6 +41,15 @@ extension Container {
                     mcpConfigurationFactory: configurationFactory
                 ))
             }
+            if let providerClient = resolver.resolve(MCPProviderClientProtocol.self),
+               let toolService = resolver.resolve(ToolServiceProtocol.self),
+               let settingsService = resolver.resolve(AppSettingsServiceProtocol.self) {
+                registry.register(LocalLLMAgentRuntime(
+                    providerClient: providerClient,
+                    toolService: toolService,
+                    settingsService: settingsService
+                ))
+            }
             return registry
         }.inObjectScope(.container)
     }

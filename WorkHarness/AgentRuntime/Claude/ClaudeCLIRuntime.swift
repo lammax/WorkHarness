@@ -80,6 +80,7 @@ final class ClaudeCLIRuntime: AgentRuntime {
             .canRunTests,
             .canOpenDiff
         ]),
+        contextWindowTokens: 200_000,
         supportsUsageReporting: true,
         supportsCancellation: true
     )
@@ -99,6 +100,7 @@ final class ClaudeCLIRuntime: AgentRuntime {
     private let mcpConfigurationFactory: ClaudeMCPConfigurationFactoryProtocol
     private var sessions: [UUID: RuntimeSession] = [:]
     private var continuationIdsByRunId: [UUID: String] = [:]
+    private var historyUsageByRunId: [UUID: TokenUsage] = [:]
     private var configuredModelId: String?
     private var configuredRunId: UUID?
 
@@ -234,6 +236,21 @@ final class ClaudeCLIRuntime: AgentRuntime {
         }
     }
 
+    func historyUsage(runId: UUID) -> AgentRuntimeHistoryUsage? {
+        guard let usage = historyUsageByRunId[runId],
+              let contextWindowTokens = descriptor.contextWindowTokens else { return nil }
+        return AgentRuntimeHistoryUsage(
+            usedTokens: usage.inputTokens + usage.outputTokens,
+            contextWindowTokens: contextWindowTokens,
+            source: "claude-cli-usage"
+        )
+    }
+
+    func resetHistory(runId: UUID) async {
+        continuationIdsByRunId.removeValue(forKey: runId)
+        historyUsageByRunId.removeValue(forKey: runId)
+    }
+
     private func processConfiguration(
         for task: AgentTask,
         runtimeSession: RuntimeSession,
@@ -350,12 +367,18 @@ final class ClaudeCLIRuntime: AgentRuntime {
         switch event {
         case .tokenUsage(let usage):
             runtimeSession.session.tokenUsage = usage
+            if let runId = runtimeSession.runId {
+                historyUsageByRunId[runId] = usage
+            }
         case .artifactCreated(let artifact):
             runtimeSession.session.artifacts.append(artifact)
         case .finished(let response):
             runtimeSession.session.state = .completed
             runtimeSession.session.finishedAt = Date()
             runtimeSession.session.tokenUsage = response.tokenUsage ?? runtimeSession.session.tokenUsage
+            if let runId = runtimeSession.runId, let usage = response.tokenUsage {
+                historyUsageByRunId[runId] = usage
+            }
             runtimeSession.session.artifacts.append(contentsOf: response.artifacts)
         case .failed:
             runtimeSession.session.state = .failed

@@ -9,6 +9,18 @@ import Foundation
 
 @MainActor
 final class HarnessEngine {
+    private enum RuntimeAttemptFailureKind {
+        case runtime
+        case validation
+    }
+
+    private struct RuntimeAttemptOutcome {
+        var succeeded: Bool
+        var failureMessage: String?
+        var failureKind: RuntimeAttemptFailureKind?
+        var latencyMilliseconds: Int
+    }
+
     private let repository: RunRepository
     private let recorder: RunRecorder
     private let providerService: ProviderServiceProtocol
@@ -730,8 +742,75 @@ final class HarnessEngine {
         recorder.record(runId: run.id, type: .runCreated, message: goal)
         recordModelRoutingDecision(routingDecision, runId: run.id, runtime: runtime)
         recordUserMessage(runId: run.id, message: goal, contextAttachments: contextAttachments)
-        await runAgentRuntimeTask(runId: run.id, prompt: goal, agent: agent, runtime: runtime)
+        let firstAttempt = await runAgentRuntimeTask(
+            runId: run.id,
+            prompt: goal,
+            agent: agent,
+            runtime: runtime,
+            finalizeFailure: false
+        )
+        if !firstAttempt.succeeded,
+           firstAttempt.failureKind == .runtime,
+           let fallback = agentModelRoutingService?.fallbackDecision(
+                afterRuntimeFailureFor: goal,
+                runtime: runtime.descriptor,
+                failedModelId: modelId
+           ) {
+            recordRuntimeFallback(
+                fallback,
+                runId: run.id,
+                runtime: runtime,
+                failedModelId: modelId,
+                failedAttempt: firstAttempt
+            )
+            repository.updateRun(run.id) { storedRun in
+                storedRun.executionBackend?.modelId = fallback.selectedModelId
+                if !storedRun.agents.isEmpty {
+                    storedRun.agents[0].model = fallback.selectedModelId ?? storedRun.agents[0].model
+                }
+            }
+            let fallbackAgent = repository.run(withId: run.id)?.agents.first ?? agent
+            let fallbackAttempt = await runAgentRuntimeTask(
+                runId: run.id,
+                prompt: goal,
+                agent: fallbackAgent,
+                runtime: runtime,
+                finalizeFailure: false
+            )
+            if !fallbackAttempt.succeeded {
+                failRun(run.id, message: fallbackAttempt.failureMessage ?? "Fallback runtime failed.")
+            }
+        } else if !firstAttempt.succeeded {
+            failRun(run.id, message: firstAttempt.failureMessage ?? "Agent runtime failed.")
+        }
         return run.id
+    }
+
+    private func recordRuntimeFallback(
+        _ decision: AgentModelRoutingDecision,
+        runId: UUID,
+        runtime: AgentRuntime,
+        failedModelId: String?,
+        failedAttempt: RuntimeAttemptOutcome
+    ) {
+        var metadata = [
+            "runtimeId": runtime.id,
+            "failedModelId": failedModelId ?? "",
+            "selectedModelId": decision.selectedModelId ?? "",
+            "route": decision.route.rawValue,
+            "reason": decision.reason,
+            "escalationLatencyMilliseconds": "\(failedAttempt.latencyMilliseconds)",
+            "costBeforeFallbackUSD": "\(repository.run(withId: runId)?.costUsage.totalUSD ?? 0)"
+        ]
+        if let message = failedAttempt.failureMessage {
+            metadata["failure"] = String(message.prefix(1_000))
+        }
+        recorder.record(
+            runId: runId,
+            type: .modelRoutingDecision,
+            message: "Fast model failed; escalating to \(decision.selectedModelId ?? runtime.displayName).",
+            metadata: metadata
+        )
     }
 
     private func recordModelRoutingDecision(
@@ -761,8 +840,35 @@ final class HarnessEngine {
         )
     }
 
-    private func runAgentRuntimeTask(runId: UUID, prompt: String, agent: Agent, runtime: AgentRuntime) async {
+    @discardableResult
+    private func runAgentRuntimeTask(
+        runId: UUID,
+        prompt: String,
+        agent: Agent,
+        runtime: AgentRuntime,
+        finalizeFailure: Bool = true
+    ) async -> RuntimeAttemptOutcome {
+        let attemptStartedAt = ProcessInfo.processInfo.systemUptime
+        let usageBeforeAttempt = repository.run(withId: runId)?.tokenUsage ?? TokenUsage()
         do {
+            if let historyUsage = runtime.historyUsage(runId: runId),
+               historyUsage.utilization >= 0.8 {
+                await runtime.resetHistory(runId: runId)
+                recorder.record(
+                    runId: runId,
+                    type: .contextCompacted,
+                    message: "Runtime history reached its measured limit; starting a fresh continuation with rebuilt context.",
+                    metadata: [
+                        "runtimeId": runtime.id,
+                        "usedTokens": "\(historyUsage.usedTokens)",
+                        "contextWindowTokens": "\(historyUsage.contextWindowTokens)",
+                        "utilization": "\(historyUsage.utilization)",
+                        "threshold": "0.8",
+                        "source": historyUsage.source,
+                        "strategy": "fresh-continuation-with-rebuilt-context"
+                    ]
+                )
+            }
             let ragResults = await ragResults(for: prompt, agent: agent, runId: runId)
             let tokenBudget = defaultTokenBudget(for: agent)
             let snapshot = try context(
@@ -805,8 +911,9 @@ final class HarnessEngine {
             var finalResponse: AgentResponse?
             var retainedStreamCharacters = 0
             var didRecordStreamLimit = false
+            var runtimeFailure: String?
 
-            for try await event in execution.events {
+            eventLoop: for try await event in execution.events {
                 guard repository.run(withId: runId)?.status != .cancelled else { break }
                 switch event {
                 case .textDelta(let delta):
@@ -822,9 +929,10 @@ final class HarnessEngine {
                     assistantMessage = message
                 case .tokenUsage(let usage):
                     didRecordUsage = true
+                    let cumulativeUsage = combinedUsage(usageBeforeAttempt, usage)
                     repository.updateRun(runId) { run in
-                        run.tokenUsage = usage
-                        run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
+                        run.tokenUsage = cumulativeUsage
+                        run.costUsage = CostUsage(totalUSD: cumulativeUsage.totalCostUSD)
                     }
                     recorder.record(
                         runId: runId,
@@ -845,8 +953,18 @@ final class HarnessEngine {
                         assistantMessage = response.message
                     }
                 case .failed(let message):
-                    mapper.record(runId: runId, event: event)
-                    failRun(runId, message: message)
+                    runtimeFailure = message
+                    recorder.record(
+                        runId: runId,
+                        type: .providerRequestFailed,
+                        message: message,
+                        metadata: [
+                            "runtimeId": runtime.id,
+                            "modelId": capturedModelId(for: agent, runtime: runtime, runId: runId) ?? "",
+                            "recoverableByRouting": "\(!finalizeFailure)"
+                        ]
+                    )
+                    break eventLoop
                 case .started, .thinking, .toolCallRequested, .fileChanged, .approvalRequested, .artifactCreated:
                     mapper.record(runId: runId, event: event)
                     break
@@ -855,12 +973,33 @@ final class HarnessEngine {
             activeRuntimeSessions.removeValue(forKey: runId)
             guard repository.run(withId: runId)?.status != .cancelled else {
                 await runtime.disconnect(sessionId: session.id)
-                return
+                return RuntimeAttemptOutcome(
+                    succeeded: false,
+                    failureMessage: "Run was cancelled.",
+                    failureKind: .runtime,
+                    latencyMilliseconds: elapsedMilliseconds(since: attemptStartedAt)
+                )
+            }
+            if let runtimeFailure {
+                if finalizeFailure { failRun(runId, message: runtimeFailure) }
+                await runtime.disconnect(sessionId: session.id)
+                return RuntimeAttemptOutcome(
+                    succeeded: false,
+                    failureMessage: runtimeFailure,
+                    failureKind: .runtime,
+                    latencyMilliseconds: elapsedMilliseconds(since: attemptStartedAt)
+                )
             }
             guard didFinish, let finalResponse else {
-                failRun(runId, message: AgentOutputRejectionReason.incompleteFinalAnswer.message)
+                let message = AgentOutputRejectionReason.incompleteFinalAnswer.message
+                if finalizeFailure { failRun(runId, message: message) }
                 await runtime.disconnect(sessionId: session.id)
-                return
+                return RuntimeAttemptOutcome(
+                    succeeded: false,
+                    failureMessage: message,
+                    failureKind: .runtime,
+                    latencyMilliseconds: elapsedMilliseconds(since: attemptStartedAt)
+                )
             }
             let safeOutput = try agentOutputSafetyPolicy.process(
                 output: assistantMessage,
@@ -872,9 +1011,14 @@ final class HarnessEngine {
             )
             recordOutputSafetyResult(safeOutput, runId: runId, source: "acp")
             if let rejectionReason = safeOutput.rejectionReason {
-                failRun(runId, message: rejectionReason.message)
+                if finalizeFailure { failRun(runId, message: rejectionReason.message) }
                 await runtime.disconnect(sessionId: session.id)
-                return
+                return RuntimeAttemptOutcome(
+                    succeeded: false,
+                    failureMessage: rejectionReason.message,
+                    failureKind: .validation,
+                    latencyMilliseconds: elapsedMilliseconds(since: attemptStartedAt)
+                )
             }
             recorder.record(
                 runId: runId,
@@ -885,8 +1029,9 @@ final class HarnessEngine {
             repository.updateRun(runId) { run in
                 run.status = .completed
                 if let usage = finalResponse.tokenUsage {
-                    run.tokenUsage = usage
-                    run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
+                    let cumulativeUsage = combinedUsage(usageBeforeAttempt, usage)
+                    run.tokenUsage = cumulativeUsage
+                    run.costUsage = CostUsage(totalUSD: cumulativeUsage.totalCostUSD)
                 }
                 run.artifacts.append(contentsOf: finalResponse.artifacts)
             }
@@ -906,12 +1051,32 @@ final class HarnessEngine {
             recorder.record(runId: runId, type: .agentFinished, message: "\(runtime.displayName) finished.")
             recorder.record(runId: runId, type: .runCompleted, message: "Run completed through \(runtime.displayName).")
             await runtime.disconnect(sessionId: session.id)
+            return RuntimeAttemptOutcome(
+                succeeded: true,
+                latencyMilliseconds: elapsedMilliseconds(since: attemptStartedAt)
+            )
         } catch {
-            activeRuntimeSessions.removeValue(forKey: runId)
-            if repository.run(withId: runId)?.status != .cancelled {
+            if let activeSession = activeRuntimeSessions.removeValue(forKey: runId) {
+                await activeSession.runtime.disconnect(sessionId: activeSession.sessionId)
+            }
+            if finalizeFailure, repository.run(withId: runId)?.status != .cancelled {
                 failRun(runId, message: error.localizedDescription)
             }
+            return RuntimeAttemptOutcome(
+                succeeded: false,
+                failureMessage: error.localizedDescription,
+                failureKind: .runtime,
+                latencyMilliseconds: elapsedMilliseconds(since: attemptStartedAt)
+            )
         }
+    }
+
+    private func combinedUsage(_ lhs: TokenUsage, _ rhs: TokenUsage) -> TokenUsage {
+        TokenUsage(
+            inputTokens: lhs.inputTokens + rhs.inputTokens,
+            outputTokens: lhs.outputTokens + rhs.outputTokens,
+            totalCostUSD: lhs.totalCostUSD + rhs.totalCostUSD
+        )
     }
 
     private func recordBoundedStreamDelta(

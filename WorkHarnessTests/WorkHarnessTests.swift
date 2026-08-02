@@ -586,7 +586,11 @@ struct WorkHarnessTests {
         #expect(runService.runs.isEmpty)
         #expect(approvalService.pendingRequests.isEmpty)
         #expect(processRunner is ProcessRunner)
-        #expect(Set(agentRuntimeRegistry.runtimes.map(\.id)).isSubset(of: ["cursor.acp", "claude.cli"]))
+        #expect(Set(agentRuntimeRegistry.runtimes.map(\.id)).isSubset(of: [
+            "cursor.acp",
+            "claude.cli",
+            LocalLLMAgentRuntime.runtimeId
+        ]))
         #expect(contextBuilder is ContextBuilder)
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
         #expect(toolRegistry.availableTools.contains { $0.id == "mobile.screen" })
@@ -1908,6 +1912,36 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func agentModelRoutingFallsBackOnlyAfterFastModelRuntimeFailure() {
+        let settings = InMemoryAppSettingsService()
+        settings.setAgentModelRoutingSettings(
+            AgentModelRoutingSettings(
+                isEnabled: true,
+                fastModelId: "haiku",
+                fallbackModelId: "sonnet",
+                promptLengthThreshold: 240
+            ),
+            for: ClaudeCLIRuntime.runtimeId
+        )
+        let service = AgentModelRoutingService(appSettingsService: settings)
+
+        let fallback = service.fallbackDecision(
+            afterRuntimeFailureFor: "Small task",
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            failedModelId: "haiku"
+        )
+        let noFallbackLoop = service.fallbackDecision(
+            afterRuntimeFailureFor: "Small task",
+            runtime: ClaudeCLIRuntime.runtimeDescriptor,
+            failedModelId: "sonnet"
+        )
+
+        #expect(fallback?.selectedModelId == "sonnet")
+        #expect(fallback?.reason == "fast_model_runtime_failure")
+        #expect(noFallbackLoop == nil)
+    }
+
+    @MainActor
     @Test func harnessEngineRecordsAutomaticModelRoutingDecision() async throws {
         let repository = InMemoryRunRepository()
         let recorder = RunRecorder(repository: repository)
@@ -1954,6 +1988,52 @@ struct WorkHarnessTests {
         #expect(routingEvent.metadata["route"] == "fallback")
         #expect(routingEvent.metadata["reason"] == "critical_keyword")
         #expect(routingEvent.metadata["selectedModelId"] == "sonnet")
+    }
+
+    @MainActor
+    @Test func harnessEngineRetriesFastRuntimeFailureWithFallbackModel() async throws {
+        let repository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: repository)
+        let settings = InMemoryAppSettingsService(defaultAgentRuntimeId: ClaudeCLIRuntime.runtimeId)
+        settings.setAgentModelRoutingSettings(
+            AgentModelRoutingSettings(
+                isEnabled: true,
+                fastModelId: "haiku",
+                fallbackModelId: "sonnet",
+                promptLengthThreshold: 240
+            ),
+            for: ClaudeCLIRuntime.runtimeId
+        )
+        let client = FakeACPClient(
+            id: ClaudeCLIRuntime.runtimeId,
+            displayName: "Claude Code CLI",
+            completedMessages: ["Fallback completed."],
+            failedMessages: ["Fast model unavailable."]
+        )
+        let registry = AgentRuntimeRegistry()
+        registry.register(ACPClientRuntime(client: client, descriptor: ClaudeCLIRuntime.runtimeDescriptor))
+        let engine = HarnessEngine(
+            repository: repository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            appSettingsService: settings,
+            agentModelRoutingService: AgentModelRoutingService(appSettingsService: settings),
+            agentRuntimeRegistry: registry
+        )
+
+        let runId = try #require(await engine.startRun(goal: "Add a title."))
+        let run = try #require(repository.run(withId: runId))
+        let escalation = try #require(run.events.last {
+            $0.type == .modelRoutingDecision
+                && $0.metadata["reason"] == "fast_model_runtime_failure"
+        })
+
+        #expect(run.status == .completed)
+        #expect(run.executionBackend?.modelId == "sonnet")
+        #expect(client.tasks.count == 2)
+        #expect(client.configuredModelId == "sonnet")
+        #expect(escalation.metadata["failedModelId"] == "haiku")
+        #expect(escalation.metadata["selectedModelId"] == "sonnet")
     }
 
     @MainActor
@@ -2122,6 +2202,10 @@ struct WorkHarnessTests {
         #expect(transport.configurations[0].arguments.contains("dontAsk"))
         let resumeIndex = try #require(transport.configurations[1].arguments.firstIndex(of: "--resume"))
         #expect(transport.configurations[1].arguments[resumeIndex + 1] == "claude-session-1")
+        #expect(runtime.historyUsage(runId: runId)?.usedTokens == 6)
+        #expect(runtime.historyUsage(runId: runId)?.source == "claude-cli-usage")
+        await runtime.resetHistory(runId: runId)
+        #expect(runtime.historyUsage(runId: runId) == nil)
     }
 
     @MainActor
@@ -4204,6 +4288,7 @@ private final class FakeACPClient: ACPClient {
     private let sessionId = UUID()
     private let waitsForCancellation: Bool
     private var completedMessages: [String]
+    private var failedMessages: [String]
     private var continuations: [AsyncThrowingStream<ACPEvent, Error>.Continuation] = []
     private(set) var configuredModelId: String?
     private(set) var configuredWorkingDirectory: String?
@@ -4214,12 +4299,14 @@ private final class FakeACPClient: ACPClient {
         id: String = "fake.acp",
         displayName: String = "Fake ACP Agent",
         waitsForCancellation: Bool = false,
-        completedMessages: [String] = []
+        completedMessages: [String] = [],
+        failedMessages: [String] = []
     ) {
         self.id = id
         self.displayName = displayName
         self.waitsForCancellation = waitsForCancellation
         self.completedMessages = completedMessages
+        self.failedMessages = failedMessages
     }
 
     func configure(modelId: String?) {
@@ -4248,6 +4335,11 @@ private final class FakeACPClient: ACPClient {
             continuation.yield(.started)
             guard !waitsForCancellation else {
                 continuations.append(continuation)
+                return
+            }
+            if !failedMessages.isEmpty {
+                continuation.yield(.failed(failedMessages.removeFirst()))
+                continuation.finish()
                 return
             }
             let completedMessage = completedMessages.isEmpty

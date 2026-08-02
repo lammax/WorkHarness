@@ -38,6 +38,7 @@ struct AgentCapabilities: Codable, Equatable {
 enum AgentRuntimeTransportKind: String, Codable, Equatable {
     case acp
     case cli
+    case mcp
 
     var label: String {
         switch self {
@@ -45,6 +46,8 @@ enum AgentRuntimeTransportKind: String, Codable, Equatable {
             "ACP"
         case .cli:
             "CLI"
+        case .mcp:
+            "MCP"
         }
     }
 }
@@ -240,6 +243,17 @@ struct AgentExecution {
     let events: AsyncThrowingStream<AgentEvent, Error>
 }
 
+struct AgentRuntimeHistoryUsage: Equatable {
+    var usedTokens: Int
+    var contextWindowTokens: Int
+    var source: String
+
+    var utilization: Double {
+        guard contextWindowTokens > 0 else { return 0 }
+        return Double(usedTokens) / Double(contextWindowTokens)
+    }
+}
+
 @MainActor
 protocol AgentRuntime: AnyObject {
     var id: String { get }
@@ -254,6 +268,8 @@ protocol AgentRuntime: AnyObject {
     func cancel(sessionId: UUID) async
     func pause(sessionId: UUID) async throws
     func resume(sessionId: UUID) async throws
+    func historyUsage(runId: UUID) -> AgentRuntimeHistoryUsage?
+    func resetHistory(runId: UUID) async
 }
 
 extension AgentRuntime {
@@ -272,6 +288,10 @@ extension AgentRuntime {
     func configure(modelId: String?, runId: UUID?, workingDirectory: String?) {
         configure(modelId: modelId, runId: runId)
     }
+
+    func historyUsage(runId: UUID) -> AgentRuntimeHistoryUsage? { nil }
+
+    func resetHistory(runId: UUID) async {}
 }
 
 @MainActor

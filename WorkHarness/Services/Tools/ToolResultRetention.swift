@@ -16,6 +16,26 @@ protocol RunArtifactStoreProtocol {
         kind: String,
         projectRootPath: String?
     ) throws -> RunArtifact
+
+    func readText(artifactId: UUID, offset: Int, limit: Int) throws -> RunArtifactContentPage
+    func cleanupArtifacts(olderThan cutoff: Date) throws -> Int
+}
+
+extension RunArtifactStoreProtocol {
+    func readText(artifactId: UUID, offset: Int, limit: Int) throws -> RunArtifactContentPage {
+        throw RunArtifactStoreError.retrievalUnsupported
+    }
+
+    func cleanupArtifacts(olderThan cutoff: Date) throws -> Int { 0 }
+}
+
+struct RunArtifactContentPage: Equatable {
+    var artifactId: UUID
+    var content: String
+    var offset: Int
+    var nextOffset: Int?
+    var totalCharacterCount: Int
+    var hasMore: Bool
 }
 
 struct FileRunArtifactStore: RunArtifactStoreProtocol {
@@ -35,16 +55,74 @@ struct FileRunArtifactStore: RunArtifactStoreProtocol {
         kind: String,
         projectRootPath: String?
     ) throws -> RunArtifact {
+        _ = try? cleanupArtifacts(
+            olderThan: Date().addingTimeInterval(-30 * 24 * 60 * 60)
+        )
         let root = try storageRoot()
         let directory = root
             .appendingPathComponent(".workharness", isDirectory: true)
             .appendingPathComponent("artifacts", isDirectory: true)
             .appendingPathComponent(runId.uuidString, isDirectory: true)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        let filename = "\(sourceId.uuidString)-\(safeFilename(name)).txt"
+        let artifactId = UUID()
+        let filename = "\(artifactId.uuidString).txt"
         let url = directory.appendingPathComponent(filename, isDirectory: false)
         try content.write(to: url, atomically: true, encoding: .utf8)
-        return RunArtifact(name: name, kind: kind, path: url.path)
+        return RunArtifact(id: artifactId, name: name, kind: kind, path: url.path)
+    }
+
+    func readText(artifactId: UUID, offset: Int, limit: Int) throws -> RunArtifactContentPage {
+        let boundedOffset = max(0, offset)
+        let boundedLimit = min(max(1, limit), 12_000)
+        let root = try artifactsRoot()
+        guard let enumerator = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            throw RunArtifactStoreError.artifactNotFound(artifactId)
+        }
+        let expectedName = "\(artifactId.uuidString).txt"
+        guard let url = enumerator.compactMap({ $0 as? URL }).first(where: {
+            $0.lastPathComponent == expectedName
+        }) else {
+            throw RunArtifactStoreError.artifactNotFound(artifactId)
+        }
+        let content = try String(contentsOf: url, encoding: .utf8)
+        let startOffset = min(boundedOffset, content.count)
+        let start = content.index(content.startIndex, offsetBy: startOffset)
+        let retainedCount = min(boundedLimit, content.distance(from: start, to: content.endIndex))
+        let end = content.index(start, offsetBy: retainedCount)
+        let nextOffset = startOffset + retainedCount
+        let hasMore = nextOffset < content.count
+        return RunArtifactContentPage(
+            artifactId: artifactId,
+            content: String(content[start..<end]),
+            offset: startOffset,
+            nextOffset: hasMore ? nextOffset : nil,
+            totalCharacterCount: content.count,
+            hasMore: hasMore
+        )
+    }
+
+    func cleanupArtifacts(olderThan cutoff: Date) throws -> Int {
+        let root = try artifactsRoot()
+        guard fileManager.fileExists(atPath: root.path),
+              let enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+              ) else { return 0 }
+        var removed = 0
+        for case let url as URL in enumerator where url.pathExtension == "txt" {
+            let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+            guard values.isRegularFile == true,
+                  let modifiedAt = values.contentModificationDate,
+                  modifiedAt < cutoff else { continue }
+            try fileManager.removeItem(at: url)
+            removed += 1
+        }
+        return removed
     }
 
     private func storageRoot() throws -> URL {
@@ -60,11 +138,12 @@ struct FileRunArtifactStore: RunArtifactStoreProtocol {
         return applicationSupport.appendingPathComponent("WorkHarness", isDirectory: true)
     }
 
-    private func safeFilename(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
-        return String(scalars).prefix(80).lowercased()
+    private func artifactsRoot() throws -> URL {
+        try storageRoot()
+            .appendingPathComponent(".workharness", isDirectory: true)
+            .appendingPathComponent("artifacts", isDirectory: true)
     }
+
 }
 
 struct ToolResultRetentionConfiguration: Equatable {
@@ -129,10 +208,8 @@ struct ToolResultRetentionProcessor {
             kind: "tool-result",
             projectRootPath: request.projectRootPath
         )
-        let reference = artifactReference(artifact, projectRootPath: request.projectRootPath)
-        let retrievalInstruction = artifact.path?.hasPrefix((request.projectRootPath ?? "") + "/") == true
-            ? "Use file.read with _output_offset and _output_limit to retrieve a narrow window."
-            : "Open the WorkHarness artifact by ID \(artifact.id.uuidString) to inspect the full result."
+        let reference = "artifact:\(artifact.id.uuidString)"
+        let retrievalInstruction = "Retrieve the WorkHarness artifact by ID with bounded offset and limit."
         let preview = String(redactedOutput.prefix(configuration.previewCharacters))
         let boundedOutput = """
         Tool output exceeded the inline limit (\(redactedOutput.count) characters).
@@ -220,15 +297,6 @@ struct ToolResultRetentionProcessor {
         )
     }
 
-    private func artifactReference(_ artifact: RunArtifact, projectRootPath: String?) -> String {
-        guard let path = artifact.path else { return "artifact:\(artifact.id.uuidString)" }
-        guard let projectRootPath,
-              path.hasPrefix(projectRootPath + "/") else {
-            return "artifact:\(artifact.id.uuidString)"
-        }
-        return String(path.dropFirst(projectRootPath.count + 1))
-    }
-
     private func redact(_ metadata: [String: String], arguments: [String: String]) -> [String: String] {
         metadata.reduce(into: [:]) { result, pair in
             result[pair.key] = isSensitiveKey(pair.key)
@@ -283,6 +351,20 @@ enum ToolResultRetentionError: LocalizedError {
         switch self {
         case .artifactStorageUnavailable:
             "Tool output is too large to return inline and artifact storage is unavailable."
+        }
+    }
+}
+
+enum RunArtifactStoreError: LocalizedError, Equatable {
+    case artifactNotFound(UUID)
+    case retrievalUnsupported
+
+    var errorDescription: String? {
+        switch self {
+        case .artifactNotFound(let id):
+            "Artifact was not found: \(id.uuidString)."
+        case .retrievalUnsupported:
+            "This artifact store does not support content retrieval."
         }
     }
 }

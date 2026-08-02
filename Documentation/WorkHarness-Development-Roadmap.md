@@ -1,6 +1,6 @@
 # WorkHarness Development Roadmap
 
-Updated: 29.07.2026
+Updated: 02.08.2026
 
 WorkHarness is a local-first macOS SwiftUI AI Agent Harness. It must stay Run-centric, provider-agnostic, agent-agnostic and safety-aware. Do not treat it as a generic chat app.
 
@@ -84,6 +84,9 @@ WorkHarness already has:
   - `local_llm_describe_model`.
   - `local_llm_generate`.
   - `local_llm_health`.
+- Tool-capable Local LLM AgentRuntime with a strict structured tool loop,
+  MCP-only file/shell/Git execution, shared approvals, bounded history and
+  execution-loop compatibility.
 - ContextBuilder v1.
 - `ContextBuilderProtocol`.
 - `ContextBuilder`.
@@ -175,6 +178,15 @@ WorkHarness already has:
   - critical-keyword and multi-requirement heuristics;
   - immutable per-Run model selection;
   - observable routing decisions in the Run timeline.
+- Model routing v2 with fast-model runtime-failure fallback, cumulative
+  attempt usage, observable escalation latency/cost and immutable task-level
+  routing snapshots in execution-loop reports.
+- Opaque artifact-content retrieval with bounded offset/limit pages,
+  automatic 30-day tool-artifact cleanup and no host path in agent retrieval
+  instructions.
+- Measured Claude continuation utilization with an observable fresh-context
+  reset at 80% of the declared runtime context window; runtimes without
+  telemetry continue to report history utilization as unavailable.
 - Cross-agent WorkHarness context-engineering policy with one version-controlled
   skill source, native Codex/Claude/Cursor discovery, mandatory project rules
   and a context-impact completion note for relevant changes.
@@ -310,20 +322,22 @@ Continue product development in this order:
    - add optional UI smoke validation for UI tasks;
    - retain `.xcresult`, logs and screenshots as Run artifacts;
    - distinguish code, simulator and infrastructure failures.
-5. Tool-capable Local LLM AgentRuntime:
+5. [x] Tool-capable Local LLM AgentRuntime:
    - use Ollama behind an agent-runtime boundary;
    - route file, shell and Git actions through WorkHarness MCP tools and
      approvals;
    - preserve RunEvents and execution-loop metrics;
-   - execute the Day 5 local-model comparison honestly even if the model
+   - the technical path is complete; execute the Day 5 local-model comparison
+     as an explicit user-started evidence Run, honestly even if the model
      completes zero tasks.
-6. Model routing v2:
+6. [x] Model routing v2:
    - add fallback after a real fast-model runtime failure;
    - support execution-loop routing with immutable per-task model snapshots;
    - record escalation reasons, latency and cost;
-   - keep the Day 10 self-reported confidence pipeline as course evidence, then
-     add calibrated production confidence on a larger held-out set.
-7. Measured context-engineering hardening:
+   - the Day 10 self-reported confidence pipeline remains course evidence;
+     calibrated production confidence on a larger held-out set remains a
+     future evidence task rather than a hidden production dependency.
+7. [x] Measured context-engineering hardening:
    - [x] audit current `ContextBuilder`, folding, memory/RAG and tool-result
      traces before changing their architecture;
    - [x] deliver the existing selected context exactly once through Cursor ACP,
@@ -359,10 +373,13 @@ Continue product development in this order:
      policy tests, a successful macOS build and 210 passing regression tests;
      retain the documented macOS Automation Mode initialization failure as an
      environment-level UI-test rerun requirement;
-   - add cleanup for persistent context/tool artifacts and an artifact-content
-     retrieval contract that does not require exposing host paths;
-   - add measured history limits for runtime-managed Cursor/Claude sessions
-     when their adapters expose history/context telemetry;
+   - [x] add automatic 30-day cleanup for persistent tool artifacts and a
+     bounded opaque-ID artifact-content retrieval contract that does not
+     require exposing host paths;
+   - [x] add measured history limits for runtime-managed sessions when their
+     adapters expose history/context telemetry: Claude currently reports usage
+     and resets its continuation observably at 80%; Cursor remains explicitly
+     unavailable until ACP exposes equivalent telemetry;
    - [x] compare deterministic representative traces before and after each
      completed context-policy slice and record quality, latency, token and cost
      impact in the context-engineering baseline;

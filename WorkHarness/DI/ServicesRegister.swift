@@ -139,6 +139,12 @@ extension Container {
             RunContextAttachmentService()
         }.inObjectScope(.container)
 
+        register(RunArtifactContentServiceProtocol.self) { resolver in
+            RunArtifactContentService(
+                artifactStore: resolver.resolve(RunArtifactStoreProtocol.self)!
+            )
+        }.inObjectScope(.container)
+
         register(UsageStatisticsServiceProtocol.self) { resolver in
             UsageStatisticsService(runService: resolver.resolve(RunServiceProtocol.self)!)
         }.inObjectScope(.container)

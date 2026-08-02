@@ -70,6 +70,29 @@ final class AgentModelRoutingService: AgentModelRoutingServiceProtocol {
         )
     }
 
+    func fallbackDecision(
+        afterRuntimeFailureFor prompt: String,
+        runtime: AgentRuntimeDescriptor,
+        failedModelId: String?
+    ) -> AgentModelRoutingDecision? {
+        guard let descriptor = runtime.modelRouting else { return nil }
+        let settings = normalizedSettings(
+            appSettingsService.agentModelRoutingSettings(for: runtime.id),
+            descriptor: descriptor,
+            availableModels: runtime.modelOptions
+        )
+        guard settings.isEnabled,
+              failedModelId == settings.fastModelId,
+              settings.fastModelId != settings.fallbackModelId else {
+            return nil
+        }
+        return fallbackDecision(
+            settings: settings,
+            reason: "fast_model_runtime_failure",
+            promptLength: prompt.count
+        )
+    }
+
     private func normalizedSettings(
         _ savedSettings: AgentModelRoutingSettings?,
         descriptor: AgentModelRoutingDescriptor,

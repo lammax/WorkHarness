@@ -40,14 +40,21 @@ struct ExecutionLoopReportWriter {
     func markdown(for attempt: ExecutionLoopAttempt) -> String {
         let formatter = ISO8601DateFormatter()
         let percentage = Int((attempt.firstPassSuccessRate * 100).rounded())
-        let rows = attempt.taskResults.map { result in
-            [
+        let rows = attempt.taskResults.map { result -> String in
+            let routingLatency = result.routingLatencyMilliseconds.map { "\($0)ms" } ?? "—"
+            let routingCost = result.routingCostUSD.map { String(format: "$%.6f", $0) } ?? "—"
+            let columns: [String] = [
                 result.taskId,
                 escaped(result.title),
                 result.profileId,
                 result.runtimeName ?? "—",
                 result.runtimeId ?? "—",
                 result.modelId ?? "—",
+                result.routingRoute ?? "—",
+                result.routingReason ?? "—",
+                result.escalationReason ?? "—",
+                routingLatency,
+                routingCost,
                 result.status.rawValue,
                 "\(result.attemptNumber ?? 1)",
                 result.failureKind?.rawValue ?? "—",
@@ -57,8 +64,9 @@ struct ExecutionLoopReportWriter {
                 result.commitSHA ?? "—",
                 result.pushSucceeded ? "pushed" : "not pushed",
                 escaped(result.failureReason ?? "—")
-            ].joined(separator: " | ")
-        }.map { "| \($0) |" }.joined(separator: "\n")
+            ]
+            return "| \(columns.joined(separator: " | ")) |"
+        }.joined(separator: "\n")
 
         return """
         # Day 5 Execution Loop Report
@@ -86,9 +94,9 @@ struct ExecutionLoopReportWriter {
 
         ## Task Log
 
-        | Task | Title | Profile | Agent | Runtime ID | Model | Result | Attempt | Failure kind | Time | Build | Tests | Commit | Push | Failure |
-        | --- | --- | --- | --- | --- | --- | --- | ---: | --- | ---: | --- | --- | --- | --- | --- |
-        \(rows.isEmpty ? "| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |" : rows)
+        | Task | Title | Profile | Agent | Runtime ID | Model | Route | Route reason | Escalation | Routing latency | Cost before fallback | Result | Attempt | Failure kind | Time | Build | Tests | Commit | Push | Failure |
+        | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | --- |
+        \(rows.isEmpty ? "| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |" : rows)
         """
     }
 

@@ -423,8 +423,24 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             activeTaskCheckpoint?.runId = runId
             try persistState()
 
-            guard runLauncher.run(withId: runId)?.status == .completed else {
+            guard let completedRun = runLauncher.run(withId: runId),
+                  completedRun.status == .completed else {
                 throw ExecutionLoopServiceError.taskRunFailed(task.id)
+            }
+            result.modelId = completedRun.executionBackend?.modelId ?? result.modelId
+            let routingEvents = completedRun.events.filter { $0.type == .modelRoutingDecision }
+            if let initialRoute = routingEvents.first {
+                result.routingRoute = initialRoute.metadata["route"]
+                result.routingReason = initialRoute.metadata["reason"]
+            }
+            if let escalation = routingEvents.last(where: {
+                $0.metadata["reason"] == "fast_model_runtime_failure"
+            }) {
+                result.escalationReason = escalation.metadata["reason"]
+                result.routingLatencyMilliseconds = escalation.metadata["escalationLatencyMilliseconds"]
+                    .flatMap(Int.init)
+                result.routingCostUSD = escalation.metadata["costBeforeFallbackUSD"]
+                    .flatMap(Double.init)
             }
 
             let headAfterAgent = try await git(
