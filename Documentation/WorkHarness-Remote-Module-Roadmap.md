@@ -2,7 +2,8 @@
 
 Updated: 02.08.2026
 
-Status: R0 Architecture Contract complete; R1 RemoteSDK Models is next.
+Status: R0 Architecture Contract and R1 RemoteSDK Models complete; R2 Server
+and Client Connection is next.
 
 This is the repository-owned implementation plan derived from
 `/Users/lammax/Downloads/workharness-remote-module-roadmap-lean.md` and audited
@@ -64,7 +65,10 @@ Required boundaries:
 
 ### RemoteSDK decision
 
-Create `Packages/RemoteSDK` as an independently buildable Swift Package in R1.
+Use the dedicated repository at
+`/Users/lammax/Documents/ThisIsMy/Programming/AI/WorkHarnessRemoteSDK` as an
+independently buildable Swift Package. Its package layout follows the
+single-package, multiple-target convention used by `MCP_server`.
 
 Lean package targets:
 
@@ -173,8 +177,8 @@ versioned client and integration tests cover the replacement.
 | Phase | Status | Deliverable |
 |---|---|---|
 | R0 | Complete | Boundaries, MVP scope, security and migration contract |
-| R1 | Next | Independent RemoteSDK package with DTOs and fixtures |
-| R2 | Pending | Explicit server lifecycle, `/api/v1` status and typed HTTP client |
+| R1 | Complete | Independent RemoteSDK package with DTOs and fixtures |
+| R2 | Next | Explicit server lifecycle, `/api/v1` status and typed HTTP client |
 | R3 | Pending | Pairing, trusted device, Keychain credential and revocation |
 | R4 | Pending | Versioned project and Run read APIs through service boundaries |
 | R5 | Pending | Idempotent Run commands and authenticated bounded live stream |
@@ -185,17 +189,19 @@ versioned client and integration tests cover the replacement.
 
 Goal: create the minimal shared protocol contract without server/network code.
 
+Status: Complete in the dedicated `WorkHarnessRemoteSDK` repository.
+
 Create:
 
 ```text
-Packages/RemoteSDK/
+WorkHarnessRemoteSDK/
 ├── Package.swift
 ├── Sources/
 │   ├── RemoteModels/
 │   ├── RemoteClient/
 │   └── RemoteTestSupport/
-├── Tests/RemoteModelsTests/
-└── Fixtures/
+└── Tests/RemoteModelsTests/
+    └── Fixtures/
 ```
 
 Initial RemoteModels:
@@ -222,7 +228,7 @@ Constraints:
 
 Acceptance:
 
-- `swift test` passes inside `Packages/RemoteSDK`;
+- `swift test` passes inside the `WorkHarnessRemoteSDK` repository;
 - representative JSON fixtures round-trip;
 - the package builds independently;
 - DTO/domain separation and compatibility behavior are documented.

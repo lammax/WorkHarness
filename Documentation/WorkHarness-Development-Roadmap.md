@@ -1489,8 +1489,8 @@ comparison.
 
 ## Step 26 - Remote Platform Lean MVP v1
 
-Status: active. R0 Architecture Contract is complete. R1 RemoteSDK Models is
-the next implementation phase.
+Status: active. R0 Architecture Contract and R1 RemoteSDK Models are complete.
+R2 Server and Client Connection is the next implementation phase.
 
 The detailed R0–R7 sequence, current RemoteControl prototype audit, security
 constraints, migration rules and acceptance criteria live in
@@ -1505,7 +1505,7 @@ revocation, a typed RemoteSDK client, provider routes or full hardening.
 Active order:
 
 1. R0 — architecture and scope contract (complete);
-2. R1 — independent RemoteSDK package and shared DTO fixtures;
+2. R1 — independent RemoteSDK package and shared DTO fixtures (complete);
 3. R2 — explicit server lifecycle and versioned typed status connection;
 4. R3 — pairing, Keychain credential and trusted-device revocation;
 5. R4 — project and Run read APIs;
