@@ -333,15 +333,15 @@ final class MultiAgentCoordinator {
 
                 try ensureRunIsActive(runId)
                 let completedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let outputContract = roleConfiguration?.outputContract {
-                    try validateOutput(
-                        completedOutput,
-                        against: outputContract,
-                        runId: runId,
-                        stepId: step.id,
-                        metadata: metadata
-                    )
-                }
+                let safetyMetadata = metadata.merging([
+                    "validationKind": "agentOutputSafety"
+                ]) { _, new in new }
+                recorder.record(
+                    runId: runId,
+                    type: .validationStarted,
+                    message: "Validating final output for \(roleConfiguration?.assistantName ?? step.role.label).",
+                    metadata: safetyMetadata
+                )
                 let handoff = try handoffPolicy.prepare(
                     output: completedOutput,
                     runId: runId,
@@ -360,6 +360,38 @@ final class MultiAgentCoordinator {
                             "kind": artifact.kind,
                             "sourcePlanStepId": step.id.uuidString
                         ]
+                    )
+                }
+                if let rejectionReason = handoff.rejectionReason {
+                    recorder.record(
+                        runId: runId,
+                        type: .validationFinished,
+                        message: rejectionReason.message,
+                        metadata: safetyMetadata.merging([
+                            "status": "failed",
+                            "reason": rejectionReason.rawValue
+                        ]) { _, new in new }
+                    )
+                    throw MultiAgentCoordinatorError.stepFailed(
+                        step.id,
+                        rejectionReason.message
+                    )
+                }
+                recorder.record(
+                    runId: runId,
+                    type: .validationFinished,
+                    message: "Agent output passed safety validation.",
+                    metadata: safetyMetadata.merging([
+                        "status": "passed"
+                    ]) { _, new in new }
+                )
+                if let outputContract = roleConfiguration?.outputContract {
+                    try validateOutput(
+                        completedOutput,
+                        against: outputContract,
+                        runId: runId,
+                        stepId: step.id,
+                        metadata: metadata
                     )
                 }
                 if !handoff.content.isEmpty {

@@ -225,6 +225,85 @@ struct ExecutionLoopTests {
     }
 
     @MainActor
+    @Test func pausedLoopRestoresSavedPoolAfterServiceRelaunch() async throws {
+        let fixture = try LoopFixture(safetyMode: .autoInsideSandbox)
+        defer { fixture.cleanup() }
+        try fixture.useTwoTaskPool()
+        fixture.toolService.statusOutputs = ["", " M README.md\n", "", " M README.md\n"]
+
+        _ = try await fixture.service.start(sourcePath: fixture.sourceURL.path)
+        fixture.service.pauseAfterCurrentTask()
+        for _ in 0..<2_000 where fixture.service.activeAttempt?.status != .paused {
+            await Task.yield()
+        }
+        try "# The source changed after checkpoint creation".write(
+            to: fixture.sourceURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let restoredService = fixture.makeService()
+        #expect(restoredService.activeAttempt?.status == .paused)
+        _ = try await restoredService.resume()
+        for _ in 0..<4_000 where restoredService.activeAttempt?.finishedAt == nil {
+            await Task.yield()
+        }
+
+        #expect(restoredService.activeAttempt?.status == .passed)
+        #expect(restoredService.activeAttempt?.taskResults.map(\.taskId) == ["WHM-001", "WHM-002"])
+        #expect(fixture.runLauncher.prompts.count == 2)
+    }
+
+    @MainActor
+    @Test func interruptedTaskRestartsAsSecondAttemptAndDoesNotPassFirstPassMetric() async throws {
+        let fixture = try LoopFixture(safetyMode: .autoInsideSandbox)
+        defer { fixture.cleanup() }
+        let pool = try fixture.service.preview(sourcePath: fixture.sourceURL.path)
+        let controllerRun = Run(goal: "Recovered loop", mode: .codingLoop, status: .running)
+        fixture.runRepository.insert(controllerRun)
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let attempt = ExecutionLoopAttempt(
+            id: UUID(),
+            controllerRunId: controllerRun.id,
+            sourcePath: pool.sourcePath,
+            targetRepositoryPath: pool.targetRepositoryPath,
+            baseBranch: pool.baseBranch,
+            baseCommitSHA: "base-sha",
+            executionBranch: "main",
+            status: .running,
+            startedAt: startedAt,
+            taskResults: []
+        )
+        try fixture.stateStore.save(ExecutionLoopCheckpoint(
+            attempt: attempt,
+            pool: pool,
+            activeTask: ExecutionLoopTaskCheckpoint(
+                task: pool.tasks[0],
+                attemptNumber: 1,
+                startedAt: startedAt,
+                headBeforeTask: "base-sha"
+            ),
+            savedAt: startedAt
+        ))
+        fixture.toolService.statusOutputs = [" M README.md\n", " M README.md\n"]
+
+        let restoredService = fixture.makeService()
+        #expect(restoredService.activeAttempt?.taskResults.first?.status == .interrupted)
+        #expect(restoredService.activeAttempt?.taskResults.first?.failureKind == .runtimeCrash)
+        _ = try await restoredService.resume()
+        for _ in 0..<4_000 where restoredService.activeAttempt?.finishedAt == nil {
+            await Task.yield()
+        }
+
+        let results = try #require(restoredService.activeAttempt?.taskResults)
+        #expect(results.map(\.attemptNumber) == [1, 2])
+        #expect(results.last?.status == .passed)
+        #expect(results.last?.firstPassSucceeded == false)
+        #expect(restoredService.activeAttempt?.firstPassSuccessRate == 0)
+        #expect(fixture.runLauncher.prompts.last?.contains("recovers an interrupted task") == true)
+    }
+
+    @MainActor
     @Test func loopUsesCurrentBranchValidatesCommitsAndPushesPinnedTargetRepository() async throws {
         let fixture = try LoopFixture(safetyMode: .autoInsideSandbox)
         defer { fixture.cleanup() }
@@ -407,6 +486,9 @@ private final class LoopFixture {
     let toolService: ExecutionLoopToolServiceFake
     let service: ExecutionLoopService
     let runRepository: InMemoryRunRepository
+    let recorder: RunRecorder
+    let appSettings: InMemoryAppSettingsService
+    let stateStore: FileExecutionLoopStateStore
 
     init(safetyMode: SafetyMode) throws {
         rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -444,15 +526,18 @@ private final class LoopFixture {
         try projectService.selectProject(id: originalProject.id)
 
         runRepository = InMemoryRunRepository()
-        let recorder = RunRecorder(repository: runRepository)
+        recorder = RunRecorder(repository: runRepository)
         runLauncher = ExecutionLoopRunLauncherFake(
             repository: runRepository,
             projectService: projectService
         )
         toolService = ExecutionLoopToolServiceFake()
-        let appSettings = InMemoryAppSettingsService(
+        appSettings = InMemoryAppSettingsService(
             defaultAgentRuntimeId: "cursor.acp",
             defaultSafetyMode: safetyMode
+        )
+        stateStore = FileExecutionLoopStateStore(
+            fileURL: rootURL.appendingPathComponent("ExecutionLoopCheckpoint.json")
         )
         service = ExecutionLoopService(
             taskSource: MarkdownExecutionTaskSource(),
@@ -466,7 +551,8 @@ private final class LoopFixture {
             appSettingsService: appSettings,
             reportWriter: ExecutionLoopReportWriter(
                 reportsRootURL: rootURL.appendingPathComponent("Reports", isDirectory: true)
-            )
+            ),
+            stateStore: stateStore
         )
     }
 
@@ -498,6 +584,24 @@ private final class LoopFixture {
         - Done when:
           - tests pass
         """.write(to: sourceURL, atomically: true, encoding: .utf8)
+    }
+
+    func makeService() -> ExecutionLoopService {
+        ExecutionLoopService(
+            taskSource: MarkdownExecutionTaskSource(),
+            profileSelector: ExecutionProfileSelector(),
+            runLauncher: runLauncher,
+            runRepository: runRepository,
+            recorder: recorder,
+            toolService: toolService,
+            projectService: projectService,
+            agentProfileService: AgentProfileService(projectService: projectService),
+            appSettingsService: appSettings,
+            reportWriter: ExecutionLoopReportWriter(
+                reportsRootURL: rootURL.appendingPathComponent("Reports", isDirectory: true)
+            ),
+            stateStore: stateStore
+        )
     }
 }
 

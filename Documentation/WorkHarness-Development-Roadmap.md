@@ -277,22 +277,27 @@ Agreed: 30.07.2026.
 
 Continue product development in this order:
 
-1. Agent output safety and bounded artifacts:
-   - detect plain-text pseudo-tool transcripts;
-   - reject incomplete final answers instead of reporting success;
-   - keep oversized tool results and diffs out of the Run timeline;
-   - store full output as artifacts and show a bounded human-readable summary;
-   - add regression coverage for oversized diffs and interrupted responses.
-2. Durable Execution Loop recovery:
-   - persist the selected task pool and attempt state;
-   - restore paused loops after application relaunch;
-   - reconcile branch, HEAD and working-tree state before resume;
-   - classify token exhaustion, runtime crash, validation failure and repository
-     mismatch separately;
-   - retry an interrupted task as an explicit new attempt without counting it
-     as first-pass success;
-   - continue an existing runtime session only when that runtime supports safe
-     continuation; otherwise restart the task with a recorded context snapshot.
+1. [x] Agent output safety and bounded artifacts:
+   - plain-text pseudo-tool transcripts, empty, preparatory and truncated final
+     answers are rejected instead of reporting Run success;
+   - provider and ACP stream previews are bounded in the Run timeline;
+   - oversized or rejected final output is redacted, stored as a Run artifact
+     and represented by a bounded human-readable summary;
+   - the same safety gate runs for ordinary provider, agent-runtime and
+     multi-agent outputs;
+   - regression coverage includes oversized diff-like transcripts, interrupted
+     responses and large completed output.
+2. [x] Durable Execution Loop recovery:
+   - the selected task-pool snapshot, attempt and active-task checkpoint are
+     persisted atomically outside model context;
+   - paused and interrupted loops are restored after application relaunch;
+   - branch, HEAD and working-tree state are reconciled before resume;
+   - token exhaustion, runtime crash, validation failure, repository mismatch,
+     cancellation and unknown failures have separate typed classifications;
+   - an interrupted task is recorded as its own failed attempt and restarted as
+     an explicit next attempt, so it cannot count as first-pass success;
+   - runtime-session continuation is not assumed: recovery starts a new task Run
+     with the saved task snapshot and an explicit inspect-current-diff prompt.
 3. Remote Control API contract verification:
    - maintain canonical request/response fixtures;
    - test health, capabilities, Runs, RunEvents and Approvals;

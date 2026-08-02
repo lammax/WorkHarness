@@ -40,6 +40,16 @@ enum ExecutionTaskResultStatus: String, Codable, Equatable {
     case failed
     case blocked
     case cancelled
+    case interrupted
+}
+
+enum ExecutionTaskFailureKind: String, Codable, Equatable {
+    case tokenExhausted
+    case runtimeCrash
+    case validationFailure
+    case repositoryMismatch
+    case cancelled
+    case unknown
 }
 
 struct ExecutionTaskResult: Identifiable, Codable, Equatable {
@@ -60,13 +70,15 @@ struct ExecutionTaskResult: Identifiable, Codable, Equatable {
     var commitSHA: String?
     var pushSucceeded: Bool
     var failureReason: String?
+    var attemptNumber: Int? = nil
+    var failureKind: ExecutionTaskFailureKind? = nil
 
     var duration: TimeInterval {
         max(0, finishedAt.timeIntervalSince(startedAt))
     }
 
     var firstPassSucceeded: Bool {
-        status == .passed
+        status == .passed && (attemptNumber ?? 1) == 1
     }
 }
 

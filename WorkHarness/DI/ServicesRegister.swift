@@ -115,6 +115,10 @@ extension Container {
             MarkdownExecutionTaskSource()
         }.inObjectScope(.container)
 
+        register(ExecutionLoopStateStoreProtocol.self) { _ in
+            FileExecutionLoopStateStore()
+        }.inObjectScope(.container)
+
         register(ExecutionLoopServiceProtocol.self) { resolver in
             ExecutionLoopService(
                 taskSource: resolver.resolve(ExecutionTaskSourceProtocol.self)!,
@@ -126,7 +130,8 @@ extension Container {
                 projectService: resolver.resolve(ProjectServiceProtocol.self)!,
                 agentProfileService: resolver.resolve(AgentProfileServiceProtocol.self)!,
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
-                reportWriter: ExecutionLoopReportWriter()
+                reportWriter: ExecutionLoopReportWriter(),
+                stateStore: resolver.resolve(ExecutionLoopStateStoreProtocol.self)!
             )
         }.inObjectScope(.container)
 

@@ -21,6 +21,7 @@ final class HarnessEngine {
     private let agentModelRoutingService: AgentModelRoutingServiceProtocol?
     private let agentRuntimeRegistry: AgentRuntimeRegistry
     private let multiAgentCoordinator: MultiAgentCoordinator
+    private let agentOutputSafetyPolicy: AgentOutputSafetyPolicy
     private let contextObservationPolicy = ContextObservationPolicy()
     private let contextMemoryRetrievalPolicy: ContextMemoryRetrievalPolicy
     private var activeRuntimeSessions: [UUID: (runtime: AgentRuntime, sessionId: UUID)] = [:]
@@ -38,7 +39,8 @@ final class HarnessEngine {
         agentModelRoutingService: AgentModelRoutingServiceProtocol? = nil,
         agentRuntimeRegistry: AgentRuntimeRegistry? = nil,
         multiAgentCoordinator: MultiAgentCoordinator? = nil,
-        contextMemoryRetrievalPolicy: ContextMemoryRetrievalPolicy? = nil
+        contextMemoryRetrievalPolicy: ContextMemoryRetrievalPolicy? = nil,
+        agentOutputSafetyPolicy: AgentOutputSafetyPolicy? = nil
     ) {
         self.repository = repository
         self.recorder = recorder
@@ -53,6 +55,7 @@ final class HarnessEngine {
         self.agentRuntimeRegistry = agentRuntimeRegistry ?? AgentRuntimeRegistry()
         self.multiAgentCoordinator = multiAgentCoordinator ?? MultiAgentCoordinator(repository: repository, recorder: recorder)
         self.contextMemoryRetrievalPolicy = contextMemoryRetrievalPolicy ?? ContextMemoryRetrievalPolicy()
+        self.agentOutputSafetyPolicy = agentOutputSafetyPolicy ?? AgentOutputSafetyPolicy()
     }
 
     var providerName: String {
@@ -482,6 +485,9 @@ final class HarnessEngine {
             )
             let stream = try await provider.send(request)
             var completedMessage = ""
+            var didFinish = false
+            var retainedStreamCharacters = 0
+            var didRecordStreamLimit = false
 
             for try await event in stream {
                 guard repository.run(withId: runId)?.status != .cancelled else { return }
@@ -489,10 +495,15 @@ final class HarnessEngine {
                 case .started:
                     recorder.record(runId: runId, type: .providerRequestStarted, message: "Provider stream opened.", metadata: ["providerId": provider.id])
                 case .messageDelta(let delta):
-                    recorder.record(runId: runId, type: .providerStreamDelta, message: delta)
+                    recordBoundedStreamDelta(
+                        delta,
+                        runId: runId,
+                        source: "provider",
+                        retainedCharacters: &retainedStreamCharacters,
+                        didRecordLimit: &didRecordStreamLimit
+                    )
                 case .messageCompleted(let message):
                     completedMessage = message
-                    recorder.record(runId: runId, type: .assistantMessage, message: message)
                 case .toolCall(let name, let input):
                     recorder.record(runId: runId, type: .toolCallRequested, message: name, metadata: ["input": input])
                 case .tokenUsage(let usage):
@@ -512,7 +523,7 @@ final class HarnessEngine {
                         )
                     )
                 case .finished:
-                    recorder.record(runId: runId, type: .providerRequestFinished, message: completedMessage.isEmpty ? "Provider finished." : completedMessage)
+                    didFinish = true
                 case .error(let message):
                     recorder.record(runId: runId, type: .providerRequestFailed, message: message, metadata: ["providerId": provider.id])
                     failRun(runId, message: message)
@@ -521,6 +532,35 @@ final class HarnessEngine {
             }
 
             guard repository.run(withId: runId)?.status != .cancelled else { return }
+            guard didFinish else {
+                failRun(runId, message: AgentOutputRejectionReason.incompleteFinalAnswer.message)
+                return
+            }
+            let safeOutput = try agentOutputSafetyPolicy.process(
+                output: completedMessage,
+                runId: runId,
+                sourceId: request.id,
+                name: "Provider final output",
+                artifactKind: "agent-output",
+                projectRootPath: projectService?.currentProject?.rootPath
+            )
+            recordOutputSafetyResult(safeOutput, runId: runId, source: "provider")
+            if let rejectionReason = safeOutput.rejectionReason {
+                failRun(runId, message: rejectionReason.message)
+                return
+            }
+            recorder.record(
+                runId: runId,
+                type: .assistantMessage,
+                message: safeOutput.content,
+                metadata: safeOutput.metadata
+            )
+            recorder.record(
+                runId: runId,
+                type: .providerRequestFinished,
+                message: "Provider request finished.",
+                metadata: ["providerId": provider.id]
+            )
             repository.updateRun(runId) { run in
                 run.status = .completed
             }
@@ -760,16 +800,24 @@ final class HarnessEngine {
             )
             let mapper = ACPRunEventMapper(recorder: recorder)
             var assistantMessage = ""
-            var hasStreamedText = false
             var didRecordUsage = false
+            var didFinish = false
+            var finalResponse: AgentResponse?
+            var retainedStreamCharacters = 0
+            var didRecordStreamLimit = false
 
             for try await event in execution.events {
                 guard repository.run(withId: runId)?.status != .cancelled else { break }
                 switch event {
                 case .textDelta(let delta):
                     assistantMessage += delta
-                    hasStreamedText = true
-                    recorder.record(runId: runId, type: .providerStreamDelta, message: delta, metadata: ["source": "acp"])
+                    recordBoundedStreamDelta(
+                        delta,
+                        runId: runId,
+                        source: "acp",
+                        retainedCharacters: &retainedStreamCharacters,
+                        didRecordLimit: &didRecordStreamLimit
+                    )
                 case .messageCompleted(let message):
                     assistantMessage = message
                 case .tokenUsage(let usage):
@@ -791,30 +839,10 @@ final class HarnessEngine {
                     )
                 case .finished(let response):
                     guard repository.run(withId: runId)?.status != .cancelled else { break }
-                    if !assistantMessage.isEmpty && !hasStreamedText {
-                        recorder.record(runId: runId, type: .assistantMessage, message: assistantMessage, metadata: ["source": "acp"])
-                    }
-                    mapper.record(runId: runId, event: event)
-                    repository.updateRun(runId) { run in
-                        run.status = .completed
-                        if let usage = response.tokenUsage {
-                            run.tokenUsage = usage
-                            run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
-                        }
-                        run.artifacts.append(contentsOf: response.artifacts)
-                    }
-                    if let usage = response.tokenUsage, !didRecordUsage {
-                        recorder.record(
-                            runId: runId,
-                            type: .usageUpdated,
-                            message: "Agent runtime reported final token and cost usage.",
-                            metadata: ContextUsageObservation.metadata(
-                                usage: usage,
-                                snapshot: snapshot,
-                                providerId: runtime.id,
-                                source: "agentRuntimeFinal"
-                            )
-                        )
+                    didFinish = true
+                    finalResponse = response
+                    if !response.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        assistantMessage = response.message
                     }
                 case .failed(let message):
                     mapper.record(runId: runId, event: event)
@@ -825,9 +853,58 @@ final class HarnessEngine {
                 }
             }
             activeRuntimeSessions.removeValue(forKey: runId)
-            if repository.run(withId: runId)?.status == .completed {
-                recorder.record(runId: runId, type: .runCompleted, message: "Run completed through \(runtime.displayName).")
+            guard repository.run(withId: runId)?.status != .cancelled else {
+                await runtime.disconnect(sessionId: session.id)
+                return
             }
+            guard didFinish, let finalResponse else {
+                failRun(runId, message: AgentOutputRejectionReason.incompleteFinalAnswer.message)
+                await runtime.disconnect(sessionId: session.id)
+                return
+            }
+            let safeOutput = try agentOutputSafetyPolicy.process(
+                output: assistantMessage,
+                runId: runId,
+                sourceId: UUID(),
+                name: "\(runtime.displayName) final output",
+                artifactKind: "agent-output",
+                projectRootPath: projectService?.currentProject?.rootPath
+            )
+            recordOutputSafetyResult(safeOutput, runId: runId, source: "acp")
+            if let rejectionReason = safeOutput.rejectionReason {
+                failRun(runId, message: rejectionReason.message)
+                await runtime.disconnect(sessionId: session.id)
+                return
+            }
+            recorder.record(
+                runId: runId,
+                type: .assistantMessage,
+                message: safeOutput.content,
+                metadata: ["source": "acp"].merging(safeOutput.metadata) { _, new in new }
+            )
+            repository.updateRun(runId) { run in
+                run.status = .completed
+                if let usage = finalResponse.tokenUsage {
+                    run.tokenUsage = usage
+                    run.costUsage = CostUsage(totalUSD: usage.totalCostUSD)
+                }
+                run.artifacts.append(contentsOf: finalResponse.artifacts)
+            }
+            if let usage = finalResponse.tokenUsage, !didRecordUsage {
+                recorder.record(
+                    runId: runId,
+                    type: .usageUpdated,
+                    message: "Agent runtime reported final token and cost usage.",
+                    metadata: ContextUsageObservation.metadata(
+                        usage: usage,
+                        snapshot: snapshot,
+                        providerId: runtime.id,
+                        source: "agentRuntimeFinal"
+                    )
+                )
+            }
+            recorder.record(runId: runId, type: .agentFinished, message: "\(runtime.displayName) finished.")
+            recorder.record(runId: runId, type: .runCompleted, message: "Run completed through \(runtime.displayName).")
             await runtime.disconnect(sessionId: session.id)
         } catch {
             activeRuntimeSessions.removeValue(forKey: runId)
@@ -835,6 +912,69 @@ final class HarnessEngine {
                 failRun(runId, message: error.localizedDescription)
             }
         }
+    }
+
+    private func recordBoundedStreamDelta(
+        _ delta: String,
+        runId: UUID,
+        source: String,
+        retainedCharacters: inout Int,
+        didRecordLimit: inout Bool
+    ) {
+        let limit = 4_000
+        guard retainedCharacters < limit else {
+            if !didRecordLimit {
+                recorder.record(
+                    runId: runId,
+                    type: .providerStreamDelta,
+                    message: "Live stream preview reached its 4000-character limit. The final output will be retained by the output-safety policy.",
+                    metadata: ["source": source, "streamBounded": "true"]
+                )
+                didRecordLimit = true
+            }
+            return
+        }
+        let retainedDelta = String(delta.prefix(limit - retainedCharacters))
+        retainedCharacters += retainedDelta.count
+        guard !retainedDelta.isEmpty else { return }
+        recorder.record(
+            runId: runId,
+            type: .providerStreamDelta,
+            message: retainedDelta,
+            metadata: ["source": source]
+        )
+    }
+
+    private func recordOutputSafetyResult(
+        _ result: AgentOutputSafetyResult,
+        runId: UUID,
+        source: String
+    ) {
+        recorder.record(
+            runId: runId,
+            type: .validationStarted,
+            message: "Validating final agent output.",
+            metadata: ["validationKind": "agentOutputSafety", "source": source]
+        )
+        if let artifact = result.artifact {
+            recorder.recordArtifact(runId: runId, artifact: artifact)
+            recorder.record(
+                runId: runId,
+                type: .artifactCreated,
+                message: artifact.name,
+                metadata: ["artifactId": artifact.id.uuidString, "kind": artifact.kind]
+            )
+        }
+        recorder.record(
+            runId: runId,
+            type: .validationFinished,
+            message: result.rejectionReason?.message ?? "Agent output passed safety validation.",
+            metadata: [
+                "validationKind": "agentOutputSafety",
+                "source": source,
+                "status": result.rejectionReason == nil ? "passed" : "failed"
+            ].merging(result.metadata) { _, new in new }
+        )
     }
 
     private func selectedModelId(for runtime: AgentRuntime) -> String? {

@@ -49,6 +49,8 @@ struct ExecutionLoopReportWriter {
                 result.runtimeId ?? "—",
                 result.modelId ?? "—",
                 result.status.rawValue,
+                "\(result.attemptNumber ?? 1)",
+                result.failureKind?.rawValue ?? "—",
                 duration(result.duration),
                 result.buildPassed ? "passed" : "not passed",
                 result.testsPassed ? "passed" : "not passed",
@@ -84,9 +86,9 @@ struct ExecutionLoopReportWriter {
 
         ## Task Log
 
-        | Task | Title | Profile | Agent | Runtime ID | Model | Result | Time | Build | Tests | Commit | Push | Failure |
-        | --- | --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- |
-        \(rows.isEmpty ? "| — | — | — | — | — | — | — | — | — | — | — | — | — |" : rows)
+        | Task | Title | Profile | Agent | Runtime ID | Model | Result | Attempt | Failure kind | Time | Build | Tests | Commit | Push | Failure |
+        | --- | --- | --- | --- | --- | --- | --- | ---: | --- | ---: | --- | --- | --- | --- | --- |
+        \(rows.isEmpty ? "| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |" : rows)
         """
     }
 

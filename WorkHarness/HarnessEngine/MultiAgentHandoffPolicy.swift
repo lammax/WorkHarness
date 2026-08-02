@@ -17,18 +17,25 @@ struct MultiAgentHandoffResult {
     var content: String
     var artifact: RunArtifact?
     var metadata: [String: String]
+    var rejectionReason: AgentOutputRejectionReason?
 }
 
 struct MultiAgentHandoffPolicy {
-    private let artifactStore: any RunArtifactStoreProtocol
+    private let outputSafetyPolicy: AgentOutputSafetyPolicy
     let configuration: MultiAgentHandoffConfiguration
 
     init(
         artifactStore: any RunArtifactStoreProtocol = FileRunArtifactStore(),
         configuration: MultiAgentHandoffConfiguration = MultiAgentHandoffConfiguration()
     ) {
-        self.artifactStore = artifactStore
         self.configuration = configuration
+        self.outputSafetyPolicy = AgentOutputSafetyPolicy(
+            artifactStore: artifactStore,
+            configuration: AgentOutputSafetyConfiguration(
+                maxInlineCharacters: configuration.maxInlineCharacters,
+                previewCharacters: configuration.previewCharacters
+            )
+        )
     }
 
     func prepare(
@@ -38,60 +45,25 @@ struct MultiAgentHandoffPolicy {
         assistantName: String,
         projectRootPath: String?
     ) throws -> MultiAgentHandoffResult {
-        let redacted = SensitiveTextRedactor.redact(output)
-        let wasRedacted = redacted != output
-        guard redacted.count > configuration.maxInlineCharacters else {
-            return MultiAgentHandoffResult(
-                content: redacted,
-                artifact: nil,
-                metadata: [
-                    "handoffStorage": "inline",
-                    "originalCharacterCount": "\(output.count)",
-                    "retainedCharacterCount": "\(redacted.count)",
-                    "wasRedacted": "\(wasRedacted)",
-                    "retentionPolicy": "until-next-step"
-                ]
-            )
-        }
-
-        let artifact = try artifactStore.storeText(
-            redacted,
+        let processed = try outputSafetyPolicy.process(
+            output: output,
             runId: runId,
             sourceId: stepId,
             name: "\(assistantName) handoff",
-            kind: "multi-agent-handoff",
+            artifactKind: "multi-agent-handoff",
             projectRootPath: projectRootPath
         )
-        let reference = artifactReference(artifact, projectRootPath: projectRootPath)
-        let preview = String(redacted.prefix(configuration.previewCharacters))
-        let content = """
-        Previous step output exceeded the inline handoff limit (\(redacted.count) characters).
-        Full redacted output: \(reference)
-        Retrieve only the fragment required for the current decision.
-
-        Preview:
-        \(preview)
-        """
+        var metadata = processed.metadata
+        metadata["handoffStorage"] = processed.metadata["outputStorage"]
+        if processed.artifact == nil {
+            metadata["retentionPolicy"] = "until-next-step"
+        }
         return MultiAgentHandoffResult(
-            content: content,
-            artifact: artifact,
-            metadata: [
-                "handoffStorage": "artifactReference",
-                "originalCharacterCount": "\(output.count)",
-                "retainedCharacterCount": "\(content.count)",
-                "wasRedacted": "\(wasRedacted)",
-                "retentionPolicy": "persistent-until-explicit-cleanup",
-                "artifactId": artifact.id.uuidString
-            ]
+            content: processed.content,
+            artifact: processed.artifact,
+            metadata: metadata,
+            rejectionReason: processed.rejectionReason
         )
     }
 
-    private func artifactReference(_ artifact: RunArtifact, projectRootPath: String?) -> String {
-        guard let path = artifact.path else { return "artifact:\(artifact.id.uuidString)" }
-        guard let projectRootPath,
-              path.hasPrefix(projectRootPath + "/") else {
-            return "artifact:\(artifact.id.uuidString)"
-        }
-        return String(path.dropFirst(projectRootPath.count + 1))
-    }
 }

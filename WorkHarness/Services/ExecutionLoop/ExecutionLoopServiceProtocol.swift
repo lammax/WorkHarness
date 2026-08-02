@@ -94,6 +94,9 @@ enum ExecutionLoopServiceError: LocalizedError, Equatable {
     case validationFailed(String)
     case gitFailed(String)
     case reportFailed(String)
+    case checkpointUnavailable
+    case checkpointFailed(String)
+    case repositoryMismatch(String)
 
     var errorDescription: String? {
         switch self {
@@ -133,6 +136,12 @@ enum ExecutionLoopServiceError: LocalizedError, Equatable {
             "Git command failed: git \(command)"
         case .reportFailed(let message):
             "Execution report could not be written: \(message)"
+        case .checkpointUnavailable:
+            "The saved execution-loop task pool is unavailable. Start a new loop."
+        case .checkpointFailed(let message):
+            "Execution-loop recovery state could not be saved: \(message)"
+        case .repositoryMismatch(let message):
+            "Execution-loop repository reconciliation failed: \(message)"
         }
     }
 }

@@ -25,6 +25,7 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
     private let agentProfileService: AgentProfileServiceProtocol
     private let appSettingsService: AppSettingsServiceProtocol
     private let reportWriter: ExecutionLoopReportWriter
+    private let stateStore: any ExecutionLoopStateStoreProtocol
     private let fileManager: FileManager
     private let now: () -> Date
 
@@ -33,6 +34,9 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
     private var originalProjectId: UUID?
     private var preexistingCompletedTaskIds: Set<String> = []
     private var pauseRequested = false
+    private var activePool: ExecutionTaskPool?
+    private var activeTaskCheckpoint: ExecutionLoopTaskCheckpoint?
+    private var recoveryTaskId: String?
 
     private(set) var activeAttempt: ExecutionLoopAttempt?
 
@@ -55,6 +59,7 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         agentProfileService: AgentProfileServiceProtocol,
         appSettingsService: AppSettingsServiceProtocol,
         reportWriter: ExecutionLoopReportWriter,
+        stateStore: (any ExecutionLoopStateStoreProtocol)? = nil,
         fileManager: FileManager = .default,
         now: @escaping () -> Date = Date.init
     ) {
@@ -68,8 +73,10 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         self.agentProfileService = agentProfileService
         self.appSettingsService = appSettingsService
         self.reportWriter = reportWriter
+        self.stateStore = stateStore ?? FileExecutionLoopStateStore()
         self.fileManager = fileManager
         self.now = now
+        restoreCheckpoint()
     }
 
     func start(sourcePath: String) async throws -> UUID {
@@ -123,7 +130,11 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             taskResults: []
         )
         activeAttempt = attempt
+        activePool = pool
+        activeTaskCheckpoint = nil
+        recoveryTaskId = nil
         pauseRequested = false
+        try persistState()
 
         loopTask = Task { [weak self] in
             await self?.execute(pool: pool)
@@ -154,7 +165,9 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             throw ExecutionLoopServiceError.agentRuntimeUnavailable
         }
 
-        let pool = try preview(sourcePath: attempt.sourcePath)
+        guard let pool = activePool else {
+            throw ExecutionLoopServiceError.checkpointUnavailable
+        }
         try validateTargetRepository(pool.targetRepositoryPath)
         originalProjectId = projectService.currentProject?.id
         _ = try selectTargetProject(at: pool.targetRepositoryPath)
@@ -164,15 +177,25 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             $0.status = .preparing
             $0.stopReason = nil
         }
+        do {
+            try await reconcileRepository(for: pool)
+        } catch {
+            recordRecoveryFailure(error)
+            throw error
+        }
         runRepository.updateRun(attempt.controllerRunId) { $0.status = .running }
         recorder.record(
             runId: attempt.controllerRunId,
             type: .runResumed,
-            message: "Execution loop resumed.",
-            metadata: ["attemptId": attempt.id.uuidString]
+            message: "Execution loop resumed with a new task Run from the saved checkpoint.",
+            metadata: [
+                "attemptId": attempt.id.uuidString,
+                "recoveryStrategy": "restart-new-run",
+                "recoveryTaskId": recoveryTaskId ?? ""
+            ]
         )
         loopTask = Task { [weak self] in
-            await self?.execute(pool: pool)
+            await self?.execute(pool: pool, repositoryPrepared: true)
         }
         return attempt.controllerRunId
     }
@@ -192,7 +215,7 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         await task.value
     }
 
-    private func execute(pool: ExecutionTaskPool) async {
+    private func execute(pool: ExecutionTaskPool, repositoryPrepared: Bool = false) async {
         defer {
             activeTaskRunId = nil
             loopTask = nil
@@ -201,7 +224,9 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         }
 
         do {
-            try await prepareRepository(for: pool)
+            if !repositoryPrepared {
+                try await prepareRepository(for: pool)
+            }
             guard !Task.isCancelled else {
                 finishAttempt(status: .cancelled, reason: "Stopped by the user.")
                 return
@@ -215,8 +240,17 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
                 }
                 try validateDependencies(of: task)
 
-                let result = await execute(task: task, in: pool)
+                let attemptNumber = (activeAttempt?.taskResults.filter { $0.taskId == task.id }.count ?? 0) + 1
+                let result = await execute(
+                    task: task,
+                    in: pool,
+                    attemptNumber: attemptNumber,
+                    isRecovery: recoveryTaskId == task.id
+                )
                 updateAttempt { $0.taskResults.append(result) }
+                activeTaskCheckpoint = nil
+                if recoveryTaskId == task.id { recoveryTaskId = nil }
+                try persistState()
                 try persistReport()
 
                 guard result.status == .passed else {
@@ -302,9 +336,15 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             ]
         )
         try persistReport()
+        try persistState()
     }
 
-    private func execute(task: ExecutionTask, in pool: ExecutionTaskPool) async -> ExecutionTaskResult {
+    private func execute(
+        task: ExecutionTask,
+        in pool: ExecutionTaskPool,
+        attemptNumber: Int,
+        isRecovery: Bool
+    ) async -> ExecutionTaskResult {
         let startedAt = now()
         let profileId = profileSelector.profileId(for: task)
         let descriptor = runLauncher.selectedAgentRuntimeDescriptor
@@ -322,7 +362,8 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             finishedAt: startedAt,
             buildPassed: false,
             testsPassed: false,
-            pushSucceeded: false
+            pushSucceeded: false,
+            attemptNumber: attemptNumber
         )
 
         do {
@@ -341,6 +382,13 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
                 runId: controllerRunId,
                 projectRootPath: pool.targetRepositoryPath
             ).standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+            activeTaskCheckpoint = ExecutionLoopTaskCheckpoint(
+                task: task,
+                attemptNumber: attemptNumber,
+                startedAt: startedAt,
+                headBeforeTask: headBeforeTask
+            )
+            try persistState()
             let configuration = agentProfileService.configuration(for: profileId)
             recorder.record(
                 runId: controllerRunId,
@@ -357,7 +405,7 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
                 ]
             )
             guard let runId = await runLauncher.startRun(
-                goal: taskPrompt(task, pool: pool),
+                goal: taskPrompt(task, pool: pool, isRecovery: isRecovery),
                 mode: .multiAgent,
                 configuration: configuration,
                 progressMirrorRunId: controllerRunId,
@@ -372,6 +420,8 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             }
             activeTaskRunId = runId
             result.runId = runId
+            activeTaskCheckpoint?.runId = runId
+            try persistState()
 
             guard runLauncher.run(withId: runId)?.status == .completed else {
                 throw ExecutionLoopServiceError.taskRunFailed(task.id)
@@ -503,10 +553,12 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             )
         } catch is CancellationError {
             result.status = .cancelled
+            result.failureKind = .cancelled
             result.failureReason = "Stopped by the user."
             result.finishedAt = now()
         } catch {
             result.status = .failed
+            result.failureKind = failureKind(for: error)
             result.failureReason = error.localizedDescription
             result.finishedAt = now()
             recorder.record(
@@ -573,7 +625,11 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         }
     }
 
-    private func taskPrompt(_ task: ExecutionTask, pool: ExecutionTaskPool) -> String {
+    private func taskPrompt(
+        _ task: ExecutionTask,
+        pool: ExecutionTaskPool,
+        isRecovery: Bool
+    ) -> String {
         """
         WorkHarness Execution Loop task \(task.id).
 
@@ -581,7 +637,8 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         \(pool.targetRepositoryPath)
 
         Selected workflow profile: \(profileSelector.profileId(for: task)).
-        This is a first-pass autonomous course attempt. Do not ask the user questions.
+        This is autonomous attempt #\((activeAttempt?.taskResults.filter { $0.taskId == task.id }.count ?? 0) + 1). Do not ask the user questions.
+        \(isRecovery ? "This attempt recovers an interrupted task. Inspect the current git diff first and preserve valid existing edits before continuing." : "Start from the current repository state and keep the change scoped to this task.")
         Inspect the repository rules and current code before editing.
         Implement only this task and its acceptance criteria.
         Do not run git commit, git push, git switch, git checkout, git reset, git merge, or git rebase.
@@ -739,6 +796,7 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             ]
         )
         try? persistReport()
+        try? persistState()
     }
 
     private func pauseAttempt(reason: String) {
@@ -758,6 +816,7 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
             ]
         )
         try? persistReport()
+        try? persistState()
     }
 
     private func restoreOriginalProject() {
@@ -774,9 +833,144 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         guard var attempt = activeAttempt else { return }
         update(&attempt)
         activeAttempt = attempt
+        try? persistState()
     }
 
     private var controllerRunId: UUID {
         activeAttempt?.controllerRunId ?? UUID()
+    }
+
+    private func persistState() throws {
+        guard let attempt = activeAttempt, let pool = activePool else { return }
+        do {
+            try stateStore.save(ExecutionLoopCheckpoint(
+                attempt: attempt,
+                pool: pool,
+                activeTask: activeTaskCheckpoint,
+                recoveryTaskId: recoveryTaskId,
+                savedAt: now()
+            ))
+        } catch {
+            throw ExecutionLoopServiceError.checkpointFailed(error.localizedDescription)
+        }
+    }
+
+    private func restoreCheckpoint() {
+        guard let checkpoint = try? stateStore.load(),
+              checkpoint.attempt.finishedAt == nil else { return }
+        var attempt = checkpoint.attempt
+        activePool = checkpoint.pool
+        recoveryTaskId = checkpoint.recoveryTaskId
+        activeTaskCheckpoint = checkpoint.activeTask
+        if let activeTask = checkpoint.activeTask {
+            attempt.taskResults.append(ExecutionTaskResult(
+                taskId: activeTask.task.id,
+                title: activeTask.task.title,
+                category: activeTask.task.category,
+                status: .interrupted,
+                profileId: profileSelector.profileId(for: activeTask.task),
+                runtimeId: nil,
+                runtimeName: nil,
+                modelId: nil,
+                runId: activeTask.runId,
+                startedAt: activeTask.startedAt,
+                finishedAt: now(),
+                buildPassed: false,
+                testsPassed: false,
+                commitSHA: nil,
+                pushSucceeded: false,
+                failureReason: "WorkHarness stopped while this task was running.",
+                attemptNumber: activeTask.attemptNumber,
+                failureKind: .runtimeCrash
+            ))
+            recoveryTaskId = activeTask.task.id
+            activeTaskCheckpoint = nil
+        }
+        if attempt.status == .running || attempt.status == .preparing {
+            attempt.status = .paused
+            attempt.stopReason = "Recovered after WorkHarness relaunch. Repository reconciliation is required before resume."
+        }
+        activeAttempt = attempt
+        runRepository.updateRun(attempt.controllerRunId) { $0.status = .interrupted }
+        recorder.record(
+            runId: attempt.controllerRunId,
+            type: .runInterrupted,
+            message: attempt.stopReason ?? "Execution loop recovered after relaunch.",
+            metadata: [
+                "attemptId": attempt.id.uuidString,
+                "recoveryStrategy": "restart-new-run",
+                "recoveryTaskId": recoveryTaskId ?? ""
+            ]
+        )
+        try? persistState()
+    }
+
+    private func reconcileRepository(for pool: ExecutionTaskPool) async throws {
+        let branch = try await git(
+            "branch --show-current",
+            runId: controllerRunId,
+            projectRootPath: pool.targetRepositoryPath
+        ).standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard branch == activeAttempt?.executionBranch else {
+            throw ExecutionLoopServiceError.repositoryMismatch("Current branch \(branch) does not match saved branch \(activeAttempt?.executionBranch ?? "—").")
+        }
+        let head = try await git(
+            "rev-parse HEAD",
+            runId: controllerRunId,
+            projectRootPath: pool.targetRepositoryPath
+        ).standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expectedHead = activeAttempt?.taskResults.reversed().first(where: { $0.status == .passed })?.commitSHA
+            ?? activeAttempt?.baseCommitSHA
+        guard expectedHead == nil || head == expectedHead else {
+            throw ExecutionLoopServiceError.repositoryMismatch("Current HEAD \(head) does not match saved HEAD \(expectedHead ?? "—").")
+        }
+        let status = try await git(
+            "status --porcelain",
+            runId: controllerRunId,
+            projectRootPath: pool.targetRepositoryPath
+        ).standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard status.isEmpty || recoveryTaskId != nil else {
+            throw ExecutionLoopServiceError.repositoryMismatch("The repository has uncommitted changes unrelated to an interrupted task.")
+        }
+        preexistingCompletedTaskIds = Set(activeAttempt?.taskResults.compactMap {
+            $0.status == .passed ? $0.taskId : nil
+        } ?? [])
+        try persistState()
+    }
+
+    private func recordRecoveryFailure(_ error: Error) {
+        recorder.record(
+            runId: controllerRunId,
+            type: .error,
+            message: error.localizedDescription,
+            metadata: [
+                "failureKind": ExecutionTaskFailureKind.repositoryMismatch.rawValue,
+                "executionLoopRecovery": "true"
+            ]
+        )
+        try? persistState()
+    }
+
+    private func failureKind(for error: Error) -> ExecutionTaskFailureKind {
+        let message = error.localizedDescription.lowercased()
+        if message.contains("token") && (message.contains("limit") || message.contains("exhaust")) {
+            return .tokenExhausted
+        }
+        if case ExecutionLoopServiceError.validationFailed = error {
+            return .validationFailure
+        }
+        if case ExecutionLoopServiceError.taskChangedGitHistory = error {
+            return .repositoryMismatch
+        }
+        if case ExecutionLoopServiceError.gitFailed = error {
+            return .repositoryMismatch
+        }
+        if case ExecutionLoopServiceError.repositoryMismatch = error {
+            return .repositoryMismatch
+        }
+        if case ExecutionLoopServiceError.taskRunFailed = error {
+            return .runtimeCrash
+        }
+        return .unknown
     }
 }

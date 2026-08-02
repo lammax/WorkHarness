@@ -54,7 +54,10 @@ extension Container {
                 appSettingsService: resolver.resolve(AppSettingsServiceProtocol.self)!,
                 agentModelRoutingService: resolver.resolve(AgentModelRoutingServiceProtocol.self)!,
                 agentRuntimeRegistry: resolver.resolve(AgentRuntimeRegistry.self)!,
-                multiAgentCoordinator: resolver.resolve(MultiAgentCoordinator.self)!
+                multiAgentCoordinator: resolver.resolve(MultiAgentCoordinator.self)!,
+                agentOutputSafetyPolicy: AgentOutputSafetyPolicy(
+                    artifactStore: resolver.resolve(RunArtifactStoreProtocol.self)!
+                )
             )
         }.inObjectScope(.container)
     }
