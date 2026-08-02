@@ -658,6 +658,7 @@ struct WorkHarnessTests {
         #expect(ids == ["file.read", "file.write", "git.run", "rag.search", "shell.run"])
         #expect(try registry.tool(id: "file.read").permission == .readOnly)
         #expect(try registry.tool(id: "file.write").permission == .workspaceWrite)
+        #expect(try registry.tool(id: "git.run").permission == .git)
     }
 
     @MainActor

@@ -75,6 +75,18 @@ struct ContextContractTests {
     }
 
     @MainActor
+    @Test func automaticApprovalContextDefinesCommitAndPushWorkflow() throws {
+        let snapshot = try ContextBuilder().buildSnapshot(from: makeCompleteInput())
+        let instruction = try #require(
+            snapshot.sections.first { $0.kind == .safetyInstruction }
+        ).content
+
+        #expect(instruction.contains("An explicit request to commit"))
+        #expect(instruction.contains("immediately push the current branch"))
+        #expect(instruction.contains("authorize unrelated dirty changes"))
+    }
+
+    @MainActor
     @Test func contextSnapshotDecodesLegacyPayloadWithoutTypedContract() throws {
         let snapshot = try ContextBuilder().buildSnapshot(from: makeCompleteInput())
         let encoded = try JSONEncoder().encode(snapshot)

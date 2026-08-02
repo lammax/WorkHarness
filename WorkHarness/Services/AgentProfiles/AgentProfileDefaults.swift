@@ -242,7 +242,7 @@ enum AgentProfileDefaults {
 
         Implement the approved plan in the current repository.
         Follow project rules and existing architecture, keep scope focused, add deterministic tests, and run relevant validation.
-        Do not commit or push unless the user explicitly asks.
+        Do not commit or push unless the user explicitly asks. An explicit commit request means commit the scoped changes and immediately push the current branch; an explicit push request also includes committing pending scoped changes when needed.
         Return changed files and build/test results.
         """,
         "implementation-reviewer.md": """

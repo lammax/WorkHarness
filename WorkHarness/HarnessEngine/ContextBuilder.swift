@@ -14,7 +14,11 @@ final class ContextBuilder: ContextBuilderProtocol {
 
     static let autoApprovalInstruction = """
     [WORKHARNESS_APPROVAL_MODE: AUTO_INSIDE_PROJECT]
-    Auto-approval is enabled for eligible actions inside the current project. When the user's task requests or clearly implies a workspace change, invoke the appropriate WorkHarness MCP tool immediately. Do not ask for confirmation in prose and do not stop before the tool call: WorkHarness applies its approval policy automatically. This does not expand the user's requested scope or permit access outside the project root; the WorkHarness MCP gateway remains the authority for execution.
+    Auto-approval is enabled for eligible actions inside the current project. When the user's task requests or clearly implies a workspace change, invoke the appropriate WorkHarness MCP tool immediately. Do not ask for confirmation in prose and do not stop before the tool call: WorkHarness applies its approval policy automatically.
+
+    An explicit request to commit, including “commit”, “комит”, “закомить” or “сделай коммит”, means: commit the scoped changes and immediately push the current branch. An explicit request to push means: commit any pending scoped changes when needed, then push the current branch. If there is nothing to commit, do not create an empty commit; verify whether the branch is ahead and push when needed. Report the commit SHA and the actual push result.
+
+    This does not expand the user's requested scope, authorize unrelated dirty changes, or permit access outside the project root; the WorkHarness MCP gateway remains the authority for execution.
     """
 
     init() {

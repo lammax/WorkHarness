@@ -59,6 +59,30 @@ struct RunEventDisplayFormatterTests {
     }
 
     @Test
+    func formatsSuccessfulGitPushWrittenToStandardErrorAsPlainText() {
+        let event = makeEvent(
+            message: #"{"standardOutput":"","standardError":"To https://example.com/repository.git\n   abc123..def456  main -> main\n","exitCode":0}"#
+        )
+
+        #expect(
+            RunEventDisplayFormatter.message(for: event)
+                == "To https://example.com/repository.git\n   abc123..def456  main -> main"
+        )
+    }
+
+    @Test
+    func unwrapsLegacyToolResponseInsteadOfDisplayingJSON() {
+        let event = makeEvent(
+            message: #"{"tool_response":"{\"standardOutput\":\"Branch is up to date\",\"standardError\":\"\",\"exitCode\":0}"}"#
+        )
+        let message = RunEventDisplayFormatter.message(for: event)
+
+        #expect(message == "Branch is up to date")
+        #expect(!message.contains("tool_response"))
+        #expect(!message.contains(#"{"#))
+    }
+
+    @Test
     func formatsGenericJSONAsKeyValueText() {
         let event = makeEvent(
             message: #"{"action":"created","bytesWritten":2019,"path":"Tests/NewTests.swift"}"#

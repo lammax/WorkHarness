@@ -12,7 +12,7 @@ struct GitTool: ToolProtocol {
     let id = "git.run"
     let displayName = "Run Git"
     let description = "Runs git commands inside the current project root."
-    let permission: ToolPermission = .readOnly
+    let permission: ToolPermission = .git
     let inputSchema = [
         ToolInputField(name: "arguments", description: "Git arguments separated by spaces.", required: true)
     ]

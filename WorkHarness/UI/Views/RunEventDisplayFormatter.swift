@@ -37,6 +37,9 @@ enum RunEventDisplayFormatter {
         }
 
         if let object = value as? [String: Any] {
+            if let wrappedResult = wrappedToolResult(from: object) {
+                return wrappedResult
+            }
             if let fileResult = fileResult(from: object) {
                 return fileResult
             }
@@ -47,6 +50,15 @@ enum RunEventDisplayFormatter {
 
         let formatted = formattedValue(value)
         return formatted.isEmpty ? rawMessage : formatted
+    }
+
+    private static func wrappedToolResult(from object: [String: Any]) -> String? {
+        let rawResult = nonEmptyString(object["tool_response"])
+            ?? nonEmptyString(object["toolResponse"])
+        guard let rawResult else { return nil }
+
+        let formatted = toolResult(from: rawResult)
+        return formatted.isEmpty ? rawResult : formatted
     }
 
     private static func fileResult(from object: [String: Any]) -> String? {
@@ -79,7 +91,11 @@ enum RunEventDisplayFormatter {
             sections.append(output)
         }
         if let error {
-            sections.append("Error output:\n\(error)")
+            if let exitCode, exitCode.intValue != 0 {
+                sections.append("Error output:\n\(error)")
+            } else {
+                sections.append(error)
+            }
         }
         if let exitCode, exitCode.intValue != 0 || sections.isEmpty {
             sections.append("Exit code: \(exitCode.intValue)")
