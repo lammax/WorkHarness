@@ -2,8 +2,8 @@
 
 Updated: 02.08.2026
 
-Status: R0 Architecture Contract and R1 RemoteSDK Models complete; R2 Server
-and Client Connection is next.
+Status: R0 Architecture Contract through R2 Server and Client Connection are
+complete; R3 Pairing and Trusted Device is next.
 
 This is the repository-owned implementation plan derived from
 `/Users/lammax/Downloads/workharness-remote-module-roadmap-lean.md` and audited
@@ -130,7 +130,10 @@ prototype and compatibility baseline. It is not the final Remote Platform.
 ### Already available
 
 - `NWListener`-based local HTTP server;
+- explicit disabled/starting/running/stopping/failed lifecycle;
+- remote server disabled by default with isolated listener failures;
 - loopback binding by default unless LAN is enabled;
+- versioned `/api/v1/status` contract and typed `URLSessionRemoteClient`;
 - bearer-token check;
 - `/health` and `/capabilities`;
 - current project snapshot;
@@ -147,10 +150,10 @@ prototype and compatibility baseline. It is not the final Remote Platform.
 | Area | Current state | Required phase |
 |---|---|---|
 | Protocol models | Internal `Run`, `Project`, `ApprovalRequest` encoded directly | R1/R4 |
-| API version | Unversioned root routes and informal `0.1.0` value | R1/R2 |
-| Server lifecycle | `isRunning` only; listener construction uses `try!` | R2 |
-| Default state | Remote defaults to enabled | R2 |
-| Typed client | Missing | R2 |
+| API version | Versioned status; legacy feature routes remain unversioned | R4–R7 |
+| Server lifecycle | Explicit lifecycle with isolated listener failure | Complete |
+| Default state | Remote is disabled by default | Complete |
+| Typed client | Typed status client implemented; feature calls pending | R4–R7 |
 | Error model | Ad-hoc `{ "error": String }` | R1/R2 |
 | Pairing | Static shared bearer token only | R3 |
 | Credential storage | Token persisted in UserDefaults | R3 |
@@ -163,14 +166,13 @@ prototype and compatibility baseline. It is not the final Remote Platform.
 | Approval safety | No revision check, device attribution or local-only class | R6 |
 | Provider API | Missing | R7 |
 | Hardening | No request/rate/session limits or remote audit log | R7 |
-| Contract tests | No shared serialized fixtures/RemoteSDK tests | R1–R7 |
+| Contract tests | DTO fixtures, client unit test and live status integration pass | R3–R7 |
 
 ### Migration rule
 
-Do not replace or delete the existing RemoteControl prototype during R0/R1.
-R1 adds transport-independent contracts only. R2 introduces the typed status
-path alongside the prototype. Existing routes may be retired only after a
-versioned client and integration tests cover the replacement.
+The R2 typed status path intentionally runs alongside the legacy feature
+routes. Existing routes may be retired only after a versioned client and
+integration tests cover each replacement.
 
 ## Active Implementation Sequence
 
@@ -178,8 +180,8 @@ versioned client and integration tests cover the replacement.
 |---|---|---|
 | R0 | Complete | Boundaries, MVP scope, security and migration contract |
 | R1 | Complete | Independent RemoteSDK package with DTOs and fixtures |
-| R2 | Next | Explicit server lifecycle, `/api/v1` status and typed HTTP client |
-| R3 | Pending | Pairing, trusted device, Keychain credential and revocation |
+| R2 | Complete | Explicit server lifecycle, `/api/v1` status and typed HTTP client |
+| R3 | Next | Pairing, trusted device, Keychain credential and revocation |
 | R4 | Pending | Versioned project and Run read APIs through service boundaries |
 | R5 | Pending | Idempotent Run commands and authenticated bounded live stream |
 | R6 | Pending | Versioned safe remote approvals with race protection and audit |
@@ -236,6 +238,8 @@ Acceptance:
 ## R2–R7 Acceptance Summary
 
 ### R2 — Server and Client Connection
+
+Status: Complete.
 
 - explicit disabled/starting/running/stopping/failed lifecycle;
 - disabled by default and server failure isolated from WorkHarness;

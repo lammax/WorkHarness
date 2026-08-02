@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		8A7D3F102FFD90010001A001 /* Swinject in Frameworks */ = {isa = PBXBuildFile; productRef = 8A7D3F0F2FFD90010001A001 /* Swinject */; };
 		8A7D3F132FFD90010001A001 /* Swinject in Frameworks */ = {isa = PBXBuildFile; productRef = 8A7D3F122FFD90010001A001 /* Swinject */; };
+		8A7D3F222FFD90010001A001 /* RemoteModels in Frameworks */ = {isa = PBXBuildFile; productRef = 8A7D3F212FFD90010001A001 /* RemoteModels */; };
+		8A7D3F242FFD90010001A001 /* RemoteModels in Frameworks */ = {isa = PBXBuildFile; productRef = 8A7D3F232FFD90010001A001 /* RemoteModels */; };
+		8A7D3F262FFD90010001A001 /* RemoteClient in Frameworks */ = {isa = PBXBuildFile; productRef = 8A7D3F252FFD90010001A001 /* RemoteClient */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +60,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8A7D3F222FFD90010001A001 /* RemoteModels in Frameworks */,
 				8A7D3F102FFD90010001A001 /* Swinject in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -65,6 +69,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8A7D3F262FFD90010001A001 /* RemoteClient in Frameworks */,
+				8A7D3F242FFD90010001A001 /* RemoteModels in Frameworks */,
 				8A7D3F132FFD90010001A001 /* Swinject in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -119,6 +125,7 @@
 			);
 			name = WorkHarness;
 			packageProductDependencies = (
+				8A7D3F212FFD90010001A001 /* RemoteModels */,
 				8A7D3F0F2FFD90010001A001 /* Swinject */,
 			);
 			productName = WorkHarness;
@@ -143,6 +150,8 @@
 			);
 			name = WorkHarnessTests;
 			packageProductDependencies = (
+				8A7D3F252FFD90010001A001 /* RemoteClient */,
+				8A7D3F232FFD90010001A001 /* RemoteModels */,
 				8A7D3F122FFD90010001A001 /* Swinject */,
 			);
 			productName = WorkHarnessTests;
@@ -205,6 +214,7 @@
 			mainGroup = 133826182FFD4EA8007BDF32;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				8A7D3F202FFD90010001A001 /* XCLocalSwiftPackageReference "WorkHarnessRemoteSDK" */,
 				8A7D3F0E2FFD90010001A001 /* XCRemoteSwiftPackageReference "Swinject" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -586,6 +596,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		8A7D3F202FFD90010001A001 /* XCLocalSwiftPackageReference "WorkHarnessRemoteSDK" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../WorkHarnessRemoteSDK;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		8A7D3F0E2FFD90010001A001 /* XCRemoteSwiftPackageReference "Swinject" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -598,6 +615,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		8A7D3F212FFD90010001A001 /* RemoteModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8A7D3F202FFD90010001A001 /* XCLocalSwiftPackageReference "WorkHarnessRemoteSDK" */;
+			productName = RemoteModels;
+		};
+		8A7D3F232FFD90010001A001 /* RemoteModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8A7D3F202FFD90010001A001 /* XCLocalSwiftPackageReference "WorkHarnessRemoteSDK" */;
+			productName = RemoteModels;
+		};
+		8A7D3F252FFD90010001A001 /* RemoteClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8A7D3F202FFD90010001A001 /* XCLocalSwiftPackageReference "WorkHarnessRemoteSDK" */;
+			productName = RemoteClient;
+		};
 		8A7D3F0F2FFD90010001A001 /* Swinject */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 8A7D3F0E2FFD90010001A001 /* XCRemoteSwiftPackageReference "Swinject" */;

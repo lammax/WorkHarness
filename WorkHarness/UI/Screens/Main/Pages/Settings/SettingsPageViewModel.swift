@@ -8,6 +8,7 @@
 import AppKit
 import Foundation
 import Observation
+import RemoteModels
 
 extension MainScreen {
     @MainActor
@@ -195,6 +196,34 @@ extension MainScreen {
 
         var appSettingsStatus: String {
             hasUnsavedAppSettingsChanges ? SettingsPageDesign.AppSettings.unsavedStatus : SettingsPageDesign.AppSettings.savedStatus
+        }
+
+        var remoteControlStatus: String {
+            guard let remoteControlService else {
+                return SettingsPageDesign.AppSettings.remoteControlUnavailableStatus
+            }
+            switch remoteControlService.state {
+            case .disabled:
+                return SettingsPageDesign.AppSettings.remoteControlDisabledStatus
+            case .starting:
+                return SettingsPageDesign.AppSettings.remoteControlStartingStatus
+            case .running:
+                return SettingsPageDesign.AppSettings.remoteControlRunningStatus
+            case .stopping:
+                return SettingsPageDesign.AppSettings.remoteControlStoppingStatus
+            case .failed:
+                return SettingsPageDesign.AppSettings.remoteControlFailedStatus
+            default:
+                return remoteControlService.state.rawValue
+            }
+        }
+
+        var remoteControlStatusDetail: String {
+            if let lastErrorMessage = remoteControlService?.lastErrorMessage,
+               !lastErrorMessage.isEmpty {
+                return lastErrorMessage
+            }
+            return "http://127.0.0.1:\(remoteControlPort)/api/v1/status"
         }
 
         var hasUnsavedLocalLLMChanges: Bool {
@@ -687,10 +716,9 @@ extension MainScreen {
                 executionBackendNotice = SettingsPageDesign.ExecutionBackend.nextRunNotice
             }
             errorMessage = nil
-            do {
-                try remoteControlService?.reload()
-            } catch {
-                errorMessage = "Remote Control: \(error.localizedDescription)"
+            remoteControlService?.reload()
+            if remoteControlService?.state == .failed {
+                errorMessage = "Remote Control: \(remoteControlService?.lastErrorMessage ?? SettingsPageDesign.AppSettings.remoteControlFailedStatus)"
             }
         }
 

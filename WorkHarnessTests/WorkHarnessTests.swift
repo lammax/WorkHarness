@@ -9,7 +9,10 @@ import Testing
 import Swinject
 import Foundation
 import AppKit
+import Network
 import Observation
+import RemoteClient
+import RemoteModels
 @testable import WorkHarness
 
 struct WorkHarnessTests {
@@ -2267,6 +2270,86 @@ struct WorkHarnessTests {
     }
 
     @MainActor
+    @Test func remoteServerStartsDisabledByDefault() {
+        #expect(!AppSettingsDefaults.remoteControlEnabled)
+
+        let settings = InMemoryAppSettingsService()
+        let remoteControl = makeRemoteControlService(settings: settings)
+        remoteControl.start()
+
+        #expect(remoteControl.state == .disabled)
+        #expect(!remoteControl.isRunning)
+    }
+
+    @MainActor
+    @Test func typedClientLoadsVersionedStatusFromRemoteServer() async throws {
+        let port = Int.random(in: 20_000...50_000)
+        let settings = InMemoryAppSettingsService(
+            remoteControlEnabled: true,
+            remoteControlPort: port,
+            remoteControlToken: "r2-integration-token"
+        )
+        let remoteControl = makeRemoteControlService(settings: settings)
+        remoteControl.start()
+        defer { remoteControl.stop() }
+
+        for _ in 0..<100 where remoteControl.state == .starting {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(remoteControl.state == .running)
+
+        let client = URLSessionRemoteClient(configuration: .init(
+            baseURL: URL(string: "http://127.0.0.1:\(port)")!,
+            timeoutInterval: 2
+        ))
+        let status = try await client.status()
+
+        #expect(status.protocolVersion == .init(major: 1, minor: 0))
+        #expect(status.minimumClientVersion == .init(major: 1, minor: 0))
+        #expect(status.state == .running)
+    }
+
+    @MainActor
+    @Test func remoteServerFailureIsIsolatedFromApplicationStartup() {
+        let settings = InMemoryAppSettingsService(remoteControlEnabled: true)
+        let remoteControl = makeRemoteControlService(
+            settings: settings,
+            listenerFactory: { _ in throw TestRemoteListenerError.unavailable }
+        )
+
+        remoteControl.start()
+
+        #expect(remoteControl.state == .failed)
+        #expect(!remoteControl.isRunning)
+        #expect(remoteControl.lastErrorMessage == TestRemoteListenerError.unavailable.localizedDescription)
+    }
+
+    @MainActor
+    @Test func settingsViewModelExposesRemoteServerLifecycleStatus() {
+        let settings = InMemoryAppSettingsService()
+        let remoteControl = makeRemoteControlService(
+            settings: settings,
+            listenerFactory: { _ in throw TestRemoteListenerError.unavailable }
+        )
+        let viewModel = MainScreen.SettingsPageViewModel(
+            providerService: ProviderService(
+                registry: ProviderRegistry(providers: [TestAIProvider()]),
+                appSettingsService: settings
+            ),
+            appSettingsService: settings,
+            remoteControlService: remoteControl
+        )
+
+        #expect(viewModel.remoteControlStatus == "Disabled")
+
+        settings.remoteControlEnabled = true
+        remoteControl.start()
+
+        #expect(viewModel.remoteControlStatus == "Failed")
+        #expect(viewModel.remoteControlStatusDetail == "The test listener is unavailable.")
+    }
+
+    @MainActor
     @Test(.enabled(if: ProcessInfo.processInfo.environment["WORKHARNESS_LIVE_CLAUDE_TEST"] == "1"))
     func liveClaudeRunReadsProjectFileThroughApprovedMCPGateway() async throws {
         let claudeURL = try #require(AgentExecutableLocator.find(named: "claude"))
@@ -2344,7 +2427,7 @@ struct WorkHarnessTests {
             port: UInt16(port),
             token: token
         )
-        try remoteControl.start()
+        remoteControl.start()
         defer { remoteControl.stop() }
         for _ in 0..<50 where !remoteControl.isRunning {
             try await Task.sleep(for: .milliseconds(100))
@@ -2363,6 +2446,40 @@ struct WorkHarnessTests {
         #expect(run.status == .completed)
         #expect(assistantOutput.contains(marker))
         #expect(run.events.contains { $0.type == .toolCallFinished })
+    }
+
+    @MainActor
+    private func makeRemoteControlService(
+        settings: InMemoryAppSettingsService,
+        listenerFactory: ((UInt16) throws -> NWListener)? = nil
+    ) -> RemoteControlService {
+        let runRepository = InMemoryRunRepository()
+        let recorder = RunRecorder(repository: runRepository)
+        let projectService = ProjectService(repository: InMemoryProjectRepository())
+        let approvalService = ApprovalService(
+            repository: InMemoryApprovalRepository(),
+            runRepository: runRepository,
+            recorder: recorder,
+            appSettingsService: settings
+        )
+        let engine = HarnessEngine(
+            repository: runRepository,
+            recorder: recorder,
+            providerService: makeProviderService(TestAIProvider()),
+            projectService: projectService,
+            appSettingsService: settings
+        )
+        return RemoteControlService(
+            runRepository: runRepository,
+            runService: RunService(repository: runRepository, harnessEngine: engine),
+            projectService: projectService,
+            approvalService: approvalService,
+            appSettingsService: settings,
+            mcpApprovalGateway: NoopMCPApprovalGateway(),
+            port: UInt16(clamping: settings.remoteControlPort),
+            token: settings.remoteControlToken,
+            listenerFactory: listenerFactory
+        )
     }
 
     @MainActor
@@ -4601,6 +4718,29 @@ private final class FakeCLIProcessControl {
     func cancel() {
         continuation?.yield(.finished(ProcessExit(status: .cancelled, exitCode: nil)))
         continuation?.finish()
+    }
+}
+
+@MainActor
+private final class NoopMCPApprovalGateway: MCPApprovalGatewayProtocol {
+    func handle(
+        requestBody: Data,
+        runId: UUID,
+        projectRootPath: String?
+    ) async -> MCPGatewayHTTPResponse {
+        MCPGatewayHTTPResponse(
+            statusCode: 501,
+            contentType: "application/json",
+            body: Data()
+        )
+    }
+}
+
+private enum TestRemoteListenerError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        "The test listener is unavailable."
     }
 }
 

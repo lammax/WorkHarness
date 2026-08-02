@@ -7,17 +7,22 @@
 
 import Foundation
 import Network
+import Observation
+import RemoteModels
 
 @MainActor
 protocol RemoteControlServiceProtocol: BaseServiceProtocol {
+    var state: RemoteServerState { get }
+    var lastErrorMessage: String? { get }
     var isRunning: Bool { get }
     var port: UInt16 { get }
-    func start() throws
+    func start()
     func stop()
-    func reload() throws
+    func reload()
 }
 
 @MainActor
+@Observable
 final class RemoteControlService: RemoteControlServiceProtocol {
     private let runRepository: RunRepository
     private let runService: RunServiceProtocol
@@ -25,11 +30,16 @@ final class RemoteControlService: RemoteControlServiceProtocol {
     private let approvalService: ApprovalServiceProtocol
     private let appSettingsService: AppSettingsServiceProtocol
     private let mcpApprovalGateway: MCPApprovalGatewayProtocol
-    private var listener: NWListener
+    private let listenerFactory: (UInt16) throws -> NWListener
+    private var listener: NWListener?
+    private var listenerGeneration: UUID?
     private var token: String
 
-    private(set) var isRunning = false
+    private(set) var state: RemoteServerState = .disabled
+    private(set) var lastErrorMessage: String?
     private(set) var port: UInt16
+
+    var isRunning: Bool { state == .running }
 
     init(
         runRepository: RunRepository,
@@ -39,7 +49,8 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         appSettingsService: AppSettingsServiceProtocol,
         mcpApprovalGateway: MCPApprovalGatewayProtocol,
         port: UInt16? = nil,
-        token: String? = nil
+        token: String? = nil,
+        listenerFactory: ((UInt16) throws -> NWListener)? = nil
     ) {
         self.runRepository = runRepository
         self.runService = runService
@@ -47,22 +58,59 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         self.approvalService = approvalService
         self.appSettingsService = appSettingsService
         self.mcpApprovalGateway = mcpApprovalGateway
+        self.listenerFactory = listenerFactory ?? Self.makeListener
         self.port = port ?? UInt16(clamping: appSettingsService.remoteControlPort)
         self.token = token ?? RemoteControlService.token(from: appSettingsService.remoteControlToken)
         if appSettingsService.remoteControlToken.isEmpty {
             appSettingsService.remoteControlToken = self.token
         }
-        self.listener = Self.makeListener(port: self.port)
-        configureListener()
     }
 
     var service: AppService { .remoteControl }
 
-    func start() throws {
-        guard appSettingsService.remoteControlEnabled, !isRunning else { return }
+    func start() {
+        guard appSettingsService.remoteControlEnabled else {
+            state = .disabled
+            lastErrorMessage = nil
+            return
+        }
+        guard state != .starting, state != .running else { return }
+
+        state = .starting
+        lastErrorMessage = nil
+        let generation = UUID()
+        let listener: NWListener
+        do {
+            listener = try listenerFactory(port)
+        } catch {
+            state = .failed
+            lastErrorMessage = error.localizedDescription
+            return
+        }
+        self.listener = listener
+        listenerGeneration = generation
+        configure(listener: listener)
         listener.stateUpdateHandler = { [weak self] state in
             Task { @MainActor [weak self] in
-                self?.isRunning = state == .ready
+                guard let self, self.listenerGeneration == generation else { return }
+                switch state {
+                case .ready:
+                    self.state = .running
+                case .failed(let error):
+                    self.state = .failed
+                    self.lastErrorMessage = error.localizedDescription
+                    self.listenerGeneration = nil
+                    self.listener = nil
+                case .cancelled:
+                    self.state = .disabled
+                    self.listenerGeneration = nil
+                    self.listener = nil
+                case .setup, .waiting:
+                    self.state = .starting
+                @unknown default:
+                    self.state = .failed
+                    self.lastErrorMessage = "Unknown remote server state."
+                }
             }
         }
         listener.newConnectionHandler = { [weak self] connection in
@@ -74,21 +122,32 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         listener.start(queue: .main)
     }
 
-    func reload() throws {
+    func reload() {
         stop()
         port = UInt16(clamping: appSettingsService.remoteControlPort)
         token = Self.token(from: appSettingsService.remoteControlToken)
         if appSettingsService.remoteControlToken.isEmpty {
             appSettingsService.remoteControlToken = token
         }
-        listener = Self.makeListener(port: port)
-        configureListener()
-        try start()
+        start()
     }
 
     func stop() {
+        guard let listener else {
+            state = .disabled
+            lastErrorMessage = nil
+            return
+        }
+        state = .stopping
+        listenerGeneration = nil
+        self.listener = nil
         listener.cancel()
-        isRunning = false
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard self?.state == .stopping else { return }
+            self?.state = .disabled
+            self?.lastErrorMessage = nil
+        }
     }
 
     private func receive(on connection: NWConnection) {
@@ -112,7 +171,7 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         }
     }
 
-    private func configureListener() {
+    private func configure(listener: NWListener) {
         if !appSettingsService.remoteControlAllowLAN {
             listener.parameters.requiredInterfaceType = .loopback
         }
@@ -233,14 +292,24 @@ final class RemoteControlService: RemoteControlServiceProtocol {
             return (parts[0].lowercased(), parts[1].trimmingCharacters(in: .whitespaces))
         })
 
-        guard headers["authorization"] == "Bearer \(token)" else {
-            return HTTPResponse.json(status: 401, body: ["error": "Unauthorized"])
-        }
-
         let parts = requestLine.split(separator: " ").map(String.init)
         guard parts.count >= 2 else { return HTTPResponse.badRequest }
         let method = parts[0]
         let path = parts[1].split(separator: "?").first.map(String.init) ?? parts[1]
+
+        if method == "GET", path == "/api/v1/status" {
+            return HTTPResponse.remoteJSON(status: 200, value: ServerStatusDTO(
+                protocolVersion: .init(major: 1, minor: 0),
+                minimumClientVersion: .init(major: 1, minor: 0),
+                serverVersion: Self.serverVersion,
+                state: state,
+                serverTime: Date()
+            ))
+        }
+
+        guard headers["authorization"] == "Bearer \(token)" else {
+            return HTTPResponse.json(status: 401, body: ["error": "Unauthorized"])
+        }
 
         switch (method, path) {
         case ("GET", "/health"):
@@ -346,11 +415,16 @@ final class RemoteControlService: RemoteControlServiceProtocol {
         return (id, components.count == 3)
     }
 
-    nonisolated private static func makeListener(port: UInt16) -> NWListener {
+    nonisolated private static func makeListener(port: UInt16) throws -> NWListener {
         guard let listenerPort = NWEndpoint.Port(rawValue: port) else {
-            preconditionFailure("Invalid remote control port: \(port)")
+            throw RemoteControlError.invalidPort(port)
         }
-        return try! NWListener(using: .tcp, on: listenerPort)
+        return try NWListener(using: .tcp, on: listenerPort)
+    }
+
+    nonisolated private static var serverVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "development"
     }
 
     nonisolated private static func token(from configuredToken: String) -> String {
@@ -359,6 +433,17 @@ final class RemoteControlService: RemoteControlServiceProtocol {
             return environmentToken
         }
         return UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    }
+}
+
+private enum RemoteControlError: LocalizedError {
+    case invalidPort(UInt16)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPort(let port):
+            "Invalid remote control port: \(port)."
+        }
     }
 }
 
@@ -371,6 +456,11 @@ private enum HTTPResponse {
 
     static func json<T: Encodable>(status: Int, value: T) -> Data {
         (try? jsonData(status: status, data: value)) ?? Data()
+    }
+
+    static func remoteJSON<T: Encodable>(status: Int, value: T) -> Data {
+        let body = (try? RemoteJSONCoding.makeEncoder().encode(value)) ?? Data()
+        return data(status: status, contentType: "application/json", body: body)
     }
 
     static func data(status: Int, contentType: String, body: Data) -> Data {

@@ -46,7 +46,7 @@ enum AppSettingsDefaults {
     nonisolated static let localLLMModel = "qwen2.5-coder:1.5b"
     nonisolated static let defaultMaxInputTokens = 16_000
     nonisolated static let defaultMaxOutputTokens = 2_000
-    nonisolated static let remoteControlEnabled = true
+    nonisolated static let remoteControlEnabled = false
     nonisolated static let remoteControlAllowLAN = false
     nonisolated static let remoteControlPort = 8787
     nonisolated static let remoteControlToken = ""

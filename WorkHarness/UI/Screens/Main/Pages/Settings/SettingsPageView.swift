@@ -644,6 +644,14 @@ extension MainScreen {
                     Toggle(Design.AppSettings.remoteControlAllowLANTitle, isOn: $viewModel.remoteControlAllowLAN)
                         .disabled(!viewModel.remoteControlEnabled)
 
+                    LabeledContent(Design.AppSettings.remoteControlStatusTitle) {
+                        Text(viewModel.remoteControlStatus)
+                    }
+
+                    Text(viewModel.remoteControlStatusDetail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     HStack {
                         Text(Design.AppSettings.remoteControlPortTitle)
                         Spacer()

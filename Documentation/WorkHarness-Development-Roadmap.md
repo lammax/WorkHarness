@@ -1489,8 +1489,8 @@ comparison.
 
 ## Step 26 - Remote Platform Lean MVP v1
 
-Status: active. R0 Architecture Contract and R1 RemoteSDK Models are complete.
-R2 Server and Client Connection is the next implementation phase.
+Status: active. R0 Architecture Contract through R2 Server and Client
+Connection are complete. R3 Pairing and Trusted Device is next.
 
 The detailed R0–R7 sequence, current RemoteControl prototype audit, security
 constraints, migration rules and acceptance criteria live in
@@ -1498,15 +1498,17 @@ constraints, migration rules and acceptance criteria live in
 
 The existing Step 20 Remote Control implementation is retained as a working
 HTTP/SSE compatibility baseline, but it is not considered the final Remote
-Platform: it has unversioned routes, encodes internal models, stores a shared
-token in UserDefaults and does not provide pairing, trusted devices,
-revocation, a typed RemoteSDK client, provider routes or full hardening.
+Platform: its feature routes remain unversioned, it encodes internal models,
+stores a shared token in UserDefaults and does not provide pairing, trusted
+devices, revocation, provider routes or full hardening. R2 adds the versioned
+status route and typed RemoteSDK status client without removing compatibility
+routes.
 
 Active order:
 
 1. R0 — architecture and scope contract (complete);
 2. R1 — independent RemoteSDK package and shared DTO fixtures (complete);
-3. R2 — explicit server lifecycle and versioned typed status connection;
+3. R2 — explicit server lifecycle and versioned typed status connection (complete);
 4. R3 — pairing, Keychain credential and trusted-device revocation;
 5. R4 — project and Run read APIs;
 6. R5 — idempotent Run commands and bounded live event stream;
