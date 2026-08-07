@@ -1,0 +1,1 @@
+{"clientId":"127.0.0.1","findings":[{"fingerprint":"c983380780de","kind":"openai_api_key","replacement":"[REDACTED_API_KEY]"}],"model":"gpt-4.1-mini","phase":"input","provider":"openai","requestId":"F8824B7C-6482-4CF7-AF7D-77DF7A717FB9","sanitizedPreview":"user: Use [REDACTED_API_KEY]","status":"blocked","timestamp":"2026-08-07T21:25:59Z"}

@@ -72,6 +72,27 @@ struct MCPProviderDescriptor: Equatable {
         mcpServerPath: MCPProviderConfiguration.defaultServerBasePath,
         mcpEndpointURL: "http://127.0.0.1:3007/mcp"
     )
+
+    static let llmGateway = MCPProviderDescriptor(
+        id: "mcp.llm.gateway",
+        displayName: "LLM Gateway",
+        capabilities: ProviderCapabilities(
+            supportsStreaming: false,
+            supportsToolCalls: false,
+            supportsFileEditing: false,
+            supportsShellExecution: false,
+            supportsLocalExecution: false,
+            contextWindowTokens: nil,
+            costModel: "gateway-estimated",
+            supportsApprovals: false,
+            supportsMCP: true,
+            supportedModels: ["gpt-4.1-mini", "claude-sonnet-4-20250514"],
+            supportsUsageReporting: true,
+            supportsCancellation: false
+        ),
+        mcpServerPath: MCPProviderConfiguration.defaultServerBasePath,
+        mcpEndpointURL: "http://127.0.0.1:3013/mcp"
+    )
 }
 
 struct MCPProviderConfiguration: Equatable {
@@ -80,17 +101,20 @@ struct MCPProviderConfiguration: Equatable {
     var serverBasePath: String
     var localLLMEndpointURL: String
     var localLLMModel: String
+    var llmGatewayEndpointURL: String
     var providerDescriptors: [MCPProviderDescriptor]
 
     init(
         serverBasePath: String = Self.defaultServerBasePath,
         localLLMEndpointURL: String = AppSettingsDefaults.localLLMEndpoint,
         localLLMModel: String = AppSettingsDefaults.localLLMModel,
-        providerDescriptors: [MCPProviderDescriptor] = [.codexCLI, .cursorCLI, .localLLM]
+        llmGatewayEndpointURL: String = "http://127.0.0.1:3013/mcp",
+        providerDescriptors: [MCPProviderDescriptor] = [.codexCLI, .cursorCLI, .localLLM, .llmGateway]
     ) {
         self.serverBasePath = serverBasePath
         self.localLLMEndpointURL = localLLMEndpointURL
         self.localLLMModel = localLLMModel
+        self.llmGatewayEndpointURL = llmGatewayEndpointURL
         self.providerDescriptors = providerDescriptors
     }
 }
@@ -140,6 +164,10 @@ final class MCPProviderClient: MCPProviderClientProtocol {
     func streamEvents(for request: MCPProviderRequest) async throws -> AsyncThrowingStream<MCPProviderEvent, Error> {
         if request.providerId == MCPProviderDescriptor.localLLM.id {
             return localLLMStream(for: request)
+        }
+
+        if request.providerId == MCPProviderDescriptor.llmGateway.id {
+            return llmGatewayStream(for: request)
         }
 
         return AsyncThrowingStream<MCPProviderEvent, Error> { continuation in
@@ -202,14 +230,78 @@ final class MCPProviderClient: MCPProviderClientProtocol {
         return try JSONDecoder().decode(LocalLLMGenerateResult.self, from: Data(text.utf8))
     }
 
+    private func llmGatewayStream(for request: MCPProviderRequest) -> AsyncThrowingStream<MCPProviderEvent, Error> {
+        AsyncThrowingStream<MCPProviderEvent, Error> { continuation in
+            Task {
+                continuation.yield(.started)
+                do {
+                    let result = try await callLLMGatewayGenerate(request.aiRequest)
+                    guard result.status == "completed", let content = result.content else {
+                        continuation.yield(.failed(result.warning ?? "LLM Gateway blocked the request."))
+                        continuation.finish()
+                        return
+                    }
+                    if !content.isEmpty {
+                        continuation.yield(.messageDelta(content))
+                    }
+                    continuation.yield(.messageCompleted(content))
+                    if let usage = result.usage {
+                        continuation.yield(.tokenUsage(TokenUsage(
+                            inputTokens: usage.promptTokens,
+                            outputTokens: usage.completionTokens,
+                            totalCostUSD: usage.estimatedCostUSD
+                        )))
+                    }
+                    continuation.yield(.finished)
+                } catch {
+                    continuation.yield(.failed(error.localizedDescription))
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    private func callLLMGatewayGenerate(_ request: AIRequest) async throws -> LLMGatewayGenerateResult {
+        let provider = request.metadata["llmGatewayProvider"]
+            ?? (request.model.hasPrefix("claude-") ? "anthropic" : "openai")
+        let guardMode = request.metadata["llmGatewayGuardMode"] == "mask" ? "mask" : "block"
+        let text = try await callMCPTool(
+            named: "llm_gateway_generate",
+            arguments: LLMGatewayGenerateArguments(
+                provider: provider,
+                model: request.model,
+                messages: localLLMMessages(from: request),
+                guardMode: guardMode,
+                temperature: request.temperature,
+                maxTokens: request.budget?.maxOutputTokens
+            ),
+            endpointURL: currentConfiguration.llmGatewayEndpointURL,
+            providerId: MCPProviderDescriptor.llmGateway.id
+        )
+        return try JSONDecoder().decode(LLMGatewayGenerateResult.self, from: Data(text.utf8))
+    }
+
     private func callLocalLLMTool<Arguments: Encodable>(
         named name: String,
         arguments: Arguments,
         endpointURL: String?
     ) async throws -> String {
-        let resolvedEndpointURL = endpointURL ?? currentConfiguration.localLLMEndpointURL
-        guard let url = URL(string: resolvedEndpointURL) else {
-            throw MCPProviderClientError.missingEndpoint(MCPProviderDescriptor.localLLM.id)
+        try await callMCPTool(
+            named: name,
+            arguments: arguments,
+            endpointURL: endpointURL ?? currentConfiguration.localLLMEndpointURL,
+            providerId: MCPProviderDescriptor.localLLM.id
+        )
+    }
+
+    private func callMCPTool<Arguments: Encodable>(
+        named name: String,
+        arguments: Arguments,
+        endpointURL: String,
+        providerId: String
+    ) async throws -> String {
+        guard let url = URL(string: endpointURL) else {
+            throw MCPProviderClientError.missingEndpoint(providerId)
         }
 
         var urlRequest = URLRequest(url: url)
@@ -319,6 +411,21 @@ private struct LocalLLMGenerateArguments: Encodable {
     }
 }
 
+private struct LLMGatewayGenerateArguments: Encodable {
+    let provider: String
+    let model: String
+    let messages: [LocalLLMMessage]
+    let guardMode: String
+    let temperature: Double?
+    let maxTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case provider, model, messages, temperature
+        case guardMode = "guard_mode"
+        case maxTokens = "max_tokens"
+    }
+}
+
 struct LocalLLMMessage: Codable, Equatable {
     let role: String
     let content: String
@@ -353,4 +460,23 @@ private struct LocalLLMUsage: Decodable, Equatable {
     let promptTokens: Int?
     let completionTokens: Int?
     let totalTokens: Int?
+}
+
+private struct LLMGatewayGenerateResult: Decodable, Equatable {
+    let status: String
+    let content: String?
+    let warning: String?
+    let usage: LLMGatewayUsageResult?
+}
+
+private struct LLMGatewayUsageResult: Decodable, Equatable {
+    let promptTokens: Int
+    let completionTokens: Int
+    let estimatedCostUSD: Decimal
+
+    enum CodingKeys: String, CodingKey {
+        case promptTokens = "prompt_tokens"
+        case completionTokens = "completion_tokens"
+        case estimatedCostUSD = "estimated_cost_usd"
+    }
 }
