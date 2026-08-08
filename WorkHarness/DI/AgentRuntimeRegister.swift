@@ -49,6 +49,11 @@ extension Container {
                     toolService: toolService,
                     settingsService: settingsService
                 ))
+                registry.register(LocalLLMAgentRuntime(
+                    gatewayProviderClient: providerClient,
+                    toolService: toolService,
+                    settingsService: settingsService
+                ))
             }
             return registry
         }.inObjectScope(.container)

@@ -72,6 +72,10 @@ struct ExecutionTaskResult: Identifiable, Codable, Equatable {
     var finishedAt: Date
     var buildPassed: Bool
     var testsPassed: Bool
+    var securityVerdict: String?
+    var securitySeverity: String?
+    var securityFinding: String?
+    var securityRemediationCount: Int
     var commitSHA: String?
     var pushSucceeded: Bool
     var failureReason: String?
@@ -105,6 +109,10 @@ struct ExecutionTaskResult: Identifiable, Codable, Equatable {
         finishedAt: Date,
         buildPassed: Bool,
         testsPassed: Bool,
+        securityVerdict: String? = nil,
+        securitySeverity: String? = nil,
+        securityFinding: String? = nil,
+        securityRemediationCount: Int = 0,
         commitSHA: String? = nil,
         pushSucceeded: Bool,
         failureReason: String? = nil,
@@ -129,6 +137,10 @@ struct ExecutionTaskResult: Identifiable, Codable, Equatable {
         self.finishedAt = finishedAt
         self.buildPassed = buildPassed
         self.testsPassed = testsPassed
+        self.securityVerdict = securityVerdict
+        self.securitySeverity = securitySeverity
+        self.securityFinding = securityFinding
+        self.securityRemediationCount = securityRemediationCount
         self.commitSHA = commitSHA
         self.pushSucceeded = pushSucceeded
         self.failureReason = failureReason
@@ -156,6 +168,10 @@ struct ExecutionTaskResult: Identifiable, Codable, Equatable {
         finishedAt = try container.decode(Date.self, forKey: .finishedAt)
         buildPassed = try container.decode(Bool.self, forKey: .buildPassed)
         testsPassed = try container.decode(Bool.self, forKey: .testsPassed)
+        securityVerdict = try container.decodeIfPresent(String.self, forKey: .securityVerdict)
+        securitySeverity = try container.decodeIfPresent(String.self, forKey: .securitySeverity)
+        securityFinding = try container.decodeIfPresent(String.self, forKey: .securityFinding)
+        securityRemediationCount = try container.decodeIfPresent(Int.self, forKey: .securityRemediationCount) ?? 0
         commitSHA = try container.decodeIfPresent(String.self, forKey: .commitSHA)
         pushSucceeded = try container.decode(Bool.self, forKey: .pushSucceeded)
         failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)

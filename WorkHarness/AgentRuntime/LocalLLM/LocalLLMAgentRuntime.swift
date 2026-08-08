@@ -36,6 +36,7 @@ enum LocalLLMAgentRuntimeError: LocalizedError, Equatable {
 @MainActor
 final class LocalLLMAgentRuntime: AgentRuntime {
     static let runtimeId = "local-llm.mcp-agent"
+    static let gatewayRuntimeId = "llm-gateway.mcp-agent"
 
     private struct RuntimeSession {
         var session: AgentSession
@@ -65,6 +66,11 @@ final class LocalLLMAgentRuntime: AgentRuntime {
     private let providerClient: MCPProviderClientProtocol
     private let toolService: ToolServiceProtocol
     private let settingsService: AppSettingsServiceProtocol
+    private let runtimeId: String
+    private let runtimeDisplayName: String
+    private let providerId: String
+    private let defaultModelId: () -> String
+    private let contextWindowTokens: Int
     private let maxIterations: Int
     private let maxHistoryCharacters: Int
     private var sessions: [UUID: RuntimeSession] = [:]
@@ -82,15 +88,43 @@ final class LocalLLMAgentRuntime: AgentRuntime {
         self.providerClient = providerClient
         self.toolService = toolService
         self.settingsService = settingsService
+        self.runtimeId = Self.runtimeId
+        self.runtimeDisplayName = "Local LLM Agent"
+        self.providerId = MCPProviderDescriptor.localLLM.id
+        self.defaultModelId = { settingsService.localLLMModel }
+        self.contextWindowTokens = 16_384
         self.maxIterations = max(1, maxIterations)
         self.maxHistoryCharacters = max(4_000, maxHistoryCharacters)
     }
 
-    var id: String { Self.runtimeId }
-    var displayName: String { "Local LLM Agent" }
+    init(
+        gatewayProviderClient providerClient: MCPProviderClientProtocol,
+        toolService: ToolServiceProtocol,
+        settingsService: AppSettingsServiceProtocol,
+        maxIterations: Int = 12,
+        maxHistoryCharacters: Int = 24_000
+    ) {
+        self.providerClient = providerClient
+        self.toolService = toolService
+        self.settingsService = settingsService
+        self.runtimeId = Self.gatewayRuntimeId
+        self.runtimeDisplayName = "LLM Gateway Agent"
+        self.providerId = MCPProviderDescriptor.llmGateway.id
+        self.defaultModelId = {
+            MCPProviderDescriptor.llmGateway.capabilities.supportedModels.first
+                ?? "gpt-4.1-mini"
+        }
+        self.contextWindowTokens = MCPProviderDescriptor.llmGateway.capabilities.contextWindowTokens
+            ?? 16_384
+        self.maxIterations = max(1, maxIterations)
+        self.maxHistoryCharacters = max(4_000, maxHistoryCharacters)
+    }
+
+    var id: String { runtimeId }
+    var displayName: String { runtimeDisplayName }
 
     var descriptor: AgentRuntimeDescriptor {
-        let modelId = settingsService.localLLMModel
+        let modelId = defaultModelId()
         return AgentRuntimeDescriptor(
             id: id,
             displayName: displayName,
@@ -105,9 +139,10 @@ final class LocalLLMAgentRuntime: AgentRuntime {
                 .canUseTools,
                 .canExecuteTerminal,
                 .canReadGit,
+                .canOpenDiff,
                 .canRunTests
             ]),
-            contextWindowTokens: 16_384,
+            contextWindowTokens: contextWindowTokens,
             supportsUsageReporting: true,
             supportsCancellation: true
         )
@@ -131,7 +166,7 @@ final class LocalLLMAgentRuntime: AgentRuntime {
         )
         sessions[session.id] = RuntimeSession(
             session: session,
-            modelId: configuredModelId ?? settingsService.localLLMModel,
+            modelId: configuredModelId ?? defaultModelId(),
             runId: configuredRunId,
             workingDirectory: configuredWorkingDirectory,
             worker: nil
@@ -218,7 +253,7 @@ final class LocalLLMAgentRuntime: AgentRuntime {
                 let bounded = boundedHistory(messages)
                 if bounded.wasCompacted {
                     continuation.yield(.thinking(
-                        "Local LLM history was compacted to the \(maxHistoryCharacters)-character runtime limit."
+                        "MCP LLM history was compacted to the \(maxHistoryCharacters)-character runtime limit."
                     ))
                 }
                 messages = bounded.messages
@@ -252,7 +287,7 @@ final class LocalLLMAgentRuntime: AgentRuntime {
                           let arguments = action.arguments else {
                         throw LocalLLMAgentRuntimeError.invalidAction(inference.content)
                     }
-                    continuation.yield(.thinking("Local LLM step \(iteration): \(toolId)"))
+                    continuation.yield(.thinking("MCP LLM step \(iteration): \(toolId)"))
                     let result = try await toolService.executeAwaitingApproval(.init(
                         runId: task.runId,
                         toolId: toolId,
@@ -290,7 +325,7 @@ final class LocalLLMAgentRuntime: AgentRuntime {
     ) async throws -> InferenceResult {
         let agent = Agent(
             role: .coder,
-            providerId: MCPProviderDescriptor.localLLM.id,
+            providerId: providerId,
             model: modelId
         )
         let request = AIRequest(
@@ -302,10 +337,13 @@ final class LocalLLMAgentRuntime: AgentRuntime {
             temperature: 0.1,
             budget: TokenBudget(maxInputTokens: 12_000, maxOutputTokens: 2_048),
             workingDirectory: task.workingDirectory,
-            metadata: ["agentRuntimeId": id]
+            metadata: [
+                "agentRuntimeId": id,
+                "llmGatewayGuardMode": "block"
+            ]
         )
         let stream = try await providerClient.streamEvents(for: .init(
-            providerId: MCPProviderDescriptor.localLLM.id,
+            providerId: providerId,
             aiRequest: request
         ))
         var content = ""
@@ -345,7 +383,7 @@ final class LocalLLMAgentRuntime: AgentRuntime {
             }
             .joined(separator: "\n")
         return """
-        You are a local coding agent controlled by WorkHarness.
+        You are an MCP-backed coding agent controlled by WorkHarness.
         Return exactly one compact JSON object per inference, without Markdown.
         To request a tool: {"type":"tool","toolId":"file.read","arguments":{"path":"README.md"}}
         To finish: {"type":"final","content":"concise verified result"}

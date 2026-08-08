@@ -71,16 +71,22 @@ enum AgentProfileDefaults {
                         file: "implementation-coder.md"
                     ),
                     assistant(
-                        "30000000-0000-0000-0000-000000000003",
-                        name: "Reviewer",
-                        role: .reviewer,
-                        file: "implementation-reviewer.md"
-                    ),
-                    assistant(
                         "30000000-0000-0000-0000-000000000004",
                         name: "Test Runner",
                         role: .testRunner,
                         file: "implementation-test-runner.md"
+                    ),
+                    assistant(
+                        "30000000-0000-0000-0000-000000000005",
+                        name: "Security Reviewer",
+                        role: .securityReviewer,
+                        file: "implementation-security-reviewer.md"
+                    ),
+                    assistant(
+                        "30000000-0000-0000-0000-000000000003",
+                        name: "Reviewer",
+                        role: .reviewer,
+                        file: "implementation-reviewer.md"
                     ),
                     assistant(
                         "90000000-0000-0000-0000-000000000001",
@@ -258,6 +264,21 @@ enum AgentProfileDefaults {
         Validate the final implementation without editing production code.
         Run the focused tests, relevant suite, and build. Inspect failures and distinguish patch regressions from pre-existing issues.
         Return commands, results, failures, remaining risks, and final verdict.
+        """,
+        "implementation-security-reviewer.md": """
+        # Security Reviewer
+
+        Review the current repository diff only after build and tests pass. Do not edit files and do not commit.
+
+        Check the Apple stack specifically:
+        - authentication tokens and credentials must use Keychain, never UserDefaults or plaintext files;
+        - flag broad ATS exceptions, HTTP transport, missing TLS validation, and unjustified certificate-pinning gaps;
+        - flag PII, authorization headers, request bodies, tokens, and secrets written to logs.
+
+        Check every stack for hardcoded API keys or credentials, unsafe input handling, injection, path traversal, dangerous commands, insecure URLs, and accidental disclosure of system prompts or private repository data.
+        Cite the exact file, symbol, and line when available. Use critical/high only for an exploitable or materially exposed issue. Use medium/low for non-blocking hardening findings.
+
+        Return exactly one compact JSON object matching the structured output contract. Put a concise actionable fix in remediation. Use "none" for finding, location, and remediation when clean.
         """,
         "inference-input-normalizer.md": """
         # Input Normalizer

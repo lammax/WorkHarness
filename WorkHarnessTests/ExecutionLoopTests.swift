@@ -129,6 +129,24 @@ struct ExecutionLoopTests {
     }
 
     @MainActor
+    @Test func taskLoopRequiresLLMGatewayAgentRuntime() async throws {
+        let fixture = try LoopFixture(safetyMode: .autoInsideSandbox)
+        defer { fixture.cleanup() }
+        fixture.runLauncher.runtimeDescriptors = [AgentRuntimeDescriptor(
+            id: "cursor.acp",
+            displayName: "Cursor ACP",
+            transport: .acp,
+            modelOptions: [.init(id: "cursor", title: "Cursor")],
+            defaultModelId: "cursor"
+        )]
+
+        await #expect(throws: ExecutionLoopServiceError.llmGatewayRuntimeRequired) {
+            try await fixture.service.start(sourcePath: fixture.sourceURL.path)
+        }
+        #expect(fixture.runLauncher.prompts.isEmpty)
+    }
+
+    @MainActor
     @Test func savedAutoApproveAllowsCommitAndPushForExplicitTargetRepository() async throws {
         let runRepository = InMemoryRunRepository()
         let run = Run(goal: "Commit and push another project")
@@ -251,7 +269,7 @@ struct ExecutionLoopTests {
 
         #expect(restoredService.activeAttempt?.status == .passed)
         #expect(restoredService.activeAttempt?.taskResults.map(\.taskId) == ["WHM-001", "WHM-002"])
-        #expect(fixture.runLauncher.prompts.count == 2)
+        #expect(fixture.runLauncher.prompts.count == 4)
     }
 
     @MainActor
@@ -300,7 +318,9 @@ struct ExecutionLoopTests {
         #expect(results.last?.status == .passed)
         #expect(results.last?.firstPassSucceeded == false)
         #expect(restoredService.activeAttempt?.firstPassSuccessRate == 0)
-        #expect(fixture.runLauncher.prompts.last?.contains("recovers an interrupted task") == true)
+        #expect(fixture.runLauncher.prompts.contains {
+            $0.contains("recovers an interrupted task")
+        })
     }
 
     @MainActor
@@ -324,6 +344,8 @@ struct ExecutionLoopTests {
         #expect(attempt.consecutivePassedTaskCount == 1)
         #expect(attempt.taskResults.first?.commitSHA == "commit-sha")
         #expect(attempt.taskResults.first?.pushSucceeded == true)
+        #expect(attempt.taskResults.first?.securityVerdict == "clean")
+        #expect(attempt.taskResults.first?.securitySeverity == "none")
         #expect(attempt.executionBranch == "main")
         #expect(FileManager.default.fileExists(atPath: try #require(attempt.reportPath)))
         #expect(fixture.projectService.currentProject?.id == fixture.originalProject.id)
@@ -336,11 +358,14 @@ struct ExecutionLoopTests {
         #expect(!fixture.toolService.gitArguments.contains(where: {
             $0.hasPrefix("switch ") || $0.hasPrefix("checkout ")
         }))
-        #expect(fixture.runLauncher.configurations.map(\.profileId) == ["implementation"])
+        #expect(fixture.runLauncher.configurations.map(\.profileId) == [
+            "implementation",
+            "implementation-security-gate"
+        ])
         #expect(fixture.runLauncher.prompts.first?.contains("Do not run git commit") == true)
-        #expect(fixture.runLauncher.progressMirrorRunIds == [controllerRunId])
+        #expect(fixture.runLauncher.progressMirrorRunIds == [controllerRunId, controllerRunId])
         #expect(fixture.runLauncher.progressMirrorMetadata.first?["taskId"] == "WHM-001")
-        #expect(fixture.runRepository.run(withId: controllerRunId)?.executionBackend?.id == "cursor.acp")
+        #expect(fixture.runRepository.run(withId: controllerRunId)?.executionBackend?.id == LocalLLMAgentRuntime.gatewayRuntimeId)
         #expect(fixture.runRepository.run(withId: controllerRunId)?.executionBackend?.modelId == "nano")
         let controllerEvents = fixture.runRepository.run(withId: controllerRunId)?.events ?? []
         #expect(controllerEvents.contains {
@@ -386,22 +411,22 @@ struct ExecutionLoopTests {
     }
 
     @MainActor
-    @Test func loopSnapshotsChangedRuntimeAndModelForEachNewTask() async throws {
+    @Test func loopSnapshotsChangedGatewayModelForEachNewTask() async throws {
         let fixture = try LoopFixture(safetyMode: .autoInsideSandbox)
         defer { fixture.cleanup() }
         try fixture.useTwoTaskPool()
         fixture.runLauncher.runtimeDescriptors = [
             AgentRuntimeDescriptor(
-                id: "cursor.acp",
-                displayName: "Cursor ACP",
-                transport: .acp,
+                id: LocalLLMAgentRuntime.gatewayRuntimeId,
+                displayName: "LLM Gateway Agent",
+                transport: .mcp,
                 modelOptions: [.init(id: "nano", title: "Nano")],
                 defaultModelId: "nano"
             ),
             AgentRuntimeDescriptor(
-                id: "claude.cli",
-                displayName: "Claude Code",
-                transport: .cli,
+                id: LocalLLMAgentRuntime.gatewayRuntimeId,
+                displayName: "LLM Gateway Agent",
+                transport: .mcp,
                 modelOptions: [.init(id: "haiku", title: "Haiku")],
                 defaultModelId: "haiku"
             )
@@ -417,17 +442,17 @@ struct ExecutionLoopTests {
 
         let attempt = try #require(fixture.service.activeAttempt)
         #expect(attempt.status == .passed)
-        #expect(attempt.taskResults.map(\.runtimeName) == ["Cursor ACP", "Claude Code"])
+        #expect(attempt.taskResults.map(\.runtimeName) == ["LLM Gateway Agent", "LLM Gateway Agent"])
         #expect(attempt.taskResults.map(\.modelId) == ["nano", "haiku"])
         #expect(
             fixture.runRepository.run(withId: attempt.controllerRunId)?
-                .executionBackend?.displayName == "Claude Code"
+                .executionBackend?.displayName == "LLM Gateway Agent"
         )
 
         let reportPath = try #require(attempt.reportPath)
         let report = try String(contentsOfFile: reportPath, encoding: .utf8)
-        #expect(report.contains("| Cursor ACP | cursor.acp | nano |"))
-        #expect(report.contains("| Claude Code | claude.cli | haiku |"))
+        #expect(report.contains("| LLM Gateway Agent | llm-gateway.mcp-agent | nano |"))
+        #expect(report.contains("| LLM Gateway Agent | llm-gateway.mcp-agent | haiku |"))
     }
 
     private func task(category: ExecutionTaskCategory) -> ExecutionTask {
@@ -609,9 +634,9 @@ private final class LoopFixture {
 private final class ExecutionLoopRunLauncherFake: ExecutionLoopRunLaunchingProtocol {
     var runtimeDescriptors = [
         AgentRuntimeDescriptor(
-            id: "cursor.acp",
-            displayName: "Cursor ACP",
-            transport: .acp,
+            id: LocalLLMAgentRuntime.gatewayRuntimeId,
+            displayName: "LLM Gateway Agent",
+            transport: .mcp,
             modelOptions: [.init(id: "nano", title: "Nano")],
             defaultModelId: "nano"
         )
@@ -649,13 +674,29 @@ private final class ExecutionLoopRunLauncherFake: ExecutionLoopRunLaunchingProto
         configurations.append(configuration)
         progressMirrorRunIds.append(progressMirrorRunId)
         self.progressMirrorMetadata.append(progressMirrorMetadata)
-        let run = Run(
+        var run = Run(
             projectId: projectService.currentProject?.id,
             goal: goal,
             mode: mode,
             status: .completed,
             multiAgentConfiguration: configuration
         )
+        if configuration.roles.contains(where: { $0.role == .securityReviewer }) {
+            run.events.append(RunEvent(
+                runId: run.id,
+                type: .validationFinished,
+                message: "No security findings.",
+                metadata: [
+                    "validationKind": "securityReview",
+                    "status": "passed",
+                    "verdict": "clean",
+                    "severity": "none",
+                    "location": "none",
+                    "remediation": "none",
+                    "gatewayProviderId": MCPProviderDescriptor.llmGateway.id
+                ]
+            ))
+        }
         repository.insert(run)
         lastRunId = run.id
         return run.id

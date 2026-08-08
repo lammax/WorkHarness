@@ -141,7 +141,7 @@ protocol AgentPlannerProtocol {
 }
 
 struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
-    static let defaultRoles: [AgentRole] = [.architect, .coder, .reviewer, .testRunner]
+    static let defaultRoles: [AgentRole] = [.architect, .coder, .testRunner, .securityReviewer, .reviewer]
 
     private struct Requirement {
         let role: AgentRole
@@ -152,13 +152,13 @@ struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
         let requirements = [
             Requirement(role: .architect, capabilities: [.canPlan]),
             Requirement(role: .coder, capabilities: [.canEditFiles, .canUseTools]),
-            Requirement(role: .reviewer, capabilities: [.canOpenDiff]),
-            Requirement(role: .testRunner, capabilities: [.canRunTests])
+            Requirement(role: .testRunner, capabilities: [.canRunTests]),
+            Requirement(role: .securityReviewer, capabilities: [.canOpenDiff]),
+            Requirement(role: .reviewer, capabilities: [.canOpenDiff])
         ]
 
         var steps: [AgentPlanStep] = []
         var previousStepID: UUID?
-        var codingStepID: UUID?
         for requirement in requirements {
             guard let candidate = candidates.first(where: { candidate in
                 requirement.capabilities.isSubset(of: candidate.capabilities.values)
@@ -170,16 +170,7 @@ struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
             }
 
             let dependencies: [UUID]
-            switch requirement.role {
-            case .architect:
-                dependencies = []
-            case .coder:
-                dependencies = previousStepID.map { [$0] } ?? []
-            case .reviewer, .testRunner:
-                dependencies = codingStepID.map { [$0] } ?? []
-            default:
-                dependencies = previousStepID.map { [$0] } ?? []
-            }
+            dependencies = previousStepID.map { [$0] } ?? []
 
             let step = AgentPlanStep(
                 role: requirement.role,
@@ -189,7 +180,6 @@ struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
             )
             steps.append(step)
             previousStepID = step.id
-            if requirement.role == .coder { codingStepID = step.id }
         }
 
         return AgentExecutionPlan(goal: goal, steps: steps)
@@ -231,6 +221,8 @@ struct CapabilityBasedAgentPlanner: AgentPlannerProtocol {
         case .coder:
             [.canEditFiles, .canUseTools]
         case .reviewer:
+            [.canOpenDiff]
+        case .securityReviewer:
             [.canOpenDiff]
         case .testRunner:
             [.canRunTests]

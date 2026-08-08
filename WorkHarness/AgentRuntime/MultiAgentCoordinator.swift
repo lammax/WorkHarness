@@ -48,6 +48,8 @@ final class MultiAgentCoordinator {
     private let recorder: RunRecorder
     private let outputValidator: AgentOutputValidator
     private let handoffPolicy: MultiAgentHandoffPolicy
+    private let securityReviewPolicy: SecurityReviewPolicy
+    private let maximumSecurityRemediationRounds = 2
     private var activeSessionsByRunId: [UUID: [UUID: ActiveSession]] = [:]
     private var cancelledRunIds: Set<UUID> = []
 
@@ -56,6 +58,7 @@ final class MultiAgentCoordinator {
         self.recorder = recorder
         self.outputValidator = AgentOutputValidator()
         self.handoffPolicy = MultiAgentHandoffPolicy()
+        self.securityReviewPolicy = SecurityReviewPolicy()
     }
 
     init(
@@ -67,6 +70,7 @@ final class MultiAgentCoordinator {
         self.recorder = recorder
         self.outputValidator = AgentOutputValidator()
         self.handoffPolicy = handoffPolicy
+        self.securityReviewPolicy = SecurityReviewPolicy()
     }
 
     func execute(
@@ -117,6 +121,20 @@ final class MultiAgentCoordinator {
                     configuration: configuration
                 )
                 results.append(result)
+                if result.role == .securityReviewer {
+                    let remediationResults = try await remediateSecurityFindingsIfNeeded(
+                        initialResult: result,
+                        plan: plan,
+                        candidates: candidates,
+                        runtimes: runtimes,
+                        runId: runId,
+                        context: context,
+                        workingDirectory: workingDirectory,
+                        previousResults: results,
+                        configuration: configuration
+                    )
+                    results.append(contentsOf: remediationResults)
+                }
             } else {
                 let previousResults = results
                 let batchResults = try await withThrowingTaskGroup(of: MultiAgentStepResult.self) { group in
@@ -151,6 +169,121 @@ final class MultiAgentCoordinator {
         }
 
         return MultiAgentExecutionResult(planId: plan.id, steps: results)
+    }
+
+    private func remediateSecurityFindingsIfNeeded(
+        initialResult: MultiAgentStepResult,
+        plan: AgentExecutionPlan,
+        candidates: [AgentCandidate],
+        runtimes: [UUID: AgentRuntime],
+        runId: UUID,
+        context: ContextSnapshot?,
+        workingDirectory: String?,
+        previousResults: [MultiAgentStepResult],
+        configuration: MultiAgentRunConfiguration
+    ) async throws -> [MultiAgentStepResult] {
+        var securityResult = initialResult
+        var accumulatedResults = previousResults
+        var remediationResults: [MultiAgentStepResult] = []
+
+        for round in 0...maximumSecurityRemediationRounds {
+            let decision = try securityReviewPolicy.decision(from: securityResult.output)
+            recordSecurityDecision(
+                decision,
+                runId: runId,
+                stepId: securityResult.stepId,
+                remediationRound: round
+            )
+            guard decision.blocksCommit else { return remediationResults }
+            guard let coderStep = plan.steps.last(where: { $0.role == .coder }) else {
+                return remediationResults
+            }
+            guard round < maximumSecurityRemediationRounds,
+                  let securityStep = plan.steps.first(where: { $0.id == securityResult.stepId }) else {
+                throw MultiAgentCoordinatorError.stepFailed(
+                    securityResult.stepId,
+                    decision.feedback
+                )
+            }
+
+            let feedbackResult = MultiAgentStepResult(
+                stepId: securityResult.stepId,
+                role: .securityReviewer,
+                agentId: securityResult.agentId,
+                output: decision.feedback,
+                sessionId: securityResult.sessionId
+            )
+            accumulatedResults.append(feedbackResult)
+            let coderResult = try await executeStep(
+                coderStep,
+                plan: plan,
+                candidates: candidates,
+                runtimes: runtimes,
+                runId: runId,
+                context: context,
+                workingDirectory: workingDirectory,
+                previousResults: accumulatedResults,
+                configuration: configuration
+            )
+            remediationResults.append(coderResult)
+            accumulatedResults.append(coderResult)
+
+            if let testStep = plan.steps.last(where: { $0.role == .testRunner }) {
+                let testResult = try await executeStep(
+                    testStep,
+                    plan: plan,
+                    candidates: candidates,
+                    runtimes: runtimes,
+                    runId: runId,
+                    context: context,
+                    workingDirectory: workingDirectory,
+                    previousResults: accumulatedResults,
+                    configuration: configuration
+                )
+                remediationResults.append(testResult)
+                accumulatedResults.append(testResult)
+            }
+
+            securityResult = try await executeStep(
+                securityStep,
+                plan: plan,
+                candidates: candidates,
+                runtimes: runtimes,
+                runId: runId,
+                context: context,
+                workingDirectory: workingDirectory,
+                previousResults: accumulatedResults,
+                configuration: configuration
+            )
+            remediationResults.append(securityResult)
+            accumulatedResults.append(securityResult)
+        }
+        return remediationResults
+    }
+
+    private func recordSecurityDecision(
+        _ decision: SecurityReviewDecision,
+        runId: UUID,
+        stepId: UUID,
+        remediationRound: Int
+    ) {
+        let metadata = [
+            "validationKind": "securityReview",
+            "status": decision.auditStatus,
+            "verdict": decision.verdict.rawValue,
+            "severity": decision.severity.rawValue,
+            "location": decision.location,
+            "remediation": decision.remediation,
+            "remediationRound": "\(remediationRound)",
+            "planStepId": stepId.uuidString,
+            "gatewayProviderId": MCPProviderDescriptor.llmGateway.id
+        ]
+        recorder.record(
+            runId: runId,
+            type: .validationFinished,
+            message: decision.finding,
+            metadata: metadata
+        )
     }
 
     func cancel(runId: UUID) async {

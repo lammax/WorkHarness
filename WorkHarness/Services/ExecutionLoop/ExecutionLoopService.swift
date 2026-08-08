@@ -93,6 +93,9 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         guard runLauncher.selectedAgentRuntimeDescriptor != nil else {
             throw ExecutionLoopServiceError.agentRuntimeUnavailable
         }
+        guard runLauncher.selectedAgentRuntimeDescriptor?.id == LocalLLMAgentRuntime.gatewayRuntimeId else {
+            throw ExecutionLoopServiceError.llmGatewayRuntimeRequired
+        }
 
         let pool = try preview(sourcePath: trimmedPath)
         try validateTargetRepository(pool.targetRepositoryPath)
@@ -163,6 +166,9 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         }
         guard runLauncher.selectedAgentRuntimeDescriptor != nil else {
             throw ExecutionLoopServiceError.agentRuntimeUnavailable
+        }
+        guard runLauncher.selectedAgentRuntimeDescriptor?.id == LocalLLMAgentRuntime.gatewayRuntimeId else {
+            throw ExecutionLoopServiceError.llmGatewayRuntimeRequired
         }
 
         guard let pool = activePool else {
@@ -512,6 +518,17 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
                 ]
             )
 
+            let securityDecision = try await performFinalSecurityGate(
+                task: task,
+                pool: pool,
+                parentRunId: runId,
+                baseConfiguration: configuration
+            )
+            result.securityVerdict = securityDecision.verdict.rawValue
+            result.securitySeverity = securityDecision.severity.rawValue
+            result.securityFinding = securityDecision.finding
+            result.securityRemediationCount = securityDecision.remediationCount
+
             guard appSettingsService.defaultSafetyMode == .autoInsideSandbox else {
                 throw ExecutionLoopServiceError.autoApproveRequired
             }
@@ -609,6 +626,111 @@ final class ExecutionLoopService: ExecutionLoopServiceProtocol {
         }
         activeTaskRunId = nil
         return result
+    }
+
+    private func performFinalSecurityGate(
+        task: ExecutionTask,
+        pool: ExecutionTaskPool,
+        parentRunId: UUID,
+        baseConfiguration: MultiAgentRunConfiguration
+    ) async throws -> (verdict: SecurityReviewVerdict, severity: SecurityReviewSeverity, finding: String, remediationCount: Int) {
+        guard let securityRole = agentProfileService.configuration(for: "implementation")
+            .roles.first(where: { $0.role == .securityReviewer }) else {
+            throw ExecutionLoopServiceError.validationFailed("Security Reviewer is unavailable")
+        }
+        let securityConfiguration = MultiAgentRunConfiguration(
+            profileId: "implementation-security-gate",
+            profileName: "Implementation Security Gate",
+            roles: [securityRole]
+        )
+        var remediationCount = 0
+
+        while true {
+            let reviewRun = try await launchSecurityRun(
+                goal: securityGatePrompt(task: task, pool: pool),
+                configuration: securityConfiguration,
+                task: task
+            )
+            guard let event = reviewRun.events.last(where: {
+                $0.type == .validationFinished && $0.metadata["validationKind"] == "securityReview"
+            }),
+            let verdictValue = event.metadata["verdict"],
+            let severityValue = event.metadata["severity"],
+            let verdict = SecurityReviewVerdict(rawValue: verdictValue),
+            let severity = SecurityReviewSeverity(rawValue: severityValue) else {
+                throw ExecutionLoopServiceError.validationFailed("Security review audit result is missing")
+            }
+            let finding = event.message
+            recorder.record(
+                runId: parentRunId,
+                type: .validationFinished,
+                message: finding,
+                metadata: event.metadata.merging([
+                    "taskId": task.id,
+                    "securityReviewRunId": reviewRun.id.uuidString,
+                    "executionLoopSecurityGate": "true"
+                ]) { _, new in new }
+            )
+            guard severity.blocksCommit || verdict == .block else {
+                return (verdict, severity, finding, remediationCount)
+            }
+            guard remediationCount < 2 else {
+                throw ExecutionLoopServiceError.validationFailed(
+                    "Security review blocked commit: \(finding)"
+                )
+            }
+
+            remediationCount += 1
+            let remediationRoles = baseConfiguration.roles.filter {
+                [.coder, .testRunner, .securityReviewer].contains($0.role)
+            }
+            let remediationConfiguration = MultiAgentRunConfiguration(
+                profileId: "implementation-security-remediation",
+                profileName: "Implementation Security Remediation",
+                roles: remediationRoles
+            )
+            _ = try await launchSecurityRun(
+                goal: "Fix the blocking security finding before commit: \(finding). \(event.metadata["remediation"] ?? "Apply the smallest secure fix.")",
+                configuration: remediationConfiguration,
+                task: task
+            )
+            _ = try await shell(pool.buildCommand, runId: parentRunId, projectRootPath: pool.targetRepositoryPath)
+            _ = try await shell(pool.testCommand, runId: parentRunId, projectRootPath: pool.targetRepositoryPath)
+        }
+    }
+
+    private func launchSecurityRun(
+        goal: String,
+        configuration: MultiAgentRunConfiguration,
+        task: ExecutionTask
+    ) async throws -> Run {
+        guard let runId = await runLauncher.startRun(
+            goal: goal,
+            mode: .multiAgent,
+            configuration: configuration,
+            progressMirrorRunId: controllerRunId,
+            progressMirrorMetadata: [
+                "taskId": task.id,
+                "executionLoopSecurityGate": "true",
+                "gatewayProviderId": MCPProviderDescriptor.llmGateway.id
+            ]
+        ) else {
+            throw ExecutionLoopServiceError.taskRunFailed(task.id)
+        }
+        activeTaskRunId = runId
+        guard let run = runLauncher.run(withId: runId), run.status == .completed else {
+            throw ExecutionLoopServiceError.taskRunFailed(task.id)
+        }
+        return run
+    }
+
+    private func securityGatePrompt(task: ExecutionTask, pool: ExecutionTaskPool) -> String {
+        """
+        Final security gate for Task Loop task \(task.id), after independent build and tests passed.
+        Review only the current uncommitted diff in \(pool.targetRepositoryPath).
+        Do not edit, commit, or push. The LLM Gateway input/output guards are mandatory.
+        Return the configured compact security JSON verdict.
+        """
     }
 
     private func selectedModelId(for descriptor: AgentRuntimeDescriptor) -> String? {

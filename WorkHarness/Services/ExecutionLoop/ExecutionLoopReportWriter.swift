@@ -61,6 +61,10 @@ struct ExecutionLoopReportWriter {
                 duration(result.duration),
                 result.buildPassed ? "passed" : "not passed",
                 result.testsPassed ? "passed" : "not passed",
+                result.securityVerdict ?? "—",
+                result.securitySeverity ?? "—",
+                "\(result.securityRemediationCount)",
+                escaped(result.securityFinding ?? "—"),
                 result.commitSHA ?? "—",
                 result.pushSucceeded ? "pushed" : "not pushed",
                 escaped(result.failureReason ?? "—")
@@ -94,9 +98,9 @@ struct ExecutionLoopReportWriter {
 
         ## Task Log
 
-        | Task | Title | Profile | Agent | Runtime ID | Model | Route | Route reason | Escalation | Routing latency | Cost before fallback | Result | Attempt | Failure kind | Time | Build | Tests | Commit | Push | Failure |
-        | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | --- |
-        \(rows.isEmpty ? "| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |" : rows)
+        | Task | Title | Profile | Agent | Runtime ID | Model | Route | Route reason | Escalation | Routing latency | Cost before fallback | Result | Attempt | Failure kind | Time | Build | Tests | Security | Severity | Remediations | Security finding | Commit | Push | Failure |
+        | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | ---: | --- | --- | --- | --- |
+        \(rows.isEmpty ? "| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |" : rows)
         """
     }
 

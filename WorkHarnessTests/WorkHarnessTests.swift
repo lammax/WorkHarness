@@ -631,7 +631,8 @@ struct WorkHarnessTests {
         #expect(Set(agentRuntimeRegistry.runtimes.map(\.id)).isSubset(of: [
             "cursor.acp",
             "claude.cli",
-            LocalLLMAgentRuntime.runtimeId
+            LocalLLMAgentRuntime.runtimeId,
+            LocalLLMAgentRuntime.gatewayRuntimeId
         ]))
         #expect(contextBuilder is ContextBuilder)
         #expect(toolRegistry.availableTools.contains { $0.id == "file.read" })
@@ -2584,10 +2585,11 @@ struct WorkHarnessTests {
 
         let plan = try planner.plan(goal: "Implement feature", candidates: candidates)
 
-        #expect(plan.steps.map(\.role) == [.architect, .coder, .reviewer, .testRunner])
+        #expect(plan.steps.map(\.role) == [.architect, .coder, .testRunner, .securityReviewer, .reviewer])
         #expect(plan.steps[1].dependsOn == [plan.steps[0].id])
         #expect(plan.steps[2].dependsOn == [plan.steps[1].id])
-        #expect(plan.steps[3].dependsOn == [plan.steps[1].id])
+        #expect(plan.steps[3].dependsOn == [plan.steps[2].id])
+        #expect(plan.steps[4].dependsOn == [plan.steps[3].id])
     }
 
     @Test func capabilityBasedAgentPlannerFailsWhenCapabilityIsMissing() {
@@ -2618,14 +2620,16 @@ struct WorkHarnessTests {
             configuration: configuration
         )
 
-        #expect(plan.steps.map(\.role) == [.testRunner, .reviewer, .architect])
+        #expect(plan.steps.map(\.role) == [.securityReviewer, .testRunner, .architect, .reviewer])
         #expect(plan.steps[0].dependsOn.isEmpty)
         #expect(plan.steps[1].dependsOn == [plan.steps[0].id])
         #expect(plan.steps[2].dependsOn == [plan.steps[1].id])
+        #expect(plan.steps[3].dependsOn == [plan.steps[2].id])
         #expect(plan.steps.map(\.configurationId) == [
             configuration.roles[0].id,
             configuration.roles[2].id,
-            configuration.roles[3].id
+            configuration.roles[3].id,
+            configuration.roles[4].id
         ])
     }
 
@@ -2797,6 +2801,15 @@ struct WorkHarnessTests {
             agentProfileService: profileService
         )
 
+        #expect(viewModel.configurationForNextMultiAgentRun.roles
+            .filter {
+                ![AgentRole.inputNormalizer, .decisionMaker, .resultFormatter]
+                    .contains($0.role)
+            }
+            .map(\.role) == [
+                .architect, .coder, .testRunner, .securityReviewer, .reviewer
+            ])
+
         viewModel.selectAgentProfile(id: "bug-fix")
 
         #expect(viewModel.selectedAgentProfileId == "bug-fix")
@@ -2845,8 +2858,9 @@ struct WorkHarnessTests {
         #expect(viewModel.selectedWorkflowAssistants.map(\.name) == [
             "Architect",
             "Coder",
-            "Reviewer",
-            "Test Runner"
+            "Test Runner",
+            "Security Reviewer",
+            "Reviewer"
         ])
         #expect(viewModel.inferenceAssistants.map(\.name) == [
             "Input Normalizer",
@@ -4439,7 +4453,7 @@ private final class FakeMCPProviderClient: MCPProviderClientProtocol {
 }
 
 @MainActor
-private final class FakeACPClient: ACPClient {
+final class FakeACPClient: ACPClient {
     let id: String
     let displayName: String
     private let sessionId = UUID()

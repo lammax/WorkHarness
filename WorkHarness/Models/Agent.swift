@@ -50,6 +50,7 @@ struct Agent: Identifiable, Codable, Equatable {
 enum AgentRole: String, Codable, CaseIterable, Equatable {
     case architect
     case coder
+    case securityReviewer
     case reviewer
     case testRunner
     case inputNormalizer
@@ -63,6 +64,7 @@ enum AgentRole: String, Codable, CaseIterable, Equatable {
         switch self {
         case .architect: "Architect"
         case .coder: "Coder"
+        case .securityReviewer: "Security Reviewer"
         case .reviewer: "Reviewer"
         case .testRunner: "Test Runner"
         case .inputNormalizer: "Input Normalizer"

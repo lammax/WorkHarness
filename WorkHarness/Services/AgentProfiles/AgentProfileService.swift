@@ -92,7 +92,10 @@ final class AgentProfileService: AgentProfileServiceProtocol {
                     modelOverride: assistant.modelOverride,
                     instructions: loadedPrompts[assistant.id]
                         ?? AgentProfileDefaults.prompts[assistant.promptFileName]
-                        ?? ""
+                        ?? "",
+                    outputContract: assistant.role == .securityReviewer
+                        ? SecurityReviewPolicy.outputContract
+                        : nil
                 )
             }
         )

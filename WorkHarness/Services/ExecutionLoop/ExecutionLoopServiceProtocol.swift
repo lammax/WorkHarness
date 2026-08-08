@@ -87,6 +87,7 @@ enum ExecutionLoopServiceError: LocalizedError, Equatable {
     case currentBranchUnavailable
     case projectSelectionFailed
     case agentRuntimeUnavailable
+    case llmGatewayRuntimeRequired
     case dependencyNotPassed(taskId: String, dependencyId: String)
     case taskRunFailed(String)
     case taskChangedGitHistory
@@ -121,7 +122,9 @@ enum ExecutionLoopServiceError: LocalizedError, Equatable {
         case .projectSelectionFailed:
             "WorkHarness could not select the execution-loop target project."
         case .agentRuntimeUnavailable:
-            "Select an available Cursor or Claude Agent Runtime before starting the execution loop."
+            "Select an available Agent Runtime before starting the execution loop."
+        case .llmGatewayRuntimeRequired:
+            "Select LLM Gateway Agent before starting the execution loop so every model call passes the input/output guards."
         case .dependencyNotPassed(let taskId, let dependencyId):
             "Task \(taskId) is blocked because dependency \(dependencyId) did not pass."
         case .taskRunFailed(let taskId):
